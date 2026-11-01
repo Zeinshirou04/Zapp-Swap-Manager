@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strings"
 )
 
 // Rsync flags per plan 005: mirror = -a --delete, copy = -a,
@@ -16,18 +17,28 @@ const (
 	RsyncDryRunFlag  = "-n"
 )
 
+// ensureTrailingSlash ensures the source directory path ends with a slash so
+// that rsync copies the directory's contents into destination rather than
+// copying the directory itself into destination.
+func ensureTrailingSlash(p string) string {
+	if strings.HasSuffix(p, "/") || strings.HasSuffix(p, "\\") {
+		return p
+	}
+	return p + "/"
+}
+
 // RsyncDriver is the POSIX transfer driver over rsync.
 type RsyncDriver struct{}
 
 func (RsyncDriver) Name() string { return "rsync" }
 
 func (RsyncDriver) Mirror(ctx context.Context, src, dst string, dryRun bool) error {
-	_, err := runRsync(ctx, src, dst, rsyncMirrorArgs(dryRun)...)
+	_, err := runRsync(ctx, ensureTrailingSlash(src), dst, rsyncMirrorArgs(dryRun)...)
 	return rsyncExitError(err)
 }
 
 func (RsyncDriver) Copy(ctx context.Context, src, dst string) error {
-	_, err := runRsync(ctx, src, dst, RsyncArchiveFlag)
+	_, err := runRsync(ctx, ensureTrailingSlash(src), dst, RsyncArchiveFlag)
 	return rsyncExitError(err)
 }
 

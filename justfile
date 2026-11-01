@@ -8,7 +8,7 @@ default:
 check: check-core check-desktop check-mobile
 
 check-core:
-    @echo core not set up yet. Replace with: cd core ^&^& go vet ./... ^&^& go test ./...
+    cd core && go vet ./... && go test -v ./...
 
 check-desktop:
     @echo desktop not set up yet. Replace with: cd desktop ^&^& npm run lint ^&^& npm test

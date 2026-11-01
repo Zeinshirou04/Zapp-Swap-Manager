@@ -1,0 +1,21 @@
+"libraryfolders"
+{
+	"contentbuildid"		"12846270"
+	"0"
+	{
+		"path"		"C:\\Program Files (x86)\\Steam"
+		"label"		""
+		"contentid"		"2739304402030299582"
+		"totalsize"		"500107862016"
+		"update_clean_bytes_tolerance"		"10737418240"
+		"mount"		"0"
+	}
+	"1"
+	{
+		"path"		"D:\\SteamLibrary"
+		"label"		"games"
+		"contentid"		"2739304402030299583"
+		"totalsize"		"1000204886016"
+		"mount"		"1"
+	}
+}

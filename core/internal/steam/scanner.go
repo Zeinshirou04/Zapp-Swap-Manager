@@ -84,7 +84,8 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 }
 
 func appIDFromManifestFilename(path string) string {
-	name := filepath.Base(path)
+	normalized := strings.ReplaceAll(path, "\\", "/")
+	name := normalized[strings.LastIndex(normalized, "/")+1:]
 	name = strings.TrimPrefix(name, "appmanifest_")
 	name = strings.TrimSuffix(name, ".acf")
 	return strings.TrimSpace(name)

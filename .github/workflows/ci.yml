@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    name: Lint & Test Check
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Just
+        uses: extractions/setup-just@v2
+
+      - name: Run checks
+        shell: cmd
+        run: just check
+
+  ci-ok:
+    name: ci-ok
+    needs: [check]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Verify all checks passed
+        run: |
+          if [ "${{ needs.check.result }}" != "success" ]; then
+            echo "CI checks failed"
+            exit 1
+          fi
+          echo "All checks passed successfully."

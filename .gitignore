@@ -1,0 +1,51 @@
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# Secrets / local
+.env
+.env.*
+*.keystore
+*.jks
+local.properties
+
+# Go (core)
+*.exe
+core/bin/
+core/dist/
+*.test
+*.out
+
+# Local database
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
+# Node (desktop)
+node_modules/
+desktop/dist/
+
+# Rust / Tauri (desktop)
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+
+# Android (mobile)
+mobile/.gradle/
+mobile/build/
+mobile/app/build/
+mobile/.idea/
+*.apk
+*.aab
+
+# Agent scratch
+.agents/tmp/
+.agents/plans/
+
+# Graphify
+graphify-out/
+

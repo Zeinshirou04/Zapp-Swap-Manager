@@ -1,0 +1,13 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+# Add these once each component exists:
+#  - package-ecosystem: gomod        # directory: /core
+#  - package-ecosystem: npm          # directory: /desktop
+#  - package-ecosystem: cargo        # directory: /desktop/src-tauri
+#  - package-ecosystem: gradle       # directory: /mobile

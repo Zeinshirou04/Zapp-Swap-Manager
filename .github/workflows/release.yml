@@ -1,0 +1,153 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release Tag (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-core:
+    name: Build Core Service (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          check-latest: true
+
+      - name: Build Core Binary
+        shell: pwsh
+        run: |
+          if (Test-Path "core/go.mod") {
+            cd core
+            go build -v -ldflags="-s -w" -o ../dist/zapp-core.exe ./...
+            cd ..
+          } else {
+            New-Item -ItemType Directory -Force -Path dist
+            Set-Content -Path dist/zapp-core-placeholder.txt -Value "Core service build pipeline ready. Implement in core/."
+          }
+
+      - name: Package Core
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/* -DestinationPath zapp-core-windows-x64.zip
+
+      - name: Upload Core Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zapp-core-windows-x64
+          path: zapp-core-windows-x64.zip
+
+  build-desktop:
+    name: Build Desktop App (Tauri / Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Desktop Installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist-desktop
+          if (Test-Path "desktop/package.json") {
+            cd desktop
+            npm ci
+            npm run tauri build
+            Copy-Item -Path "src-tauri/target/release/bundle/*" -Destination "../dist-desktop" -Recurse
+            cd ..
+          } else {
+            Set-Content -Path dist-desktop/zapp-desktop-placeholder.txt -Value "Desktop build pipeline ready. Implement in desktop/."
+          }
+
+      - name: Package Desktop
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist-desktop/* -DestinationPath zapp-desktop-windows-x64.zip
+
+      - name: Upload Desktop Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zapp-desktop-windows-x64
+          path: zapp-desktop-windows-x64.zip
+
+  build-mobile:
+    name: Build Mobile App (Android APK)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Build Android APK
+        shell: bash
+        run: |
+          mkdir -p dist-mobile
+          if [ -f "mobile/gradlew" ]; then
+            cd mobile
+            chmod +x gradlew
+            ./gradlew assembleRelease --no-daemon
+            find app/build/outputs/apk/ -name "*.apk" -exec cp {} ../dist-mobile/ \;
+            cd ..
+          else
+            echo "Mobile APK build pipeline ready. Implement in mobile/." > dist-mobile/zapp-mobile-placeholder.txt
+          fi
+
+      - name: Upload Mobile Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zapp-mobile-android
+          path: dist-mobile/*
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-core, build-desktop, build-mobile]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Prepare Release Files
+        shell: bash
+        run: |
+          mkdir -p final-assets
+          find release-assets/ -type f -exec cp {} final-assets/ \;
+          ls -la final-assets/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: final-assets/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true

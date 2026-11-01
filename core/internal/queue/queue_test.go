@@ -243,8 +243,8 @@ func TestCrashRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetJob: %v", err)
 	}
-	if got.Status != StatusQueued && got.Status != StatusSucceeded {
-		// It must at minimum be requeued (or already finishedsuccessfully).
+	if got.Status != StatusQueued && got.Status != StatusRunning && got.Status != StatusSucceeded {
+		// It must at minimum be requeued (or already picked up / completed by the running worker).
 		t.Fatalf("recovered job stuck in %q", got.Status)
 	}
 	waitFor(t, "recovered job completes", func() bool {

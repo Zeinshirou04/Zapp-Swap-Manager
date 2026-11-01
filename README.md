@@ -1,7 +1,7 @@
-# Game Swap Manager (`zapp-swap-manager`)
+# Game Swap Manager (`Zapp-Swap-Manager`)
 
-[![CI](https://github.com/Zeinshirou04/zapp-swap-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/Zeinshirou04/zapp-swap-manager/actions/workflows/ci.yml)
-[![Release](https://github.com/Zeinshirou04/zapp-swap-manager/actions/workflows/release.yml/badge.svg)](https://github.com/Zeinshirou04/zapp-swap-manager/actions/workflows/release.yml)
+[![CI](https://github.com/Zeinshirou04/Zapp-Swap-Manager/actions/workflows/ci.yml/badge.svg)](https://github.com/Zeinshirou04/Zapp-Swap-Manager/actions/workflows/ci.yml)
+[![Release](https://github.com/Zeinshirou04/Zapp-Swap-Manager/actions/workflows/release.yml/badge.svg)](https://github.com/Zeinshirou04/Zapp-Swap-Manager/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A Windows tool that moves and backs up Steam games between a fast, capacity-limited **SSD** (acting as a hot cache for active games) and a massive **HDD** (acting as the cold master storage library), controlled seamlessly from your desktop or remotely from your mobile phone.
@@ -76,7 +76,7 @@ Every release tag (`v*`) triggers automated GitHub Actions builds that publish c
 | **Desktop Dashboard** | `zapp-desktop-windows-x64.zip` | Tauri installer (`.msi` / `.exe`) for Windows. |
 | **Mobile Application** | `zapp-mobile-android.apk` | Signed Android APK for sideloading on phones/tablets. |
 
-To download the latest build, visit the [Releases](https://github.com/Zeinshirou04/zapp-swap-manager/releases) page.
+To download the latest build, visit the [Releases](https://github.com/Zeinshirou04/Zapp-Swap-Manager/releases) page.
 
 ---
 

@@ -15,9 +15,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Zeinshirou04/zapp-swap-manager/core/internal/queue"
-	"github.com/Zeinshirou04/zapp-swap-manager/core/internal/steam"
-	"github.com/Zeinshirou04/zapp-swap-manager/core/internal/transfer"
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/queue"
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/steam"
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/transfer"
 )
 
 // Config wires the server to its collaborators. Libraries is the whitelist:

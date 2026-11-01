@@ -1,0 +1,166 @@
+package config
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/steam"
+)
+
+const (
+	DefaultPort = 8765
+	DefaultHost = "127.0.0.1"
+)
+
+// Config represents runtime settings for the Zapp Swap Manager core daemon.
+type Config struct {
+	BindAddr      string          `json:"bind_addr"`
+	BearerToken   string          `json:"bearer_token"`
+	CFTagAudience string          `json:"cf_tag_audience"`
+	CFTeamDomain  string          `json:"cf_team_domain"`
+	DBPath        string          `json:"db_path"`
+	Headless      bool            `json:"headless"`
+	Libraries     []steam.Library `json:"libraries"`
+}
+
+// Default returns a Config initialized with sensible and safe defaults.
+func Default() *Config {
+	return &Config{
+		BindAddr: fmt.Sprintf("%s:%d", DefaultHost, DefaultPort),
+		DBPath:   DefaultDBPath(),
+		Headless: false,
+	}
+}
+
+// DefaultDBPath determines the platform-specific default path for queue.db.
+func DefaultDBPath() string {
+	if runtime.GOOS == "windows" {
+		appData := os.Getenv("APPDATA")
+		if appData != "" {
+			return filepath.Join(appData, "Zapp-Swap-Manager", "queue.db")
+		}
+	} else {
+		dataHome := os.Getenv("XDG_DATA_HOME")
+		if dataHome != "" {
+			return filepath.Join(dataHome, "Zapp-Swap-Manager", "queue.db")
+		}
+		home, err := os.UserHomeDir()
+		if err == nil && home != "" {
+			return filepath.Join(home, ".local", "share", "Zapp-Swap-Manager", "queue.db")
+		}
+	}
+	return "queue.db"
+}
+
+// GenerateRandomToken generates a cryptographically secure 32-byte hex token.
+func GenerateRandomToken() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("crypto/rand read: %w", err)
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+// Load loads configuration from an optional file and overrides with environment variables.
+func Load(configPath string) (*Config, error) {
+	cfg := Default()
+
+	if configPath != "" {
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			return nil, fmt.Errorf("reading config file: %w", err)
+		}
+		if err := json.Unmarshal(data, cfg); err != nil {
+			return nil, fmt.Errorf("unmarshaling config json: %w", err)
+		}
+	}
+
+	// Environment variable overrides
+	if env := os.Getenv("ZAPP_BIND_ADDR"); env != "" {
+		cfg.BindAddr = env
+	}
+	if env := os.Getenv("ZAPP_BEARER_TOKEN"); env != "" {
+		cfg.BearerToken = env
+	}
+	if env := os.Getenv("ZAPP_CF_AUDIENCE"); env != "" {
+		cfg.CFTagAudience = env
+	}
+	if env := os.Getenv("ZAPP_CF_DOMAIN"); env != "" {
+		cfg.CFTeamDomain = env
+	}
+	if env := os.Getenv("ZAPP_DB_PATH"); env != "" {
+		cfg.DBPath = env
+	}
+	if env := os.Getenv("ZAPP_HEADLESS"); env != "" {
+		cfg.Headless = strings.ToLower(env) == "true" || env == "1"
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("config validation: %w", err)
+	}
+
+	// Auto-generate BearerToken if empty and neither CF nor Bearer is specified
+	if cfg.BearerToken == "" && cfg.CFTagAudience == "" {
+		token, err := GenerateRandomToken()
+		if err != nil {
+			return nil, fmt.Errorf("generating fallback bearer token: %w", err)
+		}
+		cfg.BearerToken = token
+	}
+
+	return cfg, nil
+}
+
+// Validate ensures safety invariants, particularly loopback-only binding.
+func (c *Config) Validate() error {
+	if c.BindAddr == "" {
+		return errors.New("bind_addr cannot be empty")
+	}
+
+	host, _, err := net.SplitHostPort(c.BindAddr)
+	if err != nil {
+		// If no port specified, test as host
+		host = c.BindAddr
+	}
+
+	// Check loopback invariant per docs/safety.md
+	if host == "" {
+		return errors.New("bind_addr must specify a host (e.g. 127.0.0.1:8765)")
+	}
+
+	if host == "localhost" {
+		return nil
+	}
+
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return fmt.Errorf("invalid host in bind_addr: %q", host)
+	}
+
+	if !ip.IsLoopback() {
+		return fmt.Errorf("bind_addr must be a loopback address per safety policy, got %q", host)
+	}
+
+	return nil
+}
+
+// Port extracts the integer TCP port from BindAddr, defaulting to DefaultPort.
+func (c *Config) Port() int {
+	_, portStr, err := net.SplitHostPort(c.BindAddr)
+	if err != nil {
+		return DefaultPort
+	}
+	var port int
+	if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil || port <= 0 {
+		return DefaultPort
+	}
+	return port
+}

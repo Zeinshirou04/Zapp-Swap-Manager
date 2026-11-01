@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Zeinshirou04/zapp-swap-manager/core/internal/queue"
-	"github.com/Zeinshirou04/zapp-swap-manager/core/internal/steam"
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/queue"
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/steam"
 )
 
 type handlers struct {

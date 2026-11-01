@@ -6,6 +6,10 @@ updates:
       interval: weekly
     commit-message:
       prefix: "chore(deps)"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
 # Add these once each component exists:
 #  - package-ecosystem: gomod        # directory: /core
 #  - package-ecosystem: npm          # directory: /desktop

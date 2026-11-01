@@ -8,8 +8,12 @@ on:
 
 jobs:
   check:
-    name: Lint & Test Check
-    runs-on: windows-latest
+    name: Lint & Test Check (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -17,8 +21,7 @@ jobs:
       - name: Install Just
         uses: extractions/setup-just@v2
 
-      - name: Run checks
-        shell: cmd
+      - name: Run checks (defaults to shell set by `just`)
         run: just check
 
   ci-ok:
@@ -27,10 +30,12 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     steps:
-      - name: Verify all checks passed
+      - name: Verify all matrix checks passed
+        env:
+          CHECK_RESULT: ${{ needs.check.result }}
         run: |
-          if [ "${{ needs.check.result }}" != "success" ]; then
+          if [ "$CHECK_RESULT" != "success" ]; then
             echo "CI checks failed"
             exit 1
           fi
-          echo "All checks passed successfully."
+          echo "All checks (windows + ubuntu) passed successfully."

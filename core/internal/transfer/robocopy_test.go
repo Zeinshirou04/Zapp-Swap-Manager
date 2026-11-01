@@ -81,14 +81,20 @@ func TestRunBuildsCommonFlags(t *testing.T) {
 	}
 }
 
-// stubRunner forces the runner outcome for failure-path tests.
+// stubRunner forces the runner outcome for failure-path tests and pins the
+// driver to robocopy so these tests behave identically on Linux CI.
 func stubRunner(t *testing.T, code int, err error) func() {
 	t.Helper()
 	orig := runRobocopy
 	runRobocopy = func(ctx context.Context, src, dst string, flags ...string) (Result, error) {
 		return Result{ExitCode: code, Output: "stub output"}, err
 	}
-	restore := func() { runRobocopy = orig }
+	origDriver := driverFn
+	driverFn = func() Driver { return RobocopyDriver{} }
+	restore := func() {
+		runRobocopy = orig
+		driverFn = origDriver
+	}
 	t.Cleanup(restore)
 	return restore
 }

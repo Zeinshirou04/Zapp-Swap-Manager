@@ -59,13 +59,13 @@ Branch: `feat/core-service-tray`
 - Android mobile client (reserved for Plan 010+).
 
 ## Acceptance checks
-- [ ] Config loader correctly defaults and parses settings; rejects non-loopback host bindings.
-- [ ] Service coordinator starts SQLite queue worker and HTTP API server concurrently.
-- [ ] Service gracefully handles shutdown signals (cancelling running context and closing DB).
-- [ ] Windows tray icon displays status and menu with graceful quit.
-- [ ] Headless mode `--headless` allows CLI daemon execution on both Windows and Linux without GUI errors.
-- [ ] `go build ./cmd/zapp-core` builds successfully on Windows and Linux (`GOOS=linux`).
-- [ ] `just check` passes.
+- [x] Config loader correctly defaults and parses settings; rejects non-loopback host bindings. (Tested: `TestValidateLoopback`, `TestLoadWithEnvOverrides`, `TestLoadWithFile`.)
+- [x] Service coordinator starts SQLite queue worker and HTTP API server concurrently. (Tested: `TestServiceLifecycle`.)
+- [x] Service gracefully handles shutdown signals (cancelling running context and closing DB). (Tested: `TestServiceLifecycle`, `TestServiceJobExecutionRoundTrip`.)
+- [x] Windows tray icon displays status and menu with graceful quit. (Implemented in `tray_windows.go` via pure Win32 API.)
+- [x] Headless mode `--headless` allows CLI daemon execution on both Windows and Linux without GUI errors. (Tested: `TestTrayHeadlessExecution`.)
+- [x] `go build ./cmd/zapp-core` builds successfully on Windows and Linux (`GOOS=linux`).
+- [x] `just check` passes.
 
 ## Safety
 Touches move/delete/manifest code? No (wires existing tested modules together).

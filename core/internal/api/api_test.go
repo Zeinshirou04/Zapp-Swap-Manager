@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Zeinshirou04/zapp-swap-manager/core/internal/queue"
-	"github.com/Zeinshirou04/zapp-swap-manager/core/internal/steam"
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/queue"
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/steam"
 )
 
 const testToken = "test-token"

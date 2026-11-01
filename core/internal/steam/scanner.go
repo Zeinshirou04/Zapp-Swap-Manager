@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Zeinshirou04/zapp-swap-manager/core/internal/vdf"
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/vdf"
 )
 
 // Game states from api/openapi.yaml.

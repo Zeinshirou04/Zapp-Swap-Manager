@@ -1,4 +1,4 @@
-module github.com/Zeinshirou04/zapp-swap-manager/core
+module github.com/Zeinshirou04/Zapp-Swap-Manager/core
 
 go 1.26.0
 

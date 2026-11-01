@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Zeinshirou04/zapp-swap-manager/core/internal/vdf"
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/vdf"
 )
 
 // StateFlags bits we care about (appmanifest_*.acf "StateFlags"):

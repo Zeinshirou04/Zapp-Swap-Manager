@@ -11,7 +11,7 @@ check-core:
     cd core && go vet ./... && go test -v ./...
 
 check-desktop:
-    @echo "desktop not set up yet. Replace with: cd desktop && npm run lint && npm test"
+    cd desktop && npm run lint && npm test
 
 check-mobile:
     @echo "mobile not set up yet. Replace with: cd mobile && gradlew ktlintCheck testDebugUnitTest"

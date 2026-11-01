@@ -1,9 +1,11 @@
-// Package transfer implements the Robocopy-based file transfer engine and
-// the operation sequences (Backup, Evict, Promote) from docs/safety.md.
+// Package transfer implements the file transfer engine and the operation
+// sequences (Backup, Evict, Promote) from docs/safety.md, behind a pluggable
+// Driver interface (robocopy on Windows, rsync on Linux).
 //
 // Invariants enforced here:
-//   - Robocopy exit codes 0-7 are success variants; 8+ are failures.
-//   - /MIR never runs before a /L dry run has been read.
+//   - Robocopy exit codes 0-7 are success variants; 8+ are failures
+//     (rsync: any non-zero exit code is a failure).
+//   - A mirror never runs before an equivalent dry run has been read.
 //   - SSD data is deleted only after the HDD copy is verified and the
 //     manifest has been moved.
 //   - A manifest ends up in exactly one library's steamapps folder at a time.
@@ -107,4 +109,23 @@ func Run(ctx context.Context, src, dst string, flags ...string) (Result, error) 
 		return res, err
 	}
 	return res, ExitCodeError(res.ExitCode)
+}
+
+// RobocopyDriver is the Windows transfer driver over robocopy.exe.
+type RobocopyDriver struct{}
+
+func (RobocopyDriver) Name() string { return "robocopy" }
+
+func (RobocopyDriver) Mirror(ctx context.Context, src, dst string, dryRun bool) error {
+	flags := []string{MirrorFlag}
+	if dryRun {
+		flags = append(flags, DryRunFlag)
+	}
+	_, err := Run(ctx, src, dst, flags...)
+	return err
+}
+
+func (RobocopyDriver) Copy(ctx context.Context, src, dst string) error {
+	_, err := Run(ctx, src, dst, CopyFlag)
+	return err
 }

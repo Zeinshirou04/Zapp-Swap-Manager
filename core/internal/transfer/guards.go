@@ -25,7 +25,8 @@ func steamappsFolder(libRoot string) string {
 // planned path. Installdirs come from appmanifest data, which we mostly trust
 // but never hand raw paths to.
 func validateInstallDir(installDir string) error {
-	if installDir == "" || filepath.IsAbs(installDir) || strings.Contains(installDir, "..") {
+	if installDir == "" || filepath.IsAbs(installDir) || strings.Contains(installDir, "..") ||
+		strings.ContainsAny(installDir, `/\:`) {
 		return fmt.Errorf("unsafe install directory name %q", installDir)
 	}
 	return nil

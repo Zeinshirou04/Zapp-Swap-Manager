@@ -41,15 +41,14 @@ func runMirror(ctx context.Context, opts Options, hddLibRoot, installDir, src, d
 	if err := CheckDestination(dst, hddLibRoot, installDir); err != nil {
 		return fmt.Errorf("backup/mirror: %w", err)
 	}
-	// Dry-run inspection: run /L and read its planned actions before mirroring.
-	dry, err := Run(ctx, src, dst, MirrorFlag, DryRunFlag)
-	if err != nil {
-		return fmt.Errorf("backup/mirror: dry run: %w\noutput: %s", err, dry.Output)
+	// Dry-run inspection: read the planned actions before mirroring, then
+	// run the real mirror. Same flow for robocopy (/L then /MIR) and
+	// rsync (-n then --delete).
+	if err := driverFn().Mirror(ctx, src, dst, true); err != nil {
+		return fmt.Errorf("backup/mirror: dry run: %w", err)
 	}
-	// Real mirror.
-	res, err := Run(ctx, src, dst, MirrorFlag)
-	if err != nil {
-		return fmt.Errorf("backup/mirror: %w\noutput: %s", err, res.Output)
+	if err := driverFn().Mirror(ctx, src, dst, false); err != nil {
+		return fmt.Errorf("backup/mirror: %w", err)
 	}
 	return nil
 }
@@ -120,9 +119,8 @@ func Promote(ctx context.Context, opts Options, hddLibRoot, ssdLibRoot, manifest
 		if err := CheckDestination(dst, ssdLibRoot, installDir); err != nil {
 			return err
 		}
-		res, err := Run(ctx, src, dst, CopyFlag)
-		if err != nil {
-			return fmt.Errorf("copy: %w\noutput: %s", err, res.Output)
+		if err := driverFn().Copy(ctx, src, dst); err != nil {
+			return err
 		}
 		return nil
 	}()); err != nil {

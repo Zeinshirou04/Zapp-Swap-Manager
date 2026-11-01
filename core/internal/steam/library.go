@@ -14,12 +14,12 @@ const (
 // Library is a whitelisted Steam library. Only libraries known to config may
 // be scanned; the API never carries raw paths, only IDs.
 type Library struct {
-	ID         string
-	Name       string
-	Path       string
-	Type       string // TypeSSDCache or TypeHDDMaster
-	FreeBytes  int64
-	TotalBytes int64
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Path       string `json:"-"` // raw paths never leave the core (docs/safety.md)
+	Type       string `json:"type"`
+	FreeBytes  int64  `json:"free_bytes"`
+	TotalBytes int64  `json:"total_bytes"`
 }
 
 // RefreshDiskSpace queries the drive hosting the library and fills

@@ -81,6 +81,11 @@ func (q *Queue) journal(jobID string, index int, name, status string, details *s
 	return nil
 }
 
+// Steps returns a job's journal entries (api GET /jobs/{job_id} step logs).
+func (q *Queue) Steps(jobID string) ([]JournalEntry, error) {
+	return q.journalSteps(jobID)
+}
+
 // journalSteps lists a job's journal entries in execution order.
 func (q *Queue) journalSteps(jobID string) ([]JournalEntry, error) {
 	rows, err := q.db.Query(`SELECT id, job_id, step_index, step_name, status, recorded_at, details

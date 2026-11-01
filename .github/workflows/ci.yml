@@ -18,6 +18,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Install Desktop dependencies
+        shell: bash
+        run: |
+          if [ -f "desktop/package.json" ]; then
+            cd desktop && npm ci && cd ..
+          fi
+
       - name: Install Just
         uses: extractions/setup-just@v2
 

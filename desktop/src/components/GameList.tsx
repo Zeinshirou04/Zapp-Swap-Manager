@@ -1,0 +1,250 @@
+import React, { useState, useMemo } from 'react';
+import { Game, Library } from '../types/api.ts';
+import { Search, ArrowUpRight, ArrowDownRight, RefreshCw, HardDrive, CheckCircle2 } from 'lucide-react';
+
+interface GameListProps {
+  games: Game[];
+  libraries: Library[];
+  onPromote: (appId: string, targetLibraryId: string) => void;
+  onEvict: (appId: string, targetLibraryId: string) => void;
+  onBackup: (appId: string, targetLibraryId: string) => void;
+  actionLoading: boolean;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 GB';
+  const gb = bytes / (1024 * 1024 * 1024);
+  return `${gb.toFixed(2)} GB`;
+}
+
+export const GameList: React.FC<GameListProps> = ({
+  games,
+  libraries,
+  onPromote,
+  onEvict,
+  onBackup,
+  actionLoading,
+}) => {
+  const [search, setSearch] = useState('');
+  const [filterState, setFilterState] = useState<'all' | 'active_ssd' | 'storage_hdd'>('all');
+
+  const ssdLib = libraries.find((l) => l.type === 'ssd_cache');
+  const hddLib = libraries.find((l) => l.type === 'hdd_master');
+
+  const filteredGames = useMemo(() => {
+    return games.filter((g) => {
+      const matchesSearch =
+        g.name.toLowerCase().includes(search.toLowerCase()) ||
+        String(g.app_id).includes(search);
+      const matchesState = filterState === 'all' || g.state === filterState;
+      return matchesSearch && matchesState;
+    });
+  }, [games, search, filterState]);
+
+  return (
+    <div className="card">
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px',
+          marginBottom: '16px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h2 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Steam Games</h2>
+          <span
+            style={{
+              background: 'rgba(255, 255, 255, 0.1)',
+              padding: '2px 8px',
+              borderRadius: '9999px',
+              fontSize: '0.75rem',
+            }}
+          >
+            {filteredGames.length} / {games.length}
+          </span>
+        </div>
+
+        {/* Filter and search controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          {/* State filter buttons */}
+          <div
+            style={{
+              display: 'flex',
+              background: 'rgba(0, 0, 0, 0.2)',
+              borderRadius: 'var(--radius)',
+              padding: '2px',
+            }}
+          >
+            {(['all', 'active_ssd', 'storage_hdd'] as const).map((st) => (
+              <button
+                key={st}
+                onClick={() => setFilterState(st)}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '0.8rem',
+                  background: filterState === st ? 'var(--bg-card-hover)' : 'transparent',
+                  color: filterState === st ? 'var(--text-main)' : 'var(--text-muted)',
+                }}
+              >
+                {st === 'all' ? 'All' : st === 'active_ssd' ? 'On SSD' : 'On HDD'}
+              </button>
+            ))}
+          </div>
+
+          {/* Search bar */}
+          <div
+            role="search"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'rgba(0, 0, 0, 0.2)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius)',
+              padding: '6px 10px',
+            }}
+          >
+            <Search size={16} style={{ color: 'var(--text-muted)' }} />
+            <input
+              type="search"
+              placeholder="Search games or App ID..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                color: 'var(--text-main)',
+                fontSize: '0.875rem',
+                width: '180px',
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Games table */}
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <thead>
+            <tr
+              style={{
+                borderBottom: '1px solid var(--border-color)',
+                color: 'var(--text-muted)',
+                fontSize: '0.8rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              <th style={{ padding: '12px 16px' }}>Game Title</th>
+              <th style={{ padding: '12px 16px' }}>Location</th>
+              <th style={{ padding: '12px 16px' }}>Size</th>
+              <th style={{ padding: '12px 16px' }}>Backup Status</th>
+              <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredGames.map((game) => {
+              const isOnSSD = game.state === 'active_ssd';
+
+              return (
+                <tr
+                  key={game.app_id}
+                  style={{
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                    transition: 'background-color 0.15s ease',
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.02)')
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.backgroundColor = 'transparent')
+                  }
+                >
+                  <td style={{ padding: '12px 16px' }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{game.name}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      App ID: {game.app_id} • Folder: {game.install_dir}
+                    </div>
+                  </td>
+
+                  <td style={{ padding: '12px 16px' }}>
+                    <span className={isOnSSD ? 'badge badge-ssd' : 'badge badge-hdd'}>
+                      {isOnSSD ? 'Active (SSD)' : 'Storage (HDD)'}
+                    </span>
+                  </td>
+
+                  <td style={{ padding: '12px 16px', fontSize: '0.875rem' }}>
+                    {formatBytes(game.size_bytes)}
+                  </td>
+
+                  <td style={{ padding: '12px 16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}>
+                      <CheckCircle2
+                        size={14}
+                        style={{ color: game.backup_clean ? 'var(--success)' : 'var(--warning)' }}
+                      />
+                      <span>{game.backup_clean ? 'In Sync' : 'Needs Sync'}</span>
+                    </div>
+                  </td>
+
+                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                    <div style={{ display: 'inline-flex', gap: '8px' }}>
+                      {!isOnSSD && ssdLib && (
+                        <button
+                          onClick={() => onPromote(String(game.app_id), ssdLib.id)}
+                          disabled={actionLoading}
+                          className="btn-primary"
+                          title="Copy to SSD cache and activate manifest"
+                        >
+                          <ArrowUpRight size={14} />
+                          Promote
+                        </button>
+                      )}
+
+                      {isOnSSD && hddLib && (
+                        <>
+                          <button
+                            onClick={() => onBackup(String(game.app_id), hddLib.id)}
+                            disabled={actionLoading}
+                            className="btn-secondary"
+                            title="Mirror SSD files to HDD backup"
+                          >
+                            <RefreshCw size={14} />
+                            Backup
+                          </button>
+
+                          <button
+                            onClick={() => onEvict(String(game.app_id), hddLib.id)}
+                            disabled={actionLoading}
+                            className="btn-danger"
+                            title="Safely mirror to HDD and free SSD space"
+                          >
+                            <ArrowDownRight size={14} />
+                            Evict
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+
+            {filteredGames.length === 0 && (
+              <tr>
+                <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <HardDrive size={32} style={{ margin: '0 auto 8px auto', opacity: 0.5 }} />
+                  <p>No matching games found.</p>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};

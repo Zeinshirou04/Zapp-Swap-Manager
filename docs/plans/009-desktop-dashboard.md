@@ -60,12 +60,12 @@ Branch: `feat/desktop-dashboard`
 - Mobile Android client (Plan 010).
 
 ## Acceptance checks
-- [ ] `desktop/` scaffolds cleanly with Vite, React, TypeScript, and Tauri.
-- [ ] API client strictly conforms to `api/openapi.yaml` endpoints and schemas.
-- [ ] Game listing, filtering, swap triggering, and job queue monitoring work smoothly.
-- [ ] Input safety: UI only sends `app_id` and `target_library_id`; never sends filesystem paths.
-- [ ] `npm run lint` and `npm test` pass.
-- [ ] `just check` passes.
+- [x] `desktop/` scaffolds cleanly with Vite, React, TypeScript, and Tauri.
+- [x] API client strictly conforms to `api/openapi.yaml` endpoints and schemas. (Tested in `api.test.ts`.)
+- [x] Game listing, filtering, swap triggering, and job queue monitoring work smoothly. (Tested in `GameList.test.tsx`, `DrivesOverview.test.tsx`.)
+- [x] Input safety: UI only sends `app_id` and `target_library_id`; never sends filesystem paths.
+- [x] `npm run lint` and `npm test` pass.
+- [x] `just check` passes.
 
 ## Safety
 Touches move/delete/manifest code? No (Desktop has zero filesystem access; delegates entirely to core HTTP API).

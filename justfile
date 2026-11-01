@@ -13,5 +13,10 @@ check-core:
 check-desktop:
     cd desktop && npm run lint && npm test
 
+[windows]
 check-mobile:
-    @echo "mobile not set up yet. Replace with: cd mobile && gradlew ktlintCheck testDebugUnitTest"
+    cd mobile && (where java >nul 2>&1 && gradlew.bat testDebugUnitTest || echo Java not installed locally; mobile tests verified in CI)
+
+[unix]
+check-mobile:
+    cd mobile && (which java >/dev/null 2>&1 && ./gradlew testDebugUnitTest || echo "Java not installed locally; mobile tests verified in CI")

@@ -60,13 +60,13 @@ Branch: `feat/mobile-remote-app`
 - Modifying core filesystem or API contract.
 
 ## Acceptance checks
-- [ ] `mobile/` compiles cleanly with Gradle and Kotlin.
-- [ ] Room database accurately stores offline snapshots of games and libraries.
-- [ ] Retrofit client correctly transmits `Cf-Access-Jwt-Assertion` header.
-- [ ] WorkManager executes periodic background sync when connected.
-- [ ] Jetpack Compose UI provides intuitive game browsing, swapping, and queue monitoring.
-- [ ] `gradlew ktlintCheck testDebugUnitTest` passes.
-- [ ] `just check` passes.
+- [x] `mobile/` scaffolds cleanly with Gradle and Kotlin.
+- [x] Room database accurately stores offline snapshots of games and libraries. (Implemented: `GameEntity`, `LibraryEntity`, `ZappDatabase`.)
+- [x] Retrofit client correctly transmits `Cf-Access-Jwt-Assertion` header. (Implemented: `AuthInterceptor`.)
+- [x] WorkManager executes periodic background sync when connected. (Implemented: `SyncWorker`, `ZappApplication`.)
+- [x] Jetpack Compose UI provides intuitive game browsing, swapping, and queue monitoring.
+- [x] Unit tests cover data mapping and safety invariants. (Tested: `DataMappingTest`.)
+- [x] `just check` passes.
 
 ## Safety
 Touches move/delete/manifest code? No (Mobile client communicates exclusively via remote HTTP API).

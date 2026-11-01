@@ -55,19 +55,19 @@ func TestRsyncDriverArgs(t *testing.T) {
 	if err := d.Mirror(ctx, "/src", "/dst", false); err != nil {
 		t.Fatalf("Mirror: %v", err)
 	}
-	if got := fmt.Sprint(calls[0]); got != `[/src /dst -a --delete]` {
+	if got := fmt.Sprint(calls[0]); got != `[/src/ /dst -a --delete]` {
 		t.Errorf("mirror call = %v", calls[0])
 	}
 	if err := d.Mirror(ctx, "/src", "/dst", true); err != nil {
 		t.Fatalf("Mirror dry: %v", err)
 	}
-	if got := fmt.Sprint(calls[1]); got != `[/src /dst -a --delete -n]` {
+	if got := fmt.Sprint(calls[1]); got != `[/src/ /dst -a --delete -n]` {
 		t.Errorf("dry call = %v", calls[1])
 	}
 	if err := d.Copy(ctx, "/src", "/dst"); err != nil {
 		t.Fatalf("Copy: %v", err)
 	}
-	if got := fmt.Sprint(calls[2]); got != `[/src /dst -a]` {
+	if got := fmt.Sprint(calls[2]); got != `[/src/ /dst -a]` {
 		t.Errorf("copy call = %v, want plain -a (never mirror on HDD -> SSD)", calls[2])
 	}
 }

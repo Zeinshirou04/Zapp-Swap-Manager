@@ -1,0 +1,445 @@
+# Game Swap Manager core API contract.
+# Safety rule (docs/safety.md "API input"): request bodies accept only app IDs
+# and whitelisted library targets — never raw filesystem paths. Paths are built
+# server-side by the core daemon.
+openapi: 3.0.3
+info:
+  title: Game Swap Manager Core API
+  version: 0.1.0
+  description: >
+    HTTP API exposed by the always-running Go core service. Consumed by the
+    Tauri desktop dashboard (local, Bearer token) and the Android mobile app
+    (remote, through a Cloudflare Tunnel behind Cloudflare Access).
+servers:
+  - url: http://127.0.0.1:8765
+    description: Local core service (desktop / development). Core binds to 127.0.0.1 only.
+  - url: https://{tunnel-host}
+    description: Remote core service reachable through a Cloudflare Tunnel; every request must carry a validated Cloudflare Access JWT.
+    variables:
+      tunnel-host:
+        default: swap-manager.example.com
+        description: Hostname of the Cloudflare Tunnel fronted by Cloudflare Access.
+
+security:
+  - BearerAuth: []
+  - CloudflareJWT: []
+
+paths:
+  /health:
+    get:
+      summary: Core service health
+      description: Uptime, core version, and whether a Steam process is currently running (mirrors the "backup skip when Steam is busy" check).
+      operationId: getHealth
+      tags: [System]
+      responses:
+        '200':
+          description: Core is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [uptime_seconds, version, steam_running]
+                properties:
+                  uptime_seconds:
+                    type: integer
+                    format: int64
+                    description: Seconds since the core service started.
+                  version:
+                    type: string
+                  steam_running:
+                    type: boolean
+                    description: True when a Steam process is detected. Backups are skipped while true and the game is mid-update.
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /libraries:
+    get:
+      summary: List registered Steam libraries
+      description: The whitelisted SSD cache and HDD master libraries known to the core.
+      operationId: listLibraries
+      tags: [Libraries]
+      responses:
+        '200':
+          description: Registered libraries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Library'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /games:
+    get:
+      summary: List detected games
+      description: Games found in appmanifests across all registered libraries.
+      operationId: listGames
+      tags: [Games]
+      parameters:
+        - name: state
+          in: query
+          description: Filter by game state.
+          schema:
+            $ref: '#/components/schemas/GameState'
+        - name: library_id
+          in: query
+          description: Filter by whitelisted library ID.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Matching games.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Game'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /games/{app_id}:
+    get:
+      summary: Get a single game
+      operationId: getGame
+      tags: [Games]
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      responses:
+        '200':
+          description: Game details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Game'
+        '404':
+          description: No game with that app ID is installed in any registered library.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /jobs:
+    get:
+      summary: List queue jobs
+      description: All jobs in the strictly serial FIFO queue, oldest first.
+      operationId: listJobs
+      tags: [Jobs]
+      parameters:
+        - name: status
+          in: query
+          description: Filter by job status.
+          schema:
+            $ref: '#/components/schemas/JobStatus'
+      responses:
+        '200':
+          description: Jobs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Job'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      summary: Enqueue a new job
+      description: >
+        Queues a promote, evict, or backup for one Steam app. Accepts only an
+        app ID and a whitelisted target library ID; the core builds all
+        filesystem paths and commands server-side. Raw paths are rejected with
+        400. The single queue worker executes jobs serially; a promote/evict
+        waits behind any running or queued backup of the same game.
+      operationId: createJob
+      tags: [Jobs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJobRequest'
+      responses:
+        '202':
+          description: Job queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '400':
+          description: Invalid request — unknown job type, unknown app ID, non-whitelisted target library, or a raw filesystem path was supplied (rejected by policy).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflicting job — e.g. another job for the same game is queued, running, or expected space exceeds target free space.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /jobs/{job_id}:
+    get:
+      summary: Get a single job
+      description: Status, progress, step logs, and error details.
+      operationId: getJob
+      tags: [Jobs]
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '404':
+          description: Unknown job ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /jobs/{job_id}/cancel:
+    post:
+      summary: Cancel a job
+      description: >
+        Cancels a queued job immediately; for a running job it signals a
+        cooperative cancel. The core never leaves a game half-moved: cancel
+        takes effect between journaled, idempotent steps, then the worker
+        resumes or rolls back from the journal.
+      operationId: cancelJob
+      tags: [Jobs]
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '202':
+          description: Cancel accepted (queued job removed, running job signalled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '404':
+          description: Unknown job ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Job already finished (succeeded, failed or cancelled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+components:
+  securitySchemes:
+    CloudflareJWT:
+      type: apiKey
+      in: header
+      name: Cf-Access-Jwt-Assertion
+      description: Cloudflare Access JWT, presented on every remote request through the tunnel; the core validates it (audience and domain) before handling.
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Shared secret token issued by the core for the local desktop UI and development use.
+
+  parameters:
+    AppId:
+      name: app_id
+      in: path
+      required: true
+      description: Steam app ID.
+      schema:
+        type: string
+        pattern: '^[0-9]+$'
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      description: Queue job ID (UUID).
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    ErrorResponse:
+      description: Standard error payload.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    LibraryType:
+      type: string
+      enum: [ssd_cache, hdd_master]
+      description: An SSD library holding the games currently played; the HDD master holds the full backup.
+
+    Library:
+      type: object
+      required: [id, name, type, total_bytes, free_bytes]
+      properties:
+        id:
+          type: string
+          description: Server-assigned stable identifier of the whitelisted library. The only library reference clients may send.
+        name:
+          type: string
+          description: Human-readable label, e.g. "SSD Cache".
+        type:
+          $ref: '#/components/schemas/LibraryType'
+        total_bytes:
+          type: integer
+          format: int64
+        free_bytes:
+          type: integer
+          format: int64
+
+    GameState:
+      type: string
+      enum: [active_ssd, storage_hdd]
+      description: >-
+        active_ssd: installed in an SSD cache library (playable now).
+        storage_hdd: backed up on the HDD master, not installed on the SSD.
+
+    Game:
+      type: object
+      required: [app_id, name, install_dir, size_bytes, state, current_library_id, build_id, backup_clean]
+      properties:
+        app_id:
+          type: integer
+          format: int64
+          description: Steam app ID.
+        name:
+          type: string
+        install_dir:
+          type: string
+          description: Steam install directory name (the folder under steamapps\common), not a filesystem path.
+        size_bytes:
+          type: integer
+          format: int64
+        state:
+          $ref: '#/components/schemas/GameState'
+        current_library_id:
+          type: string
+          description: Whitelisted ID of the library currently holding this game's appmanifest.
+        build_id:
+          type: string
+        last_backup_time:
+          type: string
+          format: date-time
+          nullable: true
+        backup_clean:
+          type: boolean
+          description: True only if build_id is unchanged and the last incremental backup found nothing to copy.
+
+    JobType:
+      type: string
+      enum: [promote, evict, backup]
+      description: >-
+        promote: HDD -> SSD copy, verify, move the manifest to the SSD, keep the HDD copy.
+        evict: final SSD -> HDD mirror, verify, move the manifest to the HDD, delete the SSD copy (SSD deletion happens only after the HDD copy is verified).
+        backup: SSD -> HDD mirror sync.
+
+    JobStatus:
+      type: string
+      enum: [queued, running, succeeded, failed, cancelled]
+
+    CreateJobRequest:
+      type: object
+      description: >
+        Only these three fields are accepted. The schema has no path properties
+        by design: the core rejects raw filesystem paths (400) and builds all
+        paths itself from whitelisted library records.
+      required: [type, app_id, target_library_id]
+      properties:
+        type:
+          $ref: '#/components/schemas/JobType'
+        app_id:
+          type: string
+          pattern: '^[0-9]+$'
+          description: Steam app ID to operate on.
+        target_library_id:
+          type: string
+          description: Whitelisted library ID that the operation targets (where the game ends up).
+
+    Job:
+      type: object
+      required: [id, type, app_id, target_library_id, status, progress_percent, bytes_transferred, total_bytes, error, created_at, started_at, completed_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/JobType'
+        app_id:
+          type: string
+          pattern: '^[0-9]+$'
+        target_library_id:
+          type: string
+        status:
+          $ref: '#/components/schemas/JobStatus'
+        progress_percent:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        bytes_transferred:
+          type: integer
+          format: int64
+        total_bytes:
+          type: integer
+          format: int64
+        error:
+          type: string
+          nullable: true
+          description: Human-readable failure reason, e.g. a failed mirror guard or a Robocopy exit code of 8 or above.
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        steps:
+          type: array
+          description: Ordered step log from the SQLite journal.
+          items:
+            type: object
+            required: [at, message]
+            properties:
+              at:
+                type: string
+                format: date-time
+              message:
+                type: string
+
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code, e.g. "raw_path_rejected", "unknown_library", "conflict".
+        message:
+          type: string
+        details:
+          description: Optional extra context; array or object payloads.
+          oneOf:
+            - type: array
+              items:
+                type: string
+            - type: object

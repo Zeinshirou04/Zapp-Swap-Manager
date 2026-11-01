@@ -1,0 +1,18 @@
+"AppState"
+{
+	"appid"		"105600"
+	"universe"		"1"
+	"name"		"Terraria"
+	"StateFlags"		"4"
+	"installdir"		"Terraria"
+	"SizeOnDisk"		"732596224"
+	"buildid"		"12846270"
+	"LastUpdated"		"1696000000"
+	"LastPlayed"		"1700000000"
+	"BytesToDownload"		"0"
+	"BytesDownloaded"		"0"
+	"MountedDepots"
+	{
+		"105601"		"12345"
+	}
+}

@@ -15,11 +15,11 @@ check-desktop:
 
 [windows]
 check-mobile:
-    cd mobile && (where java >nul 2>&1 && gradlew.bat testDebugUnitTest || echo Java not installed locally; mobile tests verified in CI)
+    cd mobile && (where java >nul 2>&1 && (gradlew.bat testDebugUnitTest || exit /b 1) || echo Java not installed locally; mobile tests verified in CI)
 
 [unix]
 check-mobile:
-    cd mobile && (which java >/dev/null 2>&1 && ./gradlew testDebugUnitTest || echo "Java not installed locally; mobile tests verified in CI")
+    cd mobile && (chmod +x ./gradlew 2>/dev/null || true) && if which java >/dev/null 2>&1; then ./gradlew testDebugUnitTest; else echo "Java not installed locally; mobile tests verified in CI"; fi
 
 # Build all components.
 build: build-core build-desktop build-mobile

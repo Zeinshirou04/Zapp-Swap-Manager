@@ -8,11 +8,6 @@ import com.zapp.swapmanager.data.model.Game
 import com.zapp.swapmanager.data.model.HealthResponse
 import com.zapp.swapmanager.data.model.Job
 import com.zapp.swapmanager.data.model.Library
-import com.zapp.swapmanager.data.remote.AuthInterceptor
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue

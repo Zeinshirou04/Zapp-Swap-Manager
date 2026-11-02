@@ -50,7 +50,7 @@ Branch: `fix/ci-release-build-targets`
 ## Acceptance checks
 - [x] `cargo metadata --no-deps` succeeds in `desktop/src-tauri`
 - [x] `just check` passes
-- [ ] PR created into `main` with passing `ci-ok`
+- [x] PR created into `main` with passing `ci-ok`
 
 ## Safety
 Touches move/delete/manifest code? no.

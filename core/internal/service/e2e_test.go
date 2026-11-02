@@ -136,33 +136,7 @@ func startE2EHarness(t *testing.T) *e2eHarness {
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 	client := &http.Client{Timeout: 5 * time.Second}
 
-	// Wait for server readiness
-	ready := false
-	for i := 0; i < 30; i++ {
-		req, _ := http.NewRequest(http.MethodGet, baseURL+"/health", nil)
-		req.Header.Set("Authorization", "Bearer "+token)
-		resp, err := client.Do(req)
-		if err == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				ready = true
-				break
-			}
-		}
-		time.Sleep(25 * time.Millisecond)
-	}
-	if !ready {
-		_ = svc.Stop()
-		cancel()
-		t.Fatal("e2e server failed to start and respond to health check")
-	}
-
-	t.Cleanup(func() {
-		_ = svc.Stop()
-		cancel()
-	})
-
-	return &e2eHarness{
+	h := &e2eHarness{
 		svc:        svc,
 		port:       port,
 		baseURL:    baseURL,
@@ -171,6 +145,34 @@ func startE2EHarness(t *testing.T) *e2eHarness {
 		hddRoot:    hddRoot,
 		httpClient: client,
 	}
+	h.waitForReady(t)
+
+	t.Cleanup(func() {
+		_ = svc.Stop()
+		cancel()
+	})
+
+	return h
+}
+
+func (h *e2eHarness) waitForReady(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		req, err := http.NewRequest(http.MethodGet, h.baseURL+"/health", nil)
+		if err == nil {
+			req.Header.Set("Authorization", "Bearer "+h.token)
+			resp, err := h.httpClient.Do(req)
+			if err == nil {
+				_ = resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					return
+				}
+			}
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatal("e2e server failed to start and respond to health check")
 }
 
 func (h *e2eHarness) post(t *testing.T, path string, body any, token string) (*http.Response, []byte) {
@@ -548,6 +550,7 @@ func TestE2E_ConflictGuard(t *testing.T) {
 		token:      token,
 		httpClient: client,
 	}
+	h.waitForReady(t)
 
 	// 1. Enqueue first job for App ID 77777
 	req := queue.CreateJobRequest{

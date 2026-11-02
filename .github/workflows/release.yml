@@ -22,21 +22,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version: '1.22'
-          check-latest: true
-
       - name: Build Core Binary
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force -Path dist
           if (Test-Path "core/go.mod") {
             cd core
-            go build -v -ldflags="-s -w" -o ../dist/zapp-core.exe ./...
+            go build -v -ldflags="-s -w" -o ../dist/zapp-core.exe ./cmd/zapp-core
             cd ..
           } else {
-            New-Item -ItemType Directory -Force -Path dist
             Set-Content -Path dist/zapp-core-placeholder.txt -Value "Core service build pipeline ready. Implement in core/."
           }
 
@@ -59,7 +53,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
@@ -73,8 +67,13 @@ jobs:
           if (Test-Path "desktop/package.json") {
             cd desktop
             npm ci
+            npm run build
             npm run tauri build
-            Copy-Item -Path "src-tauri/target/release/bundle/*" -Destination "../dist-desktop" -Recurse
+            if (Test-Path "src-tauri/target/release/bundle") {
+              Copy-Item -Path "src-tauri/target/release/bundle/*" -Destination "../dist-desktop" -Recurse
+            } elseif (Test-Path "src-tauri/target/release/zapp-desktop.exe") {
+              Copy-Item -Path "src-tauri/target/release/zapp-desktop.exe" -Destination "../dist-desktop"
+            }
             cd ..
           } else {
             Set-Content -Path dist-desktop/zapp-desktop-placeholder.txt -Value "Desktop build pipeline ready. Implement in desktop/."
@@ -99,7 +98,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -112,7 +111,7 @@ jobs:
             cd mobile
             chmod +x gradlew
             ./gradlew assembleRelease --no-daemon
-            find app/build/outputs/apk/ -name "*.apk" -exec cp {} ../dist-mobile/ \;
+            find app/build/outputs/apk/ -name "*.apk" -exec cp {} ../dist-mobile/zapp-mobile.apk \;
             cd ..
           else
             echo "Mobile APK build pipeline ready. Implement in mobile/." > dist-mobile/zapp-mobile-placeholder.txt
@@ -145,7 +144,7 @@ jobs:
           ls -la final-assets/
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v2
         with:
           files: final-assets/*
           draft: false

@@ -15,6 +15,12 @@ local.properties
 
 # Go (core)
 *.exe
+bin/
+dist/
+dist-desktop/
+dist-mobile/
+release-assets/
+final-assets/
 core/bin/
 core/dist/
 *.test

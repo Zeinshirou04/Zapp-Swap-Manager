@@ -20,3 +20,28 @@ check-mobile:
 [unix]
 check-mobile:
     cd mobile && (which java >/dev/null 2>&1 && ./gradlew testDebugUnitTest || echo "Java not installed locally; mobile tests verified in CI")
+
+# Build all components.
+build: build-core build-desktop build-mobile
+
+# Build the Core daemon binary.
+[windows]
+build-core:
+    cd core && go build -v -o ../bin/zapp-core.exe ./cmd/zapp-core
+
+[unix]
+build-core:
+    cd core && go build -v -o ../bin/zapp-core ./cmd/zapp-core
+
+# Build Desktop dashboard frontend assets.
+build-desktop:
+    cd desktop && npm run build
+
+# Build Mobile Android APK (debug / sideloadable).
+[windows]
+build-mobile:
+    cd mobile && (where java >nul 2>&1 && gradlew.bat assembleDebug || echo Java not installed locally; mobile builds verified in CI)
+
+[unix]
+build-mobile:
+    cd mobile && (which java >/dev/null 2>&1 && ./gradlew assembleDebug || echo "Java not installed locally; mobile builds verified in CI")

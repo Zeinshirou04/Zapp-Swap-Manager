@@ -19,7 +19,7 @@ check-mobile:
 
 [unix]
 check-mobile:
-    cd mobile && if which java >/dev/null 2>&1; then ./gradlew testDebugUnitTest; else echo "Java not installed locally; mobile tests verified in CI"; fi
+    cd mobile && (chmod +x ./gradlew 2>/dev/null || true) && if which java >/dev/null 2>&1; then ./gradlew testDebugUnitTest; else echo "Java not installed locally; mobile tests verified in CI"; fi
 
 # Build all components.
 build: build-core build-desktop build-mobile

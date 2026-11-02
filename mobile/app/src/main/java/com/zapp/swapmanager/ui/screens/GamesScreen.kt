@@ -25,9 +25,9 @@ import com.zapp.swapmanager.ui.theme.*
 fun GamesScreen(
     games: List<Game>,
     libraries: List<Library>,
-    onPromote: (appId: String, targetLibraryId: String) => Unit,
-    onEvict: (appId: String, targetLibraryId: String) => Unit,
-    onBackup: (appId: String, targetLibraryId: String) => Unit,
+    onPromote: (appId: String, targetLibraryId: String) -> Unit,
+    onEvict: (appId: String, targetLibraryId: String) -> Unit,
+    onBackup: (appId: String, targetLibraryId: String) -> Unit,
     actionLoading: Boolean
 ) {
     var searchQuery by remember { mutableStateOf("") }

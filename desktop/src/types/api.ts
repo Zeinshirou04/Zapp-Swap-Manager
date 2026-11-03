@@ -2,6 +2,22 @@
 
 export type LibraryType = 'ssd_cache' | 'hdd_master';
 
+export type DriveType = 'fixed' | 'removable' | 'network' | 'unknown';
+
+export interface DetectedLibrary {
+  id: string;
+  path: string;
+  drive_type: DriveType;
+  total_bytes: number;
+  free_bytes: number;
+}
+
+export interface LibraryInput {
+  type: LibraryType;
+  path: string;
+  id?: string;
+}
+
 export interface Library {
   id: string;
   name: string;

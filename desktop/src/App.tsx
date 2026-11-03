@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from './api/client.ts';
 import { restartCoreDaemon, sleep } from './api/native.ts';
-import { Game, HealthResponse, Job, Library } from './types/api.ts';
+import { Game, HealthResponse, Job, JobType, Library } from './types/api.ts';
 import { ConnectView } from './components/ConnectView.tsx';
 import { Header } from './components/Header.tsx';
 import { DrivesOverview } from './components/DrivesOverview.tsx';
 import { GameList } from './components/GameList.tsx';
 import { QueueMonitor } from './components/QueueMonitor.tsx';
 import { SettingsModal } from './components/SettingsModal.tsx';
+import { LibraryWizardModal } from './components/LibraryWizardModal.tsx';
+import { SwapAction, SwapConfirmModal } from './components/SwapConfirmModal.tsx';
 import { AlertTriangle, Gamepad2, Loader2, X } from 'lucide-react';
 
 type ConnectionStatus = 'connecting' | 'disconnected' | 'authenticated';
@@ -21,7 +23,11 @@ export const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<SwapAction | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const wizardShownRef = useRef(false);
 
   // At startup probe /health once: reachable -> dashboard, otherwise Connect screen.
   useEffect(() => {
@@ -71,6 +77,14 @@ export const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [conn, loadData]);
 
+  // Guided wizard auto-opens once when the core has no libraries configured.
+  useEffect(() => {
+    if (conn === 'authenticated' && !loading && libraries.length === 0 && !wizardShownRef.current) {
+      wizardShownRef.current = true;
+      setIsWizardOpen(true);
+    }
+  }, [conn, loading, libraries.length]);
+
   const handleDisconnect = () => {
     setHealth(null);
     setConn('disconnected');
@@ -96,55 +110,40 @@ export const App: React.FC = () => {
     }
   };
 
-  const handlePromote = async (appId: string, targetLibraryId: string) => {
-    try {
-      setActionLoading(true);
-      setErrorMsg(null);
-      await api.createJob({
-        type: 'promote',
-        app_id: appId,
-        target_library_id: targetLibraryId,
-      });
-      await loadData();
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to queue promote');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleEvict = async (appId: string, targetLibraryId: string) => {
-    if (!window.confirm(`Are you sure you want to evict game #${appId} to HDD? Files on SSD will only be deleted once the HDD copy is verified.`)) {
+  // The confirmation modal routes every transfer through one queueing call.
+  const requestSwap = (game: Game, type: JobType) => {
+    const libType = type === 'promote' ? 'ssd_cache' : 'hdd_master';
+    const target = libraries.find((l) => l.type === libType);
+    if (!target) {
+      setErrorMsg(`No ${libType === 'ssd_cache' ? 'SSD cache' : 'HDD master'} library is configured.`);
       return;
     }
-    try {
-      setActionLoading(true);
-      setErrorMsg(null);
-      await api.createJob({
-        type: 'evict',
-        app_id: appId,
-        target_library_id: targetLibraryId,
-      });
-      await loadData();
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to queue evict');
-    } finally {
-      setActionLoading(false);
-    }
+    setErrorMsg(null);
+    setActionError(null);
+    setPendingAction({
+      type,
+      appId: game.app_id,
+      title: game.name,
+      sizeBytes: game.size_bytes,
+      targetLibraryId: target.id,
+    });
   };
 
-  const handleBackup = async (appId: string, targetLibraryId: string) => {
+  const confirmSwap = async () => {
+    if (!pendingAction) return;
     try {
       setActionLoading(true);
       setErrorMsg(null);
       await api.createJob({
-        type: 'backup',
-        app_id: appId,
-        target_library_id: targetLibraryId,
+        type: pendingAction.type,
+        app_id: String(pendingAction.appId),
+        target_library_id: pendingAction.targetLibraryId,
       });
+      setPendingAction(null);
       await loadData();
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to queue backup');
+      // Keep the modal open; show what the core rejected.
+      setActionError(err instanceof Error ? err.message : 'Failed to queue transfer');
     } finally {
       setActionLoading(false);
     }
@@ -196,6 +195,7 @@ export const App: React.FC = () => {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onRestartCore={handleRestartCore}
         onDisconnect={handleDisconnect}
+        onConfigureLibraries={() => setIsWizardOpen(true)}
       />
 
       {errorMsg && (
@@ -236,9 +236,7 @@ export const App: React.FC = () => {
       <GameList
         games={games}
         libraries={libraries}
-        onPromote={handlePromote}
-        onEvict={handleEvict}
-        onBackup={handleBackup}
+        onAction={requestSwap}
         actionLoading={actionLoading}
       />
 
@@ -246,6 +244,27 @@ export const App: React.FC = () => {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onSaved={loadData}
+      />
+
+      <LibraryWizardModal
+        open={isWizardOpen}
+        onClose={() => setIsWizardOpen(false)}
+        onSaved={() => {
+          setIsWizardOpen(false);
+          loadData();
+        }}
+      />
+
+      <SwapConfirmModal
+        action={pendingAction}
+        libraries={libraries}
+        loading={actionLoading}
+        error={actionError}
+        onConfirm={confirmSwap}
+        onCancel={() => {
+          setPendingAction(null);
+          setActionError(null);
+        }}
       />
     </div>
   );

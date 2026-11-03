@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { HealthResponse } from '../types/api.ts';
-import { RefreshCw, Settings, Gamepad2, ShieldCheck, Activity, ChevronDown, RotateCw, Power } from 'lucide-react';
+import { RefreshCw, Settings, Gamepad2, ShieldCheck, Activity, ChevronDown, RotateCw, Power, FolderOpen } from 'lucide-react';
 
 interface HeaderProps {
   health: HealthResponse | null;
@@ -9,6 +9,7 @@ interface HeaderProps {
   onOpenSettings: () => void;
   onRestartCore: () => void;
   onDisconnect: () => void;
+  onConfigureLibraries: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -18,6 +19,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   onRestartCore,
   onDisconnect,
+  onConfigureLibraries,
 }) => {
   const isOnline = health !== null;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -153,14 +155,24 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
 
+        {/* Quick actions: library setup wizard + rescan */}
+        <button
+          onClick={onConfigureLibraries}
+          className="btn-primary"
+          title="Set up SSD / HDD Steam libraries"
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', fontSize: '0.825rem' }}
+        >
+          <FolderOpen size={14} /> Configure Libraries
+        </button>
         <button
           onClick={onRefresh}
           disabled={loading}
           className="btn-secondary"
-          title="Refresh All Data"
-          aria-label="Refresh"
+          title="Rescan Steam libraries and games"
+          aria-label="Scan Steam Games"
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', fontSize: '0.825rem' }}
         >
-          <RefreshCw size={16} className={loading ? 'spin' : ''} />
+          <RefreshCw size={14} className={loading ? 'spin' : ''} /> Scan Steam Games
         </button>
 
         <button

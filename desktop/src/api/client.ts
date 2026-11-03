@@ -1,5 +1,6 @@
 import {
   CreateJobRequest,
+  DetectedLibrary,
   ErrorResponse,
   Game,
   GameState,
@@ -7,6 +8,7 @@ import {
   Job,
   JobStatus,
   Library,
+  LibraryInput,
 } from '../types/api.ts';
 
 const CONFIG_KEY = 'zapp_api_config';
@@ -76,6 +78,17 @@ class ApiClient {
 
   async listLibraries(): Promise<Library[]> {
     return this.request<Library[]>('/libraries');
+  }
+
+  async detectLibraries(): Promise<DetectedLibrary[]> {
+    return this.request<DetectedLibrary[]>('/libraries/detected');
+  }
+
+  async registerLibraries(libraries: LibraryInput[]): Promise<Library[]> {
+    return this.request<Library[]>('/libraries', {
+      method: 'POST',
+      body: JSON.stringify(libraries),
+    });
   }
 
   async listGames(params?: { state?: GameState; library_id?: string }): Promise<Game[]> {

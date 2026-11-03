@@ -62,6 +62,9 @@ jobs:
 
       - name: Build Desktop Installer
         shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           New-Item -ItemType Directory -Force -Path dist-desktop
           if (Test-Path "desktop/package.json") {
@@ -71,6 +74,13 @@ jobs:
             npm run tauri build
             if (Test-Path "src-tauri/target/release/bundle") {
               Copy-Item -Path "src-tauri/target/release/bundle/*" -Destination "../dist-desktop" -Recurse
+              # Promote latest.json and signature files to dist-desktop root for release publishing
+              Get-ChildItem -Path "src-tauri/target/release/bundle" -Filter "latest.json" -Recurse | ForEach-Object {
+                Copy-Item -Path $_.FullName -Destination "../dist-desktop/latest.json" -Force
+              }
+              Get-ChildItem -Path "src-tauri/target/release/bundle" -Filter "*.sig" -Recurse | ForEach-Object {
+                Copy-Item -Path $_.FullName -Destination "../dist-desktop/" -Force
+              }
             } elseif (Test-Path "src-tauri/target/release/zapp-desktop.exe") {
               Copy-Item -Path "src-tauri/target/release/zapp-desktop.exe" -Destination "../dist-desktop"
             }
@@ -88,7 +98,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: zapp-desktop-windows-x64
-          path: zapp-desktop-windows-x64.zip
+          path: |
+            zapp-desktop-windows-x64.zip
+            dist-desktop/latest.json
+            dist-desktop/*.sig
 
   build-mobile:
     name: Build Mobile App (Android APK)

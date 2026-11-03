@@ -11,6 +11,9 @@ Thumbs.db
 .env.*
 *.keystore
 *.jks
+*.key
+.tauri/
+desktop/.tauri/
 local.properties
 
 # Go (core)

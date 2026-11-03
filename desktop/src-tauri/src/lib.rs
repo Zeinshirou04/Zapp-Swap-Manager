@@ -136,15 +136,22 @@ fn read_local_auth_token() -> Result<Option<String>, String> {
     }
 }
 
+#[tauri::command]
+fn relaunch_app(app: tauri::AppHandle) {
+    app.restart();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(CoreState::default())
         .invoke_handler(tauri::generate_handler![
             start_core_daemon,
             restart_core_daemon,
             get_core_status,
-            read_local_auth_token
+            read_local_auth_token,
+            relaunch_app
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

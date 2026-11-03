@@ -10,6 +10,8 @@ import { QueueMonitor } from './components/QueueMonitor.tsx';
 import { SettingsModal } from './components/SettingsModal.tsx';
 import { LibraryWizardModal } from './components/LibraryWizardModal.tsx';
 import { SwapAction, SwapConfirmModal } from './components/SwapConfirmModal.tsx';
+import { UpdateNotification } from './components/UpdateNotification.tsx';
+import { checkUpdate, UpdateDetails } from './api/updater.ts';
 import { AlertTriangle, Gamepad2, Loader2, X } from 'lucide-react';
 
 type ConnectionStatus = 'connecting' | 'disconnected' | 'authenticated';
@@ -27,7 +29,40 @@ export const App: React.FC = () => {
   const [pendingAction, setPendingAction] = useState<SwapAction | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [availableUpdate, setAvailableUpdate] = useState<UpdateDetails | null>(null);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [updateStatusMsg, setUpdateStatusMsg] = useState<string | null>(null);
   const wizardShownRef = useRef(false);
+  const updateCheckDoneRef = useRef(false);
+
+  // Check for updates (background on startup, or manual via button)
+  const handleCheckUpdates = useCallback(async (manual = false) => {
+    try {
+      setCheckingUpdates(true);
+      if (manual) setUpdateStatusMsg(null);
+      const update = await checkUpdate();
+      if (update) {
+        setAvailableUpdate(update);
+      } else if (manual) {
+        setUpdateStatusMsg("You're running the latest version of Zapp Swap Manager!");
+        setTimeout(() => setUpdateStatusMsg(null), 4000);
+      }
+    } catch (err) {
+      if (manual) {
+        setUpdateStatusMsg(err instanceof Error ? err.message : 'Failed to check for updates');
+      }
+    } finally {
+      setCheckingUpdates(false);
+    }
+  }, []);
+
+  // Background check on startup once
+  useEffect(() => {
+    if (!updateCheckDoneRef.current) {
+      updateCheckDoneRef.current = true;
+      handleCheckUpdates(false);
+    }
+  }, [handleCheckUpdates]);
 
   // At startup probe /health once: reachable -> dashboard, otherwise Connect screen.
   useEffect(() => {
@@ -196,6 +231,8 @@ export const App: React.FC = () => {
         onRestartCore={handleRestartCore}
         onDisconnect={handleDisconnect}
         onConfigureLibraries={() => setIsWizardOpen(true)}
+        onCheckUpdates={() => handleCheckUpdates(true)}
+        checkingUpdates={checkingUpdates}
       />
 
       {errorMsg && (
@@ -244,6 +281,8 @@ export const App: React.FC = () => {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onSaved={loadData}
+        onCheckUpdates={() => handleCheckUpdates(true)}
+        checkingUpdates={checkingUpdates}
       />
 
       <LibraryWizardModal
@@ -265,6 +304,13 @@ export const App: React.FC = () => {
           setPendingAction(null);
           setActionError(null);
         }}
+      />
+
+      <UpdateNotification
+        update={availableUpdate}
+        onDismiss={() => setAvailableUpdate(null)}
+        statusMessage={updateStatusMsg}
+        onClearStatus={() => setUpdateStatusMsg(null)}
       />
     </div>
   );

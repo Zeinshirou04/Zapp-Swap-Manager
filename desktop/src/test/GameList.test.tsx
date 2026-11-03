@@ -39,9 +39,7 @@ describe('GameList Component', () => {
       <GameList
         games={mockGames}
         libraries={mockLibraries}
-        onPromote={vi.fn()}
-        onEvict={vi.fn()}
-        onBackup={vi.fn()}
+        onAction={vi.fn()}
         actionLoading={false}
       />
     );
@@ -61,44 +59,60 @@ describe('GameList Component', () => {
   });
 
   it('triggers promote callback for HDD game', () => {
-    const onPromoteMock = vi.fn();
+    const onActionMock = vi.fn();
     render(
       <GameList
         games={mockGames}
         libraries={mockLibraries}
-        onPromote={onPromoteMock}
-        onEvict={vi.fn()}
-        onBackup={vi.fn()}
+        onAction={onActionMock}
         actionLoading={false}
       />
     );
 
-    const promoteButton = screen.getByText('Promote');
+    const promoteButton = screen.getByText('Move to SSD');
     fireEvent.click(promoteButton);
 
-    expect(onPromoteMock).toHaveBeenCalledWith('221380', 'ssd1');
+    expect(onActionMock).toHaveBeenCalledWith(mockGames[1], 'promote');
   });
 
-  it('triggers evict and backup callbacks for SSD game', () => {
-    const onEvictMock = vi.fn();
-    const onBackupMock = vi.fn();
+  it('triggers evict and backup actions for SSD game', () => {
+    const onActionMock = vi.fn();
     render(
       <GameList
         games={mockGames}
         libraries={mockLibraries}
-        onPromote={vi.fn()}
-        onEvict={onEvictMock}
-        onBackup={onBackupMock}
+        onAction={onActionMock}
         actionLoading={false}
       />
     );
 
-    const backupButton = screen.getByText('Backup');
-    fireEvent.click(backupButton);
-    expect(onBackupMock).toHaveBeenCalledWith('105600', 'hdd1');
+    fireEvent.click(screen.getByText('Backup to HDD'));
+    expect(onActionMock).toHaveBeenCalledWith(mockGames[0], 'backup');
 
-    const evictButton = screen.getByText('Evict');
-    fireEvent.click(evictButton);
-    expect(onEvictMock).toHaveBeenCalledWith('105600', 'hdd1');
+    fireEvent.click(screen.getByText('Evict to HDD'));
+    expect(onActionMock).toHaveBeenCalledWith(mockGames[0], 'evict');
+  });
+
+  it('toggles between grid and table view', () => {
+    render(
+      <GameList
+        games={mockGames}
+        libraries={mockLibraries}
+        onAction={vi.fn()}
+        actionLoading={false}
+      />
+    );
+
+    expect(screen.getAllByTestId('game-card')).toHaveLength(2);
+
+    // Switch to table view
+    fireEvent.click(screen.getByTitle('Table view'));
+    expect(screen.queryByTestId('game-card')).not.toBeInTheDocument();
+    expect(screen.getByText('Location')).toBeInTheDocument();
+
+    // Switch back to grid view
+    fireEvent.click(screen.getByTitle('Grid view'));
+    expect(screen.getAllByTestId('game-card')).toHaveLength(2);
   });
 });
+

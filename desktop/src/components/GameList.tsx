@@ -1,13 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { Game, Library } from '../types/api.ts';
-import { Search, ArrowUpRight, ArrowDownRight, RefreshCw, HardDrive, CheckCircle2 } from 'lucide-react';
+import { Game, JobType, Library } from '../types/api.ts';
+import { GameCard } from './GameCard.tsx';
+import { CheckCircle2, Database, HardDrive, LayoutGrid, List, Search, Zap } from 'lucide-react';
 
 interface GameListProps {
   games: Game[];
   libraries: Library[];
-  onPromote: (appId: string, targetLibraryId: string) => void;
-  onEvict: (appId: string, targetLibraryId: string) => void;
-  onBackup: (appId: string, targetLibraryId: string) => void;
+  onAction: (game: Game, type: JobType) => void;
   actionLoading: boolean;
 }
 
@@ -20,13 +19,12 @@ function formatBytes(bytes: number): string {
 export const GameList: React.FC<GameListProps> = ({
   games,
   libraries,
-  onPromote,
-  onEvict,
-  onBackup,
+  onAction,
   actionLoading,
 }) => {
   const [search, setSearch] = useState('');
   const [filterState, setFilterState] = useState<'all' | 'active_ssd' | 'storage_hdd'>('all');
+  const [view, setView] = useState<'grid' | 'table'>('grid');
 
   const ssdLib = libraries.find((l) => l.type === 'ssd_cache');
   const hddLib = libraries.find((l) => l.type === 'hdd_master');
@@ -40,6 +38,39 @@ export const GameList: React.FC<GameListProps> = ({
       return matchesSearch && matchesState;
     });
   }, [games, search, filterState]);
+
+  const actionButtons = (game: Game) => {
+    const isOnSSD = game.state === 'active_ssd';
+    return !isOnSSD && ssdLib ? (
+      <button
+        onClick={() => onAction(game, 'promote')}
+        disabled={actionLoading}
+        className="btn-primary"
+        title="Copy to SSD cache and activate manifest"
+      >
+        <Zap size={14} /> Move to SSD
+      </button>
+    ) : isOnSSD && hddLib ? (
+      <>
+        <button
+          onClick={() => onAction(game, 'backup')}
+          disabled={actionLoading}
+          className="btn-secondary"
+          title="Mirror SSD file changes to the HDD master"
+        >
+          Backup to HDD
+        </button>
+        <button
+          onClick={() => onAction(game, 'evict')}
+          disabled={actionLoading}
+          className="btn-danger"
+          title="Safely mirror to HDD and free SSD space"
+        >
+          <Database size={14} /> Evict to HDD
+        </button>
+      </>
+    ) : null;
+  };
 
   return (
     <div className="card">
@@ -67,7 +98,7 @@ export const GameList: React.FC<GameListProps> = ({
           </span>
         </div>
 
-        {/* Filter and search controls */}
+        {/* Filter, search and view controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           {/* State filter buttons */}
           <div
@@ -123,128 +154,154 @@ export const GameList: React.FC<GameListProps> = ({
               }}
             />
           </div>
+
+          {/* Grid / table view toggle */}
+          <div
+            role="group"
+            aria-label="View"
+            style={{
+              display: 'flex',
+              background: 'rgba(0, 0, 0, 0.2)',
+              borderRadius: 'var(--radius)',
+              padding: '2px',
+            }}
+          >
+            <button
+              onClick={() => setView('grid')}
+              aria-pressed={view === 'grid'}
+              title="Grid view"
+              style={{
+                padding: '6px 10px',
+                fontSize: '0.8rem',
+                background: view === 'grid' ? 'var(--bg-card-hover)' : 'transparent',
+                color: view === 'grid' ? 'var(--text-main)' : 'var(--text-muted)',
+              }}
+            >
+              <LayoutGrid size={15} />
+            </button>
+            <button
+              onClick={() => setView('table')}
+              aria-pressed={view === 'table'}
+              title="Table view"
+              style={{
+                padding: '6px 10px',
+                fontSize: '0.8rem',
+                background: view === 'table' ? 'var(--bg-card-hover)' : 'transparent',
+                color: view === 'table' ? 'var(--text-main)' : 'var(--text-muted)',
+              }}
+            >
+              <List size={15} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Games table */}
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead>
-            <tr
+      {view === 'grid' ? (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))',
+            gap: '14px',
+          }}
+        >
+          {filteredGames.map((game) => (
+            <GameCard key={game.app_id} game={game} onAction={onAction} actionLoading={actionLoading} />
+          ))}
+          {filteredGames.length === 0 && (
+            <div
               style={{
-                borderBottom: '1px solid var(--border-color)',
+                gridColumn: '1 / -1',
+                padding: '32px',
+                textAlign: 'center',
                 color: 'var(--text-muted)',
-                fontSize: '0.8rem',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
               }}
             >
-              <th style={{ padding: '12px 16px' }}>Game Title</th>
-              <th style={{ padding: '12px 16px' }}>Location</th>
-              <th style={{ padding: '12px 16px' }}>Size</th>
-              <th style={{ padding: '12px 16px' }}>Backup Status</th>
-              <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredGames.map((game) => {
-              const isOnSSD = game.state === 'active_ssd';
+              <HardDrive size={32} style={{ margin: '0 auto 8px auto', opacity: 0.5, display: 'block' }} />
+              <p>No matching games found.</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead>
+              <tr
+                style={{
+                  borderBottom: '1px solid var(--border-color)',
+                  color: 'var(--text-muted)',
+                  fontSize: '0.8rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                <th style={{ padding: '12px 16px' }}>Game Title</th>
+                <th style={{ padding: '12px 16px' }}>Location</th>
+                <th style={{ padding: '12px 16px' }}>Size</th>
+                <th style={{ padding: '12px 16px' }}>Backup Status</th>
+                <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredGames.map((game) => {
+                const isOnSSD = game.state === 'active_ssd';
+                return (
+                  <tr
+                    key={game.app_id}
+                    style={{
+                      borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                      transition: 'background-color 0.15s ease',
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.02)')
+                    }
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  >
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{game.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        App ID: {game.app_id} • Folder: {game.install_dir}
+                      </div>
+                    </td>
 
-              return (
-                <tr
-                  key={game.app_id}
-                  style={{
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                    transition: 'background-color 0.15s ease',
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.02)')
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.backgroundColor = 'transparent')
-                  }
-                >
-                  <td style={{ padding: '12px 16px' }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{game.name}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      App ID: {game.app_id} • Folder: {game.install_dir}
-                    </div>
-                  </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span className={isOnSSD ? 'badge badge-ssd' : 'badge badge-hdd'}>
+                        {isOnSSD ? '⚡ Ready on Fast SSD' : '💾 Stored on HDD Master'}
+                      </span>
+                    </td>
 
-                  <td style={{ padding: '12px 16px' }}>
-                    <span className={isOnSSD ? 'badge badge-ssd' : 'badge badge-hdd'}>
-                      {isOnSSD ? 'Active (SSD)' : 'Storage (HDD)'}
-                    </span>
-                  </td>
+                    <td style={{ padding: '12px 16px', fontSize: '0.875rem' }}>
+                      {formatBytes(game.size_bytes)}
+                    </td>
 
-                  <td style={{ padding: '12px 16px', fontSize: '0.875rem' }}>
-                    {formatBytes(game.size_bytes)}
-                  </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}>
+                        <CheckCircle2
+                          size={14}
+                          style={{ color: game.backup_clean ? 'var(--success)' : 'var(--warning)' }}
+                        />
+                        <span>{game.backup_clean ? 'In Sync' : 'Needs Sync'}</span>
+                      </div>
+                    </td>
 
-                  <td style={{ padding: '12px 16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}>
-                      <CheckCircle2
-                        size={14}
-                        style={{ color: game.backup_clean ? 'var(--success)' : 'var(--warning)' }}
-                      />
-                      <span>{game.backup_clean ? 'In Sync' : 'Needs Sync'}</span>
-                    </div>
-                  </td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', gap: '8px' }}>{actionButtons(game)}</div>
+                    </td>
+                  </tr>
+                );
+              })}
 
-                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: '8px' }}>
-                      {!isOnSSD && ssdLib && (
-                        <button
-                          onClick={() => onPromote(String(game.app_id), ssdLib.id)}
-                          disabled={actionLoading}
-                          className="btn-primary"
-                          title="Copy to SSD cache and activate manifest"
-                        >
-                          <ArrowUpRight size={14} />
-                          Promote
-                        </button>
-                      )}
-
-                      {isOnSSD && hddLib && (
-                        <>
-                          <button
-                            onClick={() => onBackup(String(game.app_id), hddLib.id)}
-                            disabled={actionLoading}
-                            className="btn-secondary"
-                            title="Mirror SSD files to HDD backup"
-                          >
-                            <RefreshCw size={14} />
-                            Backup
-                          </button>
-
-                          <button
-                            onClick={() => onEvict(String(game.app_id), hddLib.id)}
-                            disabled={actionLoading}
-                            className="btn-danger"
-                            title="Safely mirror to HDD and free SSD space"
-                          >
-                            <ArrowDownRight size={14} />
-                            Evict
-                          </button>
-                        </>
-                      )}
-                    </div>
+              {filteredGames.length === 0 && (
+                <tr>
+                  <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <HardDrive size={32} style={{ margin: '0 auto 8px auto', opacity: 0.5 }} />
+                    <p>No matching games found.</p>
                   </td>
                 </tr>
-              );
-            })}
-
-            {filteredGames.length === 0 && (
-              <tr>
-                <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  <HardDrive size={32} style={{ margin: '0 auto 8px auto', opacity: 0.5 }} />
-                  <p>No matching games found.</p>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 };

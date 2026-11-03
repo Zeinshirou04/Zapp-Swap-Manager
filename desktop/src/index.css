@@ -186,3 +186,20 @@ dialog {
   width: 90%;
   margin: auto;
 }
+
+/* Spin animation used by loading icons (was referenced but never defined) */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Game card flush artwork */
+.game-card {
+  padding: 0;
+  overflow: hidden;
+}
+

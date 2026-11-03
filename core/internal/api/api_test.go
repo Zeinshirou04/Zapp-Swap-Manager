@@ -488,3 +488,81 @@ func TestQueuedCancelThroughAPI(t *testing.T) {
 		return j["status"] == "succeeded"
 	})
 }
+
+// --- Plan 017: GET /libraries/detected and POST /libraries ---
+
+func TestDetectedLibrariesEndpoint(t *testing.T) {
+	ts, _ := newTestAPI(t, nil)
+	status, list := doJSONArray(t, ts, "GET", "/libraries/detected", true)
+	if status != http.StatusOK {
+		t.Fatalf("expected 200, got %d (items %d)", status, len(list))
+	}
+	// Detection depends on the host; only assert the item shape of what came back.
+	for _, item := range list {
+		d := item.(map[string]any)
+		for _, field := range []string{"id", "path", "drive_type", "free_bytes", "total_bytes"} {
+			if _, ok := d[field]; !ok {
+				t.Fatalf("detected library missing field %q: %v", field, d)
+			}
+		}
+	}
+}
+
+func TestRegisterLibraries(t *testing.T) {
+	var captured []steam.Library
+	ts, _ := newTestAPI(t, func(cfg *Config) {
+		cfg.SetLibraries = func(list []steam.Library) error {
+			captured = list
+			return nil
+		}
+	})
+	ssd := t.TempDir()
+	hdd := t.TempDir()
+
+	status, body := doJSON(t, ts, "POST", "/libraries", []map[string]string{
+		{"type": "ssd_cache", "path": ssd},
+		{"id": "hdd0", "type": "hdd_master", "path": hdd},
+	}, true)
+	if status != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %v", status, body)
+	}
+	if len(captured) != 2 {
+		t.Fatalf("expected 2 libraries registered, got %d", len(captured))
+	}
+	if captured[0].ID == "" {
+		t.Fatalf("expected generated id, got empty")
+	}
+	if captured[1].ID != "hdd0" {
+		t.Fatalf("expected given id hdd0, got %q", captured[1].ID)
+	}
+	// Whitelist echoes hide raw paths, like GET /libraries (docs/safety.md).
+	if _, hasPath := body["path"]; hasPath {
+		t.Fatalf("response must not include raw paths: %v", body)
+	}
+
+	for _, tc := range []struct {
+		name string
+		in   any
+	}{
+		{"relative path", []map[string]string{{"type": "ssd_cache", "path": "relative"}}},
+		{"bad type", []map[string]string{{"type": "usb_stick", "path": t.TempDir()}}},
+		{"path-like id", []map[string]string{{"id": `C:\evil`, "type": "ssd_cache", "path": t.TempDir()}}},
+		{"missing dir", []map[string]string{{"type": "ssd_cache", "path": filepath.Join(t.TempDir(), "nope")}}},
+	} {
+		status, body := doJSON(t, ts, "POST", "/libraries", tc.in, true)
+		if status != http.StatusBadRequest {
+			t.Fatalf("%s: expected 400, got %d: %v", tc.name, status, body)
+		}
+	}
+	if len(captured) != 2 {
+		t.Fatalf("failed candidates must not reach the whitelist, got %d", len(captured))
+	}
+}
+
+func TestRegisterLibrariesNotConfigured(t *testing.T) {
+	ts, _ := newTestAPI(t, nil)
+	status, body := doJSON(t, ts, "POST", "/libraries", []map[string]string{{"type": "ssd_cache", "path": t.TempDir()}}, true)
+	if status != http.StatusNotImplemented {
+		t.Fatalf("expected 501, got %d: %v", status, body)
+	}
+}

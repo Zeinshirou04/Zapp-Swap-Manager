@@ -29,6 +29,10 @@ type Config struct {
 	DBPath        string          `json:"db_path"`
 	Headless      bool            `json:"headless"`
 	Libraries     []steam.Library `json:"libraries"`
+
+	// ConfigPath records where this config is persisted (Plan 017: POST
+	// /libraries writes the whitelist back). Empty loads use DefaultConfigPath.
+	ConfigPath string `json:"-"`
 }
 
 // Default returns a Config initialized with sensible and safe defaults.
@@ -40,25 +44,33 @@ func Default() *Config {
 	}
 }
 
-// DefaultDBPath determines the platform-specific default path for queue.db.
-func DefaultDBPath() string {
+// AppDir is the per-user data directory holding the queue DB, the generated
+// auth token, and the persisted config.
+func AppDir() string {
 	if runtime.GOOS == "windows" {
-		appData := os.Getenv("APPDATA")
-		if appData != "" {
-			return filepath.Join(appData, "Zapp-Swap-Manager", "queue.db")
+		if appData := os.Getenv("APPDATA"); appData != "" {
+			return filepath.Join(appData, "Zapp-Swap-Manager")
 		}
-	} else {
-		dataHome := os.Getenv("XDG_DATA_HOME")
-		if dataHome != "" {
-			return filepath.Join(dataHome, "Zapp-Swap-Manager", "queue.db")
-		}
-		home, err := os.UserHomeDir()
-		if err == nil && home != "" {
-			return filepath.Join(home, ".local", "share", "Zapp-Swap-Manager", "queue.db")
-		}
+		return "config"
 	}
-	return "queue.db"
+	if dataHome := os.Getenv("XDG_DATA_HOME"); dataHome != "" {
+		return filepath.Join(dataHome, "Zapp-Swap-Manager")
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		return filepath.Join(home, ".local", "share", "Zapp-Swap-Manager")
+	}
+	return "config"
 }
+
+// DefaultDBPath determines the platform-specific default path for queue.db.
+func DefaultDBPath() string { return filepath.Join(AppDir(), "queue.db") }
+
+// DefaultConfigPath is where POST /libraries persists the whitelist.
+func DefaultConfigPath() string { return filepath.Join(AppDir(), "config.json") }
+
+// AuthTokenPath is the zero-config pairing token file the local desktop app
+// reads back (Plan 017/018).
+func AuthTokenPath() string { return filepath.Join(AppDir(), "auth.token") }
 
 // GenerateRandomToken generates a cryptographically secure 32-byte hex token.
 func GenerateRandomToken() (string, error) {
@@ -73,14 +85,17 @@ func GenerateRandomToken() (string, error) {
 func Load(configPath string) (*Config, error) {
 	cfg := Default()
 
-	if configPath != "" {
-		data, err := os.ReadFile(configPath)
-		if err != nil {
-			return nil, fmt.Errorf("reading config file: %w", err)
-		}
-		if err := json.Unmarshal(data, cfg); err != nil {
-			return nil, fmt.Errorf("unmarshaling config json: %w", err)
-		}
+	if configPath == "" {
+		configPath = DefaultConfigPath()
+	}
+	cfg.ConfigPath = configPath
+
+	if data, err := os.ReadFile(configPath); os.IsNotExist(err) {
+		// No file yet: defaults below. POST /libraries will write the first one.
+	} else if err != nil {
+		return nil, fmt.Errorf("reading config file: %w", err)
+	} else if err := json.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("unmarshaling config json: %w", err)
 	}
 
 	// Environment variable overrides
@@ -109,14 +124,59 @@ func Load(configPath string) (*Config, error) {
 
 	// Auto-generate BearerToken if empty and neither CF nor Bearer is specified
 	if cfg.BearerToken == "" && cfg.CFTagAudience == "" {
-		token, err := GenerateRandomToken()
-		if err != nil {
-			return nil, fmt.Errorf("generating fallback bearer token: %w", err)
+		if data, err := os.ReadFile(AuthTokenPath()); err == nil {
+			if token := strings.TrimSpace(string(data)); len(token) == 64 {
+				cfg.BearerToken = token
+			}
 		}
-		cfg.BearerToken = token
+		if cfg.BearerToken == "" {
+			token, err := GenerateRandomToken()
+			if err != nil {
+				return nil, fmt.Errorf("generating fallback bearer token: %w", err)
+			}
+			cfg.BearerToken = token
+		}
+		// Persist the effective local token so the desktop app can pair
+		// without being told it (Plan 017).
+		if err := persistAuthToken(cfg.BearerToken); err != nil {
+			return nil, fmt.Errorf("persisting auth token: %w", err)
+		}
 	}
 
 	return cfg, nil
+}
+
+func persistAuthToken(token string) error {
+	dir := AppDir()
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+	// 0600 keeps the token readable by the current user only; the declared
+	// Windows ACLs follow from the user profile directory.
+	return os.WriteFile(AuthTokenPath(), []byte(token+"\n"), 0600)
+}
+
+// Save persists the config (including any library whitelist changes) to
+// ConfigPath, defaulting to the AppDir config.json. The bearer token is
+// scrubbed from the file: it lives only in auth.token / memory.
+func (c *Config) Save() error {
+	path := c.ConfigPath
+	if path == "" {
+		path = DefaultConfigPath()
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return fmt.Errorf("creating config directory: %w", err)
+	}
+	out := *c
+	out.BearerToken = ""
+	data, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling config json: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return fmt.Errorf("writing config file: %w", err)
+	}
+	return nil
 }
 
 // Validate ensures safety invariants, particularly loopback-only binding.

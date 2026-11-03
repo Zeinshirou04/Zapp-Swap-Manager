@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -27,17 +28,88 @@ func (h handlers) health(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+// libs reports the live whitelist: the injected LibrariesFn when set, otherwise
+// the static config list.
+func (h handlers) libs() []steam.Library {
+	if h.cfg.LibrariesFn != nil {
+		return h.cfg.LibrariesFn()
+	}
+	return h.cfg.Libraries
+}
+
 // libraries: the whitelist with freshly scanned disk metrics.
 func (h handlers) libraries(w http.ResponseWriter, _ *http.Request) {
-	libs := make([]steam.Library, len(h.cfg.Libraries))
-	copy(libs, h.cfg.Libraries)
-	for i := range libs {
+	libs := h.libs()
+	dst := make([]steam.Library, len(libs))
+	copy(dst, libs)
+
+	for i := range dst {
 		if err := libs[i].RefreshDiskSpace(); err != nil {
 			writeError(w, http.StatusInternalServerError, "disk_space", err.Error())
 			return
 		}
 	}
-	writeJSON(w, http.StatusOK, libs)
+	writeJSON(w, http.StatusOK, dst)
+}
+
+// detectedLibraries: GET /libraries/detected — Steam installation
+// auto-discovery (Plan 017). Read-only: nothing here enters the whitelist.
+func (h handlers) detectedLibraries(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, steam.DetectLibraries())
+}
+
+// libraryInput is one POST /libraries body item.
+type libraryInput struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
+	Path string `json:"path"`
+}
+
+// registerLibraries: POST /libraries — replaces the whitelist. Every path is
+// validated server-side (absolute existing directory, never a filesystem
+// root) before it may enter the whitelist; jobs keep referring to libraries
+// by ID only (docs/safety.md "API input").
+func (h handlers) registerLibraries(w http.ResponseWriter, r *http.Request) {
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	var inputs []libraryInput
+	if err := dec.Decode(&inputs); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "body must be an array of {id?, type, path}: "+err.Error())
+		return
+	}
+	if h.cfg.SetLibraries == nil {
+		writeError(w, http.StatusNotImplemented, "not_supported", "this server was not configured to accept library registration")
+		return
+	}
+	merged := make([]steam.Library, 0, len(inputs))
+	for _, in := range inputs {
+		path, err := steam.ValidateLibraryPath(in.Path)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_library", err.Error())
+			return
+		}
+		if in.Type != steam.TypeSSDCache && in.Type != steam.TypeHDDMaster {
+			writeError(w, http.StatusBadRequest, "invalid_library", "library type must be "+steam.TypeSSDCache+" or "+steam.TypeHDDMaster)
+			return
+		}
+		id := in.ID
+		if id == "" {
+			id = steam.LibraryIDForPath(path)
+		}
+		if pathLike(id) {
+			writeError(w, http.StatusBadRequest, "invalid_library", "library id must be a bare identifier")
+			return
+		}
+		merged = append(merged, steam.Library{ID: id, Name: filepath.Base(path), Path: path, Type: in.Type})
+	}
+	for i := range merged {
+		_ = merged[i].RefreshDiskSpace()
+	}
+	if err := h.cfg.SetLibraries(merged); err != nil {
+		writeError(w, http.StatusInternalServerError, "persist_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, merged)
 }
 
 // gameJSON mirrors the Game schema in api/openapi.yaml.

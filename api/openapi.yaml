@@ -52,6 +52,27 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /libraries/detected:
+    get:
+      summary: Detect Steam libraries on this machine
+      description: >-
+        Scans the host for Steam installations (Windows registry HKCU\Software\Valve\Steam
+        and standard install paths) and returns every discovered library folder
+        with drive metrics. Nothing is registered until POST /libraries.
+      operationId: detectLibraries
+      tags: [Libraries]
+      responses:
+        '200':
+          description: Detected library folders; empty when no Steam installation is found.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DetectedLibrary'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /libraries:
     get:
       summary: List registered Steam libraries
@@ -67,6 +88,47 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Library'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      summary: Replace the library whitelist
+      description: >-
+        Sets the SSD cache and HDD master whitelist and persists it to the core
+        config. Every path is validated server-side: it must be an absolute
+        existing directory and not a filesystem root. IDs may be omitted for
+        server-derived stable IDs. The response is the resulting whitelist;
+        raw paths never appear in it — job references stay library IDs.
+      operationId: registerLibraries
+      tags: [Libraries]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/LibraryInput'
+      responses:
+        '200':
+          description: The resulting whitelist.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Library'
+        '400':
+          description: A candidate library failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '501':
+          description: Registration not accepted by this server configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -284,6 +346,39 @@ components:
       type: string
       enum: [ssd_cache, hdd_master]
       description: An SSD library holding the games currently played; the HDD master holds the full backup.
+
+    LibraryInput:
+      type: object
+      required: [type, path]
+      properties:
+        id:
+          type: string
+          description: Optional library ID. Omit to let the core derive a stable ID from the path.
+        type:
+          $ref: '#/components/schemas/LibraryType'
+        path:
+          type: string
+          description: Absolute library directory, e.g. a folder reported by GET /libraries/detected.
+
+    DetectedLibrary:
+      type: object
+      required: [id, path, drive_type, free_bytes, total_bytes]
+      properties:
+        id:
+          type: string
+          description: The stable library ID this path receives if registered via POST /libraries.
+        path:
+          type: string
+          description: Absolute Steam library directory on this machine.
+        drive_type:
+          type: string
+          enum: [fixed, removable, network, unknown]
+        total_bytes:
+          type: integer
+          format: int64
+        free_bytes:
+          type: integer
+          format: int64
 
     Library:
       type: object

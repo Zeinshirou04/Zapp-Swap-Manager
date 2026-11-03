@@ -25,17 +25,34 @@ type Service struct {
 	server  *api.Server
 
 	mu      sync.Mutex
+	libs    *libRegistry
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
 	running bool
 }
 
-// New creates and initializes a Service with default transfer executor.
-func New(cfg *config.Config, version string) (*Service, error) {
-	return NewWithExecutor(cfg, version, defaultExecutor(cfg))
+// libRegistry owns the runtime whitelist under a lock: the transfer executor
+// and HTTP handlers read through it, POST /libraries replaces it.
+type libRegistry struct {
+	mu   sync.RWMutex
+	list []steam.Library
 }
 
-// NewWithExecutor allows injecting a custom queue.Executor (useful for testing).
+func (r *libRegistry) Get() []steam.Library {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]steam.Library, len(r.list))
+	copy(out, r.list)
+	return out
+}
+
+// New creates and initializes a Service with default transfer executor.
+func New(cfg *config.Config, version string) (*Service, error) {
+	return NewWithExecutor(cfg, version, nil)
+}
+
+// NewWithExecutor allows injecting a custom queue.Executor (useful for testing);
+// nil selects the default executor.
 func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor) (*Service, error) {
 	if cfg == nil {
 		return nil, errors.New("service: nil config provided")
@@ -45,6 +62,11 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return nil, fmt.Errorf("creating db directory: %w", err)
 		}
+	}
+
+	libs := &libRegistry{list: cfg.Libraries}
+	if executor == nil {
+		executor = defaultExecutor(libs.Get)
 	}
 
 	q, err := queue.New(cfg.DBPath, executor)
@@ -63,11 +85,23 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 	}
 
 	apiServer, err := api.New(api.Config{
-		Port:      cfg.Port(),
-		Version:   version,
-		Libraries: cfg.Libraries,
-		Queue:     q,
-		Auth:      auth,
+		Port:        cfg.Port(),
+		Version:     version,
+		Libraries:   cfg.Libraries,
+		LibrariesFn: libs.Get,
+		SetLibraries: func(list []steam.Library) error {
+			libs.mu.Lock()
+			libs.list = list
+			libs.mu.Unlock()
+			cfg.Libraries = list
+			// Persist so the whitelist survives daemon restarts (Plan 017).
+			if err := cfg.Save(); err != nil {
+				return fmt.Errorf("persisting config: %w", err)
+			}
+			return nil
+		},
+		Queue: q,
+		Auth:  auth,
 	})
 	if err != nil {
 		_ = q.Close()
@@ -79,15 +113,17 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 		version: version,
 		queue:   q,
 		server:  apiServer,
+		libs:    libs,
 	}, nil
 }
 
-func defaultExecutor(cfg *config.Config) queue.Executor {
+func defaultExecutor(whitelist func() []steam.Library) queue.Executor {
 	return func(ctx context.Context, job queue.Job, step queue.StepFunc) error {
+		libs := whitelist()
 		var targetLib *steam.Library
-		for i := range cfg.Libraries {
-			if cfg.Libraries[i].ID == job.TargetLibraryID {
-				targetLib = &cfg.Libraries[i]
+		for i := range libs {
+			if libs[i].ID == job.TargetLibraryID {
+				targetLib = &libs[i]
 				break
 			}
 		}
@@ -97,10 +133,10 @@ func defaultExecutor(cfg *config.Config) queue.Executor {
 
 		manifestName := fmt.Sprintf("appmanifest_%s.acf", job.AppID)
 		var srcLib *steam.Library
-		for i := range cfg.Libraries {
-			manifestPath := filepath.Join(cfg.Libraries[i].Path, "steamapps", manifestName)
+		for i := range libs {
+			manifestPath := filepath.Join(libs[i].Path, "steamapps", manifestName)
 			if _, err := os.Stat(manifestPath); err == nil {
-				srcLib = &cfg.Libraries[i]
+				srcLib = &libs[i]
 				break
 			}
 		}

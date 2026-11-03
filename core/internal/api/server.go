@@ -20,14 +20,19 @@ import (
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/transfer"
 )
 
-// Config wires the server to its collaborators. Libraries is the whitelist:
-// config-owned, server-side only — clients never send paths.
+// Config wires the server to its collaborators. Libraries is the initial
+// whitelist: config-owned, server-side only — clients never send paths in
+// jobs. POST /libraries (Plan 017) may replace the whitelist through
+// SetLibraries; LibrariesFn reports the live list. Paths entering the
+// whitelist are validated server-side (existing absolute directories).
 type Config struct {
-	Port      int
-	Version   string
-	Libraries []steam.Library
-	Queue     *queue.Queue
-	Auth      Auth
+	Port         int
+	Version      string
+	Libraries    []steam.Library
+	LibrariesFn  func() []steam.Library
+	SetLibraries func([]steam.Library) error
+	Queue        *queue.Queue
+	Auth         Auth
 }
 
 // Server owns the bound http.Server.
@@ -92,6 +97,8 @@ func newRouter(cfg Config) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", h.health)
 	mux.HandleFunc("GET /libraries", h.libraries)
+	mux.HandleFunc("GET /libraries/detected", h.detectedLibraries)
+	mux.HandleFunc("POST /libraries", h.registerLibraries)
 	mux.HandleFunc("GET /games", h.listGames)
 	mux.HandleFunc("GET /games/{app_id}", h.getGame)
 	mux.HandleFunc("GET /jobs", h.listJobs)

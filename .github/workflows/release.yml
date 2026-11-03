@@ -48,6 +48,7 @@ jobs:
   build-desktop:
     name: Build Desktop App (Tauri / Windows)
     runs-on: windows-latest
+    needs: [build-core]
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -59,6 +60,23 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Download Core Binary
+        uses: actions/download-artifact@v4
+        with:
+          name: zapp-core-windows-x64
+          path: core-dist
+
+      - name: Stage Bundled Core Binary
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path bin
+          New-Item -ItemType Directory -Force -Path desktop/src-tauri/resources
+          if (Test-Path "core-dist/zapp-core-windows-x64.zip") {
+            Expand-Archive -Path "core-dist/zapp-core-windows-x64.zip" -DestinationPath "core-extracted" -Force
+            Copy-Item -Path "core-extracted/zapp-core.exe" -Destination "bin/zapp-core.exe" -Force
+            Copy-Item -Path "core-extracted/zapp-core.exe" -Destination "desktop/src-tauri/resources/zapp-core.exe" -Force
+          }
 
       - name: Build Desktop Installer
         shell: pwsh
@@ -74,7 +92,13 @@ jobs:
             npm run tauri build
             if (Test-Path "src-tauri/target/release/bundle") {
               Copy-Item -Path "src-tauri/target/release/bundle/*" -Destination "../dist-desktop" -Recurse
-              # Promote latest.json and signature files to dist-desktop root for release publishing
+              if (Test-Path "src-tauri/resources/zapp-core.exe") {
+                Copy-Item -Path "src-tauri/resources/zapp-core.exe" -Destination "../dist-desktop/zapp-core.exe" -Force
+              }
+              # Promote installers, latest.json, and signature files to dist-desktop root for release publishing
+              Get-ChildItem -Path "src-tauri/target/release/bundle" -Include "*.msi","*-setup.exe" -Recurse | ForEach-Object {
+                Copy-Item -Path $_.FullName -Destination "../dist-desktop/" -Force
+              }
               Get-ChildItem -Path "src-tauri/target/release/bundle" -Filter "latest.json" -Recurse | ForEach-Object {
                 Copy-Item -Path $_.FullName -Destination "../dist-desktop/latest.json" -Force
               }
@@ -100,6 +124,8 @@ jobs:
           name: zapp-desktop-windows-x64
           path: |
             zapp-desktop-windows-x64.zip
+            dist-desktop/*.msi
+            dist-desktop/*-setup.exe
             dist-desktop/latest.json
             dist-desktop/*.sig
 

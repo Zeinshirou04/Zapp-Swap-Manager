@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api, setApiConfig } from '../api/client.ts';
+import { api, getApiConfig, setApiConfig } from '../api/client.ts';
 import {
   CoreStatus,
   getCoreStatus,
@@ -45,6 +45,8 @@ export const ConnectView: React.FC<ConnectViewProps> = ({ onConnected }) => {
   const [stage, setStage] = useState<Stage>('idle');
   const [error, setError] = useState<string | null>(null);
   const [core, setCore] = useState<CoreStatus | null>(null);
+  const [localToken, setLocalToken] = useState(() => getApiConfig().bearerToken || '');
+  const [showManualToken, setShowManualToken] = useState(false);
   const [remoteUrl, setRemoteUrl] = useState('');
   const [remoteToken, setRemoteToken] = useState('');
 
@@ -52,28 +54,51 @@ export const ConnectView: React.FC<ConnectViewProps> = ({ onConnected }) => {
     getCoreStatus()
       .then(setCore)
       .catch(() => setCore(null));
+    readLocalAuthToken()
+      .then((token) => {
+        if (token) setLocalToken(token);
+      })
+      .catch(() => {});
   }, []);
 
   const connectLocal = async () => {
     setError(null);
     try {
       setStage('starting');
-      await startCoreDaemon();
+      if (!core?.running) {
+        await startCoreDaemon().catch((err) => {
+          console.warn('startCoreDaemon warning:', err);
+        });
+      }
       setStage('connecting');
-      // Zero-config local pairing: core generates/persists auth.token; use it if present.
-      const token = await readLocalAuthToken().catch(() => null);
-      setApiConfig({ baseUrl: LOCAL_BASE_URL, bearerToken: token ?? '' });
+
+      let lastErr: Error | null = null;
       for (let i = 0; i < 30; i++) {
         try {
+          // Zero-config local pairing: auto-detect token on each attempt in case core was generating it
+          let token = localToken.trim();
+          if (!token) {
+            token = (await readLocalAuthToken().catch(() => null)) ?? '';
+            if (token) setLocalToken(token);
+          }
+          setApiConfig({ baseUrl: LOCAL_BASE_URL, bearerToken: token });
           await api.getHealth();
           setStage('connected');
           onConnected();
           return;
-        } catch {
+        } catch (err) {
+          lastErr = err instanceof Error ? err : new Error(String(err));
           await sleep(500);
         }
       }
-      throw new Error('Core service did not become healthy after starting.');
+
+      if (lastErr && lastErr.message.toLowerCase().includes('unauthorized')) {
+        setShowManualToken(true);
+        throw new Error(
+          'Authentication failed (401 Unauthorized). The core requires a Bearer token. Enter the token from %APPDATA%/Zapp-Swap-Manager/auth.token below.'
+        );
+      }
+      throw lastErr ?? new Error('Core service did not respond after starting.');
     } catch (err) {
       setStage('error');
       setError(err instanceof Error ? err.message : String(err));
@@ -193,8 +218,53 @@ export const ConnectView: React.FC<ConnectViewProps> = ({ onConnected }) => {
               style={{ width: '100%', justifyContent: 'center', padding: '12px' }}
             >
               {busy ? <Loader2 size={16} className="spin" /> : <Play size={16} />}
-              Start Core & Connect
+              {core?.running ? 'Connect to Running Core' : 'Start Core & Connect'}
             </button>
+
+            <div style={{ marginTop: '4px' }}>
+              <button
+                type="button"
+                onClick={() => setShowManualToken((s) => !s)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  padding: 0,
+                }}
+              >
+                {showManualToken ? 'Hide token settings' : 'Advanced: Configure local token'}
+              </button>
+            </div>
+
+            {showManualToken && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label
+                  htmlFor="local-token-input"
+                  style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}
+                >
+                  Local Bearer Token (%APPDATA%/Zapp-Swap-Manager/auth.token)
+                </label>
+                <input
+                  id="local-token-input"
+                  type="password"
+                  value={localToken}
+                  onChange={(e) => setLocalToken(e.target.value)}
+                  placeholder="Auto-detected if empty"
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    background: 'rgba(0, 0, 0, 0.3)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius)',
+                    color: 'var(--text-main)',
+                    fontSize: '0.85rem',
+                  }}
+                />
+              </div>
+            )}
           </div>
         )}
 

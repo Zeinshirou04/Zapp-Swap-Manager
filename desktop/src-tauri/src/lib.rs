@@ -3,7 +3,7 @@ use std::net::{Ipv4Addr, TcpStream};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::State;
+use tauri::{Manager, State};
 
 const CORE_PORT: u16 = 8765;
 
@@ -39,17 +39,47 @@ fn core_port_listening() -> bool {
     TcpStream::connect_timeout(&addr, Duration::from_millis(500)).is_ok()
 }
 
-fn find_core_exe() -> Option<PathBuf> {
-    // Prefer zapp-core.exe next to the running desktop app; fall back to the dev build output.
-    let beside = std::env::current_exe()
-        .ok()?
-        .parent()?
-        .join("zapp-core.exe");
-    if beside.exists() {
-        return Some(beside);
+fn find_core_exe(app: &tauri::AppHandle) -> Option<PathBuf> {
+    // 1. In Tauri bundle resource directory (when bundled via tauri.conf.json resources)
+    if let Ok(res_dir) = app.path().resource_dir() {
+        let candidates = [
+            res_dir.join("zapp-core.exe"),
+            res_dir.join("resources").join("zapp-core.exe"),
+            res_dir.join("bin").join("zapp-core.exe"),
+        ];
+        for c in candidates {
+            if c.exists() {
+                return Some(c);
+            }
+        }
     }
+
+    // 2. Beside the running desktop executable (installed directory)
+    if let Ok(curr) = std::env::current_exe() {
+        if let Some(parent) = curr.parent() {
+            let candidates = [
+                parent.join("zapp-core.exe"),
+                parent.join("resources").join("zapp-core.exe"),
+            ];
+            for c in candidates {
+                if c.exists() {
+                    return Some(c);
+                }
+            }
+        }
+    }
+
+    // 3. Fall back to development build output
     let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../bin/zapp-core.exe");
-    dev.exists().then_some(dev)
+    if dev.exists() {
+        return Some(dev);
+    }
+    let dev_res = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/zapp-core.exe");
+    if dev_res.exists() {
+        return Some(dev_res);
+    }
+
+    None
 }
 
 #[tauri::command]
@@ -62,7 +92,7 @@ fn get_core_status(state: State<'_, CoreState>) -> CoreStatus {
 }
 
 #[tauri::command]
-fn start_core_daemon(state: State<'_, CoreState>) -> Result<StartResult, String> {
+fn start_core_daemon(app: tauri::AppHandle, state: State<'_, CoreState>) -> Result<StartResult, String> {
     let existing_pid = *state.spawned_pid.lock().unwrap();
     if core_port_listening() {
         return Ok(StartResult {
@@ -70,8 +100,8 @@ fn start_core_daemon(state: State<'_, CoreState>) -> Result<StartResult, String>
             pid: existing_pid,
         });
     }
-    let exe = find_core_exe()
-        .ok_or_else(|| "zapp-core.exe not found. Run `just build` first.".to_string())?;
+    let exe = find_core_exe(&app)
+        .ok_or_else(|| "zapp-core.exe not found in application bundle or bin/ directory.".to_string())?;
     let child = spawn_detached(&exe).map_err(|e| format!("failed to spawn core: {e}"))?;
     let pid = child.id();
     *state.spawned_pid.lock().unwrap() = Some(pid);
@@ -95,9 +125,9 @@ fn spawn_detached(exe: &PathBuf) -> std::io::Result<std::process::Child> {
 }
 
 #[tauri::command]
-fn restart_core_daemon(state: State<'_, CoreState>) -> Result<StartResult, String> {
+fn restart_core_daemon(app: tauri::AppHandle, state: State<'_, CoreState>) -> Result<StartResult, String> {
     stop_spawned_core(&state);
-    start_core_daemon(state)
+    start_core_daemon(app, state)
 }
 
 #[cfg(windows)]

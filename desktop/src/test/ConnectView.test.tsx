@@ -87,7 +87,25 @@ describe('ConnectView Component', () => {
       fireEvent.click(screen.getByText('Start Core & Connect'));
       await vi.advanceTimersByTimeAsync(20000); // full 30x500ms retry window
 
-      expect(screen.getByText(/did not become healthy/)).toBeInTheDocument();
+      expect(screen.getByText(/ECONNREFUSED|did not respond/)).toBeInTheDocument();
+      expect(onConnected).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('surfaces token input when 401 Unauthorized is returned', async () => {
+    vi.useFakeTimers();
+    try {
+      getHealthMock.mockRejectedValue(new Error('401 Unauthorized'));
+      const onConnected = vi.fn();
+      render(<ConnectView onConnected={onConnected} />);
+
+      fireEvent.click(screen.getByText('Start Core & Connect'));
+      await vi.advanceTimersByTimeAsync(20000);
+
+      expect(screen.getByText(/Authentication failed \(401 Unauthorized\)/)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Local Bearer Token/i)).toBeInTheDocument();
       expect(onConnected).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();

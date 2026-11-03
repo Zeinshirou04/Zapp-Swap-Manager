@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { api } from './api/client.ts';
-import { restartCoreDaemon, sleep } from './api/native.ts';
+import { api, getApiConfig, setApiConfig } from './api/client.ts';
+import { readLocalAuthToken, restartCoreDaemon, sleep } from './api/native.ts';
 import { Game, HealthResponse, Job, JobType, Library } from './types/api.ts';
 import { ConnectView } from './components/ConnectView.tsx';
 import { Header } from './components/Header.tsx';
@@ -64,11 +64,18 @@ export const App: React.FC = () => {
     }
   }, [handleCheckUpdates]);
 
-  // At startup probe /health once: reachable -> dashboard, otherwise Connect screen.
+  // At startup probe /health: auto-read local auth token if targeting loopback, reachable -> dashboard, otherwise Connect screen.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
+        const cfg = getApiConfig();
+        if (!cfg.bearerToken && (cfg.baseUrl.includes('127.0.0.1') || cfg.baseUrl.includes('localhost'))) {
+          const localToken = await readLocalAuthToken().catch(() => null);
+          if (localToken) {
+            setApiConfig({ baseUrl: cfg.baseUrl, bearerToken: localToken });
+          }
+        }
         const h = await api.getHealth();
         if (!cancelled) {
           setHealth(h);

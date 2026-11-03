@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { HealthResponse } from '../types/api.ts';
-import { RefreshCw, Settings, Gamepad2, ShieldCheck, Activity, ChevronDown, RotateCw, Power, FolderOpen } from 'lucide-react';
+import { RefreshCw, Settings, Gamepad2, ShieldCheck, Activity, ChevronDown, RotateCw, Power, FolderOpen, Sparkles } from 'lucide-react';
 
 interface HeaderProps {
   health: HealthResponse | null;
@@ -10,6 +10,8 @@ interface HeaderProps {
   onRestartCore: () => void;
   onDisconnect: () => void;
   onConfigureLibraries: () => void;
+  onCheckUpdates?: () => void;
+  checkingUpdates?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -20,6 +22,8 @@ export const Header: React.FC<HeaderProps> = ({
   onRestartCore,
   onDisconnect,
   onConfigureLibraries,
+  onCheckUpdates,
+  checkingUpdates,
 }) => {
   const isOnline = health !== null;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -105,6 +109,18 @@ export const Header: React.FC<HeaderProps> = ({
                 gap: '2px',
               }}
             >
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  onCheckUpdates?.();
+                }}
+                disabled={checkingUpdates}
+                className="btn-secondary"
+                style={{ justifyContent: 'flex-start', width: '100%' }}
+              >
+                <Sparkles size={14} className={checkingUpdates ? 'spin' : ''} />
+                {checkingUpdates ? 'Checking Updates...' : 'Check for Updates'}
+              </button>
               <button
                 onClick={() => {
                   setMenuOpen(false);

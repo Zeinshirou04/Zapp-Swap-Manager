@@ -1,17 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { getApiConfig, setApiConfig, api } from '../api/client.ts';
-import { KeyRound, Server, Check, X, AlertCircle } from 'lucide-react';
+import { KeyRound, Server, Check, X, AlertCircle, Sparkles } from 'lucide-react';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSaved: () => void;
+  onCheckUpdates?: () => void;
+  checkingUpdates?: boolean;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
   onSaved,
+  onCheckUpdates,
+  checkingUpdates,
 }) => {
   const [baseUrl, setBaseUrl] = useState('http://127.0.0.1:8765');
   const [bearerToken, setBearerToken] = useState('');
@@ -182,6 +186,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <span>{testResult.message}</span>
             </div>
           )}
+
+          {/* Updates Section */}
+          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, display: 'block' }}>Desktop App Updates</span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>v0.1.0 • Cloud Auto-Updater</span>
+              </div>
+              {onCheckUpdates && (
+                <button
+                  type="button"
+                  onClick={onCheckUpdates}
+                  disabled={checkingUpdates}
+                  className="btn-secondary"
+                  style={{ fontSize: '0.8rem', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Sparkles size={14} className={checkingUpdates ? 'spin' : ''} />
+                  {checkingUpdates ? 'Checking...' : 'Check for Updates'}
+                </button>
+              )}
+            </div>
+          </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
             <button

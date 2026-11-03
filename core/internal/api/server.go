@@ -61,7 +61,7 @@ func New(cfg Config) (*Server, error) {
 		cfg.Port = 8765
 	}
 	mux := newRouter(cfg)
-	handler := cfg.Auth.RequireAuth(reqLog(mux))
+	handler := corsMiddleware(cfg.Auth.RequireAuth(reqLog(mux)))
 	s := &Server{cfg: cfg, start: time.Now()}
 	s.srv = &http.Server{
 		// safety: core binds to loopback only, never 0.0.0.0.
@@ -195,4 +195,40 @@ func TransferExecutor(libs []steam.Library) queue.Executor {
 			return fmt.Errorf("unknown job type %q", job.Type)
 		}
 	}
+}
+
+// corsMiddleware attaches CORS and Private Network Access (PNA) headers to all
+// responses, and short-circuits HTTP OPTIONS preflight requests without requiring auth.
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Add("Vary", "Origin")
+		} else {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		}
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD")
+
+		reqHeaders := r.Header.Get("Access-Control-Request-Headers")
+		if reqHeaders != "" {
+			w.Header().Set("Access-Control-Allow-Headers", reqHeaders)
+		} else {
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Cf-Access-Jwt-Assertion, Accept")
+		}
+		w.Header().Set("Access-Control-Max-Age", "86400")
+
+		// Support Private Network Access (PNA) for Chromium webviews
+		if r.Header.Get("Access-Control-Request-Private-Network") == "true" {
+			w.Header().Set("Access-Control-Allow-Private-Network", "true")
+		}
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }

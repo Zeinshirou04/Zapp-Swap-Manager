@@ -1,14 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from './api/client.ts';
+import { restartCoreDaemon, sleep } from './api/native.ts';
 import { Game, HealthResponse, Job, Library } from './types/api.ts';
+import { ConnectView } from './components/ConnectView.tsx';
 import { Header } from './components/Header.tsx';
 import { DrivesOverview } from './components/DrivesOverview.tsx';
 import { GameList } from './components/GameList.tsx';
 import { QueueMonitor } from './components/QueueMonitor.tsx';
 import { SettingsModal } from './components/SettingsModal.tsx';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, Gamepad2, Loader2, X } from 'lucide-react';
+
+type ConnectionStatus = 'connecting' | 'disconnected' | 'authenticated';
 
 export const App: React.FC = () => {
+  const [conn, setConn] = useState<ConnectionStatus>('connecting');
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [libraries, setLibraries] = useState<Library[]>([]);
   const [games, setGames] = useState<Game[]>([]);
@@ -17,6 +22,25 @@ export const App: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // At startup probe /health once: reachable -> dashboard, otherwise Connect screen.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const h = await api.getHealth();
+        if (!cancelled) {
+          setHealth(h);
+          setConn('authenticated');
+        }
+      } catch {
+        if (!cancelled) setConn('disconnected');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -37,6 +61,7 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (conn !== 'authenticated') return;
     loadData();
     // Auto-refresh jobs and health every 3 seconds
     const interval = setInterval(() => {
@@ -44,7 +69,32 @@ export const App: React.FC = () => {
       api.listJobs().then(setJobs).catch(() => {});
     }, 3000);
     return () => clearInterval(interval);
-  }, [loadData]);
+  }, [conn, loadData]);
+
+  const handleDisconnect = () => {
+    setHealth(null);
+    setConn('disconnected');
+  };
+
+  const handleRestartCore = async () => {
+    try {
+      setConn('connecting');
+      await restartCoreDaemon();
+      // Retry health until core is back (it may hard-stop then restart if we own the process).
+      for (let i = 0; i < 30; i++) {
+        try {
+          setHealth(await api.getHealth());
+          setConn('authenticated');
+          return;
+        } catch {
+          await sleep(500);
+        }
+      }
+      setConn('disconnected');
+    } catch {
+      setConn('disconnected');
+    }
+  };
 
   const handlePromote = async (appId: string, targetLibraryId: string) => {
     try {
@@ -113,6 +163,30 @@ export const App: React.FC = () => {
     }
   };
 
+  if (conn === 'connecting') {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '12px',
+          color: 'var(--text-muted)',
+        }}
+      >
+        <Gamepad2 size={32} style={{ color: 'var(--primary)' }} />
+        <Loader2 className="spin" size={20} />
+        <span>Connecting to Core Service...</span>
+      </div>
+    );
+  }
+
+  if (conn === 'disconnected') {
+    return <ConnectView onConnected={() => setConn('authenticated')} />;
+  }
+
   return (
     <div className="app-container">
       <Header
@@ -120,6 +194,8 @@ export const App: React.FC = () => {
         loading={loading}
         onRefresh={loadData}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onRestartCore={handleRestartCore}
+        onDisconnect={handleDisconnect}
       />
 
       {errorMsg && (

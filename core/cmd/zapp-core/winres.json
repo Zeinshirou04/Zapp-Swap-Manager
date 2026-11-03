@@ -1,0 +1,47 @@
+{
+  "RT_GROUP_ICON": {
+    "APP": {
+      "0000": [
+        "../../../desktop/src-tauri/icons/32x32.png",
+        "../../../desktop/src-tauri/icons/64x64.png",
+        "../../../desktop/src-tauri/icons/128x128.png",
+        "../../../desktop/src-tauri/icons/128x128@2x.png"
+      ]
+    }
+  },
+  "RT_VERSION": {
+    "#1": {
+      "0000": {
+        "fixed": {
+          "file_version": "0.1.0.0",
+          "product_version": "0.1.0.0"
+        },
+        "info": {
+          "0409": {
+            "ProductName": "Zapp Swap Manager",
+            "CompanyName": "Zapp",
+            "FileDescription": "Zapp Swap Manager Core Service",
+            "LegalCopyright": "Copyright © 2026 Zapp Swap Manager Contributors",
+            "ProductVersion": "0.1.0.0",
+            "FileVersion": "0.1.0.0"
+          }
+        }
+      }
+    }
+  },
+  "RT_MANIFEST": {
+    "#1": {
+      "0409": {
+        "identity": {
+          "name": "zapp-core.exe",
+          "version": "0.1.0.0"
+        },
+        "description": "Zapp Swap Manager Core Service",
+        "minimum-os": "win7",
+        "execution-level": "asInvoker",
+        "active-code-page": "UTF-8",
+        "common-controls": "v6"
+      }
+    }
+  }
+}

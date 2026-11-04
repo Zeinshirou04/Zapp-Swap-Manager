@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/steam"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -104,3 +106,36 @@ func TestAutoGenerateBearerToken(t *testing.T) {
 		t.Errorf("expected 64 char hex token, got %d chars", len(cfg.BearerToken))
 	}
 }
+
+func TestLibraryPathPersistence(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.json")
+
+	cfg := Default()
+	cfg.ConfigPath = configFile
+	cfg.Libraries = []steam.Library{
+		{
+			ID:   "lib-test-1",
+			Name: "Test Library",
+			Path: filepath.Join(tmpDir, "steamapps"),
+			Type: steam.TypeSSDCache,
+		},
+	}
+
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	loaded, err := Load(configFile)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if len(loaded.Libraries) != 1 {
+		t.Fatalf("expected 1 library, got %d", len(loaded.Libraries))
+	}
+	if loaded.Libraries[0].Path != filepath.Join(tmpDir, "steamapps") {
+		t.Fatalf("expected path %q, got %q", filepath.Join(tmpDir, "steamapps"), loaded.Libraries[0].Path)
+	}
+}
+

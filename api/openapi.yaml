@@ -436,6 +436,9 @@ components:
         backup_clean:
           type: boolean
           description: True only if build_id is unchanged and the last incremental backup found nothing to copy.
+        is_custom:
+          type: boolean
+          description: True if this is an unmanifested or non-Steam game folder.
 
     JobType:
       type: string
@@ -462,7 +465,7 @@ components:
         app_id:
           type: string
           pattern: '^[0-9]+$'
-          description: Steam app ID to operate on.
+          description: Steam app ID or non-Steam deterministic numeric ID to operate on.
         target_library_id:
           type: string
           description: Whitelisted library ID that the operation targets (where the game ends up).

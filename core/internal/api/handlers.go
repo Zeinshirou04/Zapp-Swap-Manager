@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -176,8 +177,11 @@ func (h handlers) scanGames() ([]steam.Game, error) {
 func (h handlers) listGames(w http.ResponseWriter, r *http.Request) {
 	games, err := h.scanGames()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "scan_failed", err.Error())
-		return
+		if len(games) == 0 {
+			writeError(w, http.StatusInternalServerError, "scan_failed", err.Error())
+			return
+		}
+		slog.Warn("games scan had non-fatal warnings", "err", err)
 	}
 	state, libID := r.URL.Query().Get("state"), r.URL.Query().Get("library_id")
 	out := make([]gameJSON, 0, len(games))
@@ -198,8 +202,11 @@ func (h handlers) getGame(w http.ResponseWriter, r *http.Request) {
 	appID := r.PathValue("app_id")
 	games, err := h.scanGames()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "scan_failed", err.Error())
-		return
+		if len(games) == 0 {
+			writeError(w, http.StatusInternalServerError, "scan_failed", err.Error())
+			return
+		}
+		slog.Warn("game scan had non-fatal warnings", "err", err)
 	}
 	for _, g := range games {
 		if g.Manifest.AppID == appID {

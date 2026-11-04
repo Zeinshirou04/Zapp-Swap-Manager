@@ -16,7 +16,7 @@ const (
 type Library struct {
 	ID         string `json:"id"`
 	Name       string `json:"name"`
-	Path       string `json:"-"` // raw paths never leave the core (docs/safety.md)
+	Path       string `json:"path,omitempty"` // persisted in core config; never exposed over public HTTP API (docs/safety.md)
 	Type       string `json:"type"`
 	FreeBytes  int64  `json:"free_bytes"`
 	TotalBytes int64  `json:"total_bytes"`

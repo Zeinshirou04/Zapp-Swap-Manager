@@ -37,6 +37,34 @@ func (h handlers) libs() []steam.Library {
 	return h.cfg.Libraries
 }
 
+// libraryJSON mirrors the Library schema in api/openapi.yaml without exposing
+// the raw filesystem path.
+type libraryJSON struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	FreeBytes  int64  `json:"free_bytes"`
+	TotalBytes int64  `json:"total_bytes"`
+}
+
+func toLibraryJSON(l steam.Library) libraryJSON {
+	return libraryJSON{
+		ID:         l.ID,
+		Name:       l.Name,
+		Type:       l.Type,
+		FreeBytes:  l.FreeBytes,
+		TotalBytes: l.TotalBytes,
+	}
+}
+
+func toLibrariesJSON(libs []steam.Library) []libraryJSON {
+	out := make([]libraryJSON, len(libs))
+	for i, l := range libs {
+		out[i] = toLibraryJSON(l)
+	}
+	return out
+}
+
 // libraries: the whitelist with freshly scanned disk metrics.
 func (h handlers) libraries(w http.ResponseWriter, _ *http.Request) {
 	libs := h.libs()
@@ -44,12 +72,12 @@ func (h handlers) libraries(w http.ResponseWriter, _ *http.Request) {
 	copy(dst, libs)
 
 	for i := range dst {
-		if err := libs[i].RefreshDiskSpace(); err != nil {
+		if err := dst[i].RefreshDiskSpace(); err != nil {
 			writeError(w, http.StatusInternalServerError, "disk_space", err.Error())
 			return
 		}
 	}
-	writeJSON(w, http.StatusOK, dst)
+	writeJSON(w, http.StatusOK, toLibrariesJSON(dst))
 }
 
 // detectedLibraries: GET /libraries/detected — Steam installation
@@ -109,7 +137,7 @@ func (h handlers) registerLibraries(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "persist_failed", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, merged)
+	writeJSON(w, http.StatusOK, toLibrariesJSON(merged))
 }
 
 // gameJSON mirrors the Game schema in api/openapi.yaml.
@@ -141,7 +169,7 @@ func toGameJSON(g steam.Game) gameJSON {
 }
 
 func (h handlers) scanGames() ([]steam.Game, error) {
-	return steam.ScanLibraries(h.cfg.Libraries)
+	return steam.ScanLibraries(h.libs())
 }
 
 // listGames: GET /games?state=&library_id=

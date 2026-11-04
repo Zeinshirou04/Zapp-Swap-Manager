@@ -96,6 +96,10 @@ func Load(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("reading config file: %w", err)
 	} else if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("unmarshaling config json: %w", err)
+	} else {
+		if healMissingLibraryPaths(cfg.Libraries) {
+			_ = cfg.Save()
+		}
 	}
 
 	// Environment variable overrides
@@ -154,6 +158,36 @@ func persistAuthToken(token string) error {
 	// 0600 keeps the token readable by the current user only; the declared
 	// Windows ACLs follow from the user profile directory.
 	return os.WriteFile(AuthTokenPath(), []byte(token+"\n"), 0600)
+}
+
+// healMissingLibraryPaths matches libraries that have empty Path against
+// auto-discovered Steam libraries by stable ID. Returns true if any path was restored.
+func healMissingLibraryPaths(libs []steam.Library) bool {
+	needsHeal := false
+	for _, l := range libs {
+		if strings.TrimSpace(l.Path) == "" && l.ID != "" {
+			needsHeal = true
+			break
+		}
+	}
+	if !needsHeal {
+		return false
+	}
+	detected := steam.DetectLibraries()
+	detectedByID := make(map[string]string, len(detected))
+	for _, d := range detected {
+		detectedByID[d.ID] = d.Path
+	}
+	healed := false
+	for i := range libs {
+		if strings.TrimSpace(libs[i].Path) == "" && libs[i].ID != "" {
+			if path, ok := detectedByID[libs[i].ID]; ok && path != "" {
+				libs[i].Path = path
+				healed = true
+			}
+		}
+	}
+	return healed
 }
 
 // Save persists the config (including any library whitelist changes) to

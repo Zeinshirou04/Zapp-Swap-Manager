@@ -566,3 +566,42 @@ func TestRegisterLibrariesNotConfigured(t *testing.T) {
 		t.Fatalf("expected 501, got %d: %v", status, body)
 	}
 }
+
+func TestGamesReflectDynamicLibraries(t *testing.T) {
+	var liveLibs []steam.Library
+	gameLibPath := prepLibrary(t, true)
+
+	ts, _ := newTestAPI(t, func(cfg *Config) {
+		cfg.Libraries = []steam.Library{}
+		cfg.LibrariesFn = func() []steam.Library { return liveLibs }
+		cfg.SetLibraries = func(list []steam.Library) error {
+			liveLibs = list
+			return nil
+		}
+	})
+
+	// Before registration: 0 games
+	status, games := doJSONArray(t, ts, "GET", "/games", true)
+	if status != http.StatusOK || len(games) != 0 {
+		t.Fatalf("expected 0 games before registration, got %d (status %d)", len(games), status)
+	}
+
+	// Register the library with the game
+	status, _ = doJSON(t, ts, "POST", "/libraries", []map[string]string{
+		{"type": "ssd_cache", "path": gameLibPath},
+	}, true)
+	if status != http.StatusOK {
+		t.Fatalf("expected 200 on library registration, got %d", status)
+	}
+
+	// After registration: 1 game detected dynamically!
+	status, games = doJSONArray(t, ts, "GET", "/games", true)
+	if status != http.StatusOK || len(games) != 1 {
+		t.Fatalf("expected 1 game after registration, got %d (status %d)", len(games), status)
+	}
+	g := games[0].(map[string]any)
+	if g["app_id"].(float64) != 105600 {
+		t.Fatalf("expected app_id 105600, got %v", g["app_id"])
+	}
+}
+

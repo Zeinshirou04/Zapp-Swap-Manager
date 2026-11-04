@@ -31,6 +31,18 @@ const mockGames: Game[] = [
     last_backup_time: '2026-10-31T12:00:00Z',
     backup_clean: true,
   },
+  {
+    app_id: 9876543210,
+    name: 'Genshin Impact',
+    install_dir: 'GenshinImpact',
+    size_bytes: 80 * 1024 * 1024 * 1024,
+    state: 'storage_hdd',
+    current_library_id: 'hdd1',
+    build_id: 'custom',
+    last_backup_time: null,
+    backup_clean: false,
+    is_custom: true,
+  },
 ];
 
 describe('GameList Component', () => {
@@ -69,7 +81,7 @@ describe('GameList Component', () => {
       />
     );
 
-    const promoteButton = screen.getByText('Move to SSD');
+    const promoteButton = screen.getAllByText('Move to SSD')[0];
     fireEvent.click(promoteButton);
 
     expect(onActionMock).toHaveBeenCalledWith(mockGames[1], 'promote');
@@ -103,7 +115,7 @@ describe('GameList Component', () => {
       />
     );
 
-    expect(screen.getAllByTestId('game-card')).toHaveLength(2);
+    expect(screen.getAllByTestId('game-card')).toHaveLength(3);
 
     // Switch to table view
     fireEvent.click(screen.getByTitle('Table view'));
@@ -112,7 +124,26 @@ describe('GameList Component', () => {
 
     // Switch back to grid view
     fireEvent.click(screen.getByTitle('Grid view'));
-    expect(screen.getAllByTestId('game-card')).toHaveLength(2);
+    expect(screen.getAllByTestId('game-card')).toHaveLength(3);
+  });
+
+  it('renders and filters non-Steam custom games', () => {
+    render(
+      <GameList
+        games={mockGames}
+        libraries={mockLibraries}
+        onAction={vi.fn()}
+        actionLoading={false}
+      />
+    );
+
+    expect(screen.getByText('Custom / Non-Steam')).toBeInTheDocument();
+
+    // Filter to Non-Steam
+    fireEvent.click(screen.getByText('Non-Steam'));
+    expect(screen.getByText('Genshin Impact')).toBeInTheDocument();
+    expect(screen.queryByText('Terraria')).not.toBeInTheDocument();
+    expect(screen.queryByText('Age of Empires II HD')).not.toBeInTheDocument();
   });
 });
 

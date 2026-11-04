@@ -141,6 +141,88 @@ func Promote(ctx context.Context, opts Options, hddLibRoot, ssdLibRoot, manifest
 	return nil
 }
 
+// EvictCustom removes a non-Steam game from the SSD cache after the HDD
+// master copy is proven good:
+//  1. final mirror SSD -> HDD (with all mirror guards),
+//  2. verify file count and byte size match,
+//  3. delete the SSD game folder,
+//  4. create an NTFS directory junction pointing to the HDD target.
+func EvictCustom(ctx context.Context, opts Options, ssdLibRoot, hddLibRoot, installDir string) error {
+	registerStep := func(step int, err error) error {
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("evict custom step %d: %w", step, err)
+	}
+	src := gameFolder(ssdLibRoot, installDir)
+	dst := gameFolder(hddLibRoot, installDir)
+
+	// Step 1: final mirror with the full guard chain.
+	if err := registerStep(1, runMirror(ctx, opts, hddLibRoot, installDir, src, dst)); err != nil {
+		return err
+	}
+	// Step 2: verify the HDD copy matches the SSD copy.
+	if err := registerStep(2, VerifyMatch(src, dst)); err != nil {
+		return err
+	}
+	// Step 3: delete the SSD copy, strictly after verification.
+	if err := registerStep(3, os.RemoveAll(src)); err != nil {
+		return err
+	}
+	// Step 4: create Directory Junction on SSD pointing to HDD.
+	if err := registerStep(4, CreateJunction(src, dst)); err != nil {
+		return err
+	}
+	return nil
+}
+
+// PromoteCustom copies a non-Steam game from the HDD master onto the SSD:
+//  1. remove existing junction on SSD if present,
+//  2. copy HDD -> SSD with /E,
+//  3. verify file count and byte size match,
+//  4. keep the HDD copy as master backup.
+func PromoteCustom(ctx context.Context, opts Options, hddLibRoot, ssdLibRoot, installDir string) error {
+	registerStep := func(step int, err error) error {
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("promote custom step %d: %w", step, err)
+	}
+	src := gameFolder(hddLibRoot, installDir)
+	dst := gameFolder(ssdLibRoot, installDir)
+
+	if err := validateInstallDir(installDir); err != nil {
+		return registerStep(1, err)
+	}
+	// Remove existing junction on destination if present.
+	if IsJunction(dst) {
+		if err := RemoveJunction(dst); err != nil {
+			return registerStep(1, fmt.Errorf("remove junction: %w", err))
+		}
+	}
+	// Step 1: copy from HDD to SSD.
+	if err := registerStep(1, func() error {
+		if err := CheckSource(src); err != nil {
+			return err
+		}
+		if err := CheckDestination(dst, ssdLibRoot, installDir); err != nil {
+			return err
+		}
+		if err := driverFn().Copy(ctx, src, dst); err != nil {
+			return err
+		}
+		return nil
+	}()); err != nil {
+		return err
+	}
+	// Step 2: verify the SSD copy matches the HDD master.
+	if err := registerStep(2, VerifyMatch(src, dst)); err != nil {
+		return err
+	}
+	// Step 3: implicit — the HDD copy is retained untouched.
+	return nil
+}
+
 // MoveManifest relocates appmanifest_<appid>.acf between two libraries'
 // steamapps folders. It refuses to overwrite an existing destination
 // (Steam treats the manifest as owning the game in exactly one library) and

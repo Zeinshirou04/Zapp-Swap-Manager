@@ -23,7 +23,7 @@ export const GameList: React.FC<GameListProps> = ({
   actionLoading,
 }) => {
   const [search, setSearch] = useState('');
-  const [filterState, setFilterState] = useState<'all' | 'active_ssd' | 'storage_hdd'>('all');
+  const [filterState, setFilterState] = useState<'all' | 'active_ssd' | 'storage_hdd' | 'custom'>('all');
   const [view, setView] = useState<'grid' | 'table'>('grid');
 
   const ssdLib = libraries.find((l) => l.type === 'ssd_cache');
@@ -34,7 +34,12 @@ export const GameList: React.FC<GameListProps> = ({
       const matchesSearch =
         g.name.toLowerCase().includes(search.toLowerCase()) ||
         String(g.app_id).includes(search);
-      const matchesState = filterState === 'all' || g.state === filterState;
+      const matchesState =
+        filterState === 'all'
+          ? true
+          : filterState === 'custom'
+            ? !!g.is_custom
+            : g.state === filterState;
       return matchesSearch && matchesState;
     });
   }, [games, search, filterState]);
@@ -109,18 +114,23 @@ export const GameList: React.FC<GameListProps> = ({
               padding: '2px',
             }}
           >
-            {(['all', 'active_ssd', 'storage_hdd'] as const).map((st) => (
+            {[
+              { id: 'all', label: 'All' },
+              { id: 'active_ssd', label: 'On SSD' },
+              { id: 'storage_hdd', label: 'On HDD' },
+              { id: 'custom', label: 'Non-Steam' },
+            ].map(({ id, label }) => (
               <button
-                key={st}
-                onClick={() => setFilterState(st)}
+                key={id}
+                onClick={() => setFilterState(id as any)}
                 style={{
                   padding: '6px 12px',
                   fontSize: '0.8rem',
-                  background: filterState === st ? 'var(--bg-card-hover)' : 'transparent',
-                  color: filterState === st ? 'var(--text-main)' : 'var(--text-muted)',
+                  background: filterState === id ? 'var(--bg-card-hover)' : 'transparent',
+                  color: filterState === id ? 'var(--text-main)' : 'var(--text-muted)',
                 }}
               >
-                {st === 'all' ? 'All' : st === 'active_ssd' ? 'On SSD' : 'On HDD'}
+                {label}
               </button>
             ))}
           </div>
@@ -257,9 +267,26 @@ export const GameList: React.FC<GameListProps> = ({
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                   >
                     <td style={{ padding: '12px 16px' }}>
-                      <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{game.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{game.name}</span>
+                        {game.is_custom && (
+                          <span
+                            style={{
+                              background: 'rgba(234, 88, 12, 0.2)',
+                              color: '#ea580c',
+                              border: '1px solid rgba(234, 88, 12, 0.4)',
+                              borderRadius: '4px',
+                              padding: '1px 6px',
+                              fontSize: '0.7rem',
+                              fontWeight: 600,
+                            }}
+                          >
+                            Non-Steam
+                          </span>
+                        )}
+                      </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        App ID: {game.app_id} • Folder: {game.install_dir}
+                        {game.is_custom ? `Folder: ${game.install_dir}` : `App ID: ${game.app_id} • Folder: ${game.install_dir}`}
                       </div>
                     </td>
 

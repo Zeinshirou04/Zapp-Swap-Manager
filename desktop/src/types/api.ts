@@ -38,6 +38,7 @@ export interface Game {
   build_id: string;
   last_backup_time: string | null;
   backup_clean: boolean;
+  is_custom?: boolean;
 }
 
 export type JobType = 'promote' | 'evict' | 'backup';

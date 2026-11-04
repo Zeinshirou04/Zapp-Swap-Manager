@@ -47,6 +47,21 @@ export const GameCard: React.FC<GameCardProps> = ({ game, onAction, actionLoadin
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
         )}
+        {game.is_custom && (
+          <span
+            className="badge"
+            style={{
+              position: 'absolute',
+              top: '8px',
+              left: '8px',
+              background: 'rgba(234, 88, 12, 0.9)',
+              color: '#fff',
+              backdropFilter: 'blur(4px)',
+            }}
+          >
+            Custom / Non-Steam
+          </span>
+        )}
         <span
           className={isOnSSD ? 'badge badge-ssd' : 'badge badge-hdd'}
           style={{ position: 'absolute', top: '8px', right: '8px', backdropFilter: 'blur(4px)' }}
@@ -58,7 +73,7 @@ export const GameCard: React.FC<GameCardProps> = ({ game, onAction, actionLoadin
       <div style={{ padding: '12px' }}>
         <h3 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '2px' }}>{game.name}</h3>
         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '10px' }}>
-          App ID: {game.app_id} • {formatBytes(game.size_bytes)}
+          {game.is_custom ? 'Non-Steam Folder' : `App ID: ${game.app_id}`} • {formatBytes(game.size_bytes)}
         </p>
 
         {!isOnSSD && (

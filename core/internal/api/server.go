@@ -182,6 +182,9 @@ func TransferExecutor(libs []steam.Library) queue.Executor {
 				return fmt.Errorf("evict requires the game in an ssd library and an hdd target")
 			}
 			return step(1, "evict to hdd", func() error {
+				if game.IsCustom {
+					return transfer.EvictCustom(ctx, opts, cur.Path, target.Path, dir)
+				}
 				return transfer.Evict(ctx, opts, cur.Path, target.Path, manifestName, dir)
 			})
 		case job.Type == queue.TypePromote:
@@ -189,6 +192,9 @@ func TransferExecutor(libs []steam.Library) queue.Executor {
 				return fmt.Errorf("promote requires the game in the hdd library and an ssd target")
 			}
 			return step(1, "promote to ssd", func() error {
+				if game.IsCustom {
+					return transfer.PromoteCustom(ctx, opts, cur.Path, target.Path, dir)
+				}
 				return transfer.Promote(ctx, opts, cur.Path, target.Path, manifestName, dir)
 			})
 		default:

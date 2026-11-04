@@ -17,6 +17,7 @@ export const isTauri = (): boolean =>
 
 export const startCoreDaemon = (): Promise<StartResult> => invoke('start_core_daemon');
 export const restartCoreDaemon = (): Promise<StartResult> => invoke('restart_core_daemon');
+export const stopCoreDaemon = (): Promise<boolean> => invoke('stop_core_daemon');
 export const getCoreStatus = (): Promise<CoreStatus> => invoke('get_core_status');
 export const readLocalAuthToken = (): Promise<string | null> => invoke('read_local_auth_token');
 

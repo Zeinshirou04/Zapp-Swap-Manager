@@ -28,7 +28,8 @@ export async function checkUpdate(): Promise<UpdateDetails | null> {
       downloadAndInstall: async (onProgress: (percent: number) => void) => {
         let total = 0;
         let downloaded = 0;
-        await update.downloadAndInstall((event: DownloadEvent) => {
+        // 1. Download installer package with live progress reporting
+        await update.download((event: DownloadEvent) => {
           if (event.event === 'Started') {
             total = event.data.contentLength ?? 0;
           } else if (event.event === 'Progress') {
@@ -41,6 +42,12 @@ export async function checkUpdate(): Promise<UpdateDetails | null> {
             onProgress(100);
           }
         });
+        // 2. Cleanly stop core daemon so resources/zapp-core.exe is not locked when installer runs
+        await invoke('stop_core_daemon').catch((err) => {
+          console.warn('Failed to stop core daemon prior to installer execution:', err);
+        });
+        // 3. Launch the Windows installer
+        await update.install();
       },
     };
   } catch (err) {

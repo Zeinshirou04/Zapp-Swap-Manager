@@ -130,6 +130,20 @@ fn restart_core_daemon(app: tauri::AppHandle, state: State<'_, CoreState>) -> Re
     start_core_daemon(app, state)
 }
 
+#[tauri::command]
+fn stop_core_daemon(state: State<'_, CoreState>) -> Result<bool, String> {
+    stop_spawned_core(&state);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("taskkill")
+            .args(["/IM", "zapp-core.exe", "/F"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .status();
+    }
+    Ok(true)
+}
+
 #[cfg(windows)]
 fn stop_spawned_core(state: &State<'_, CoreState>) {
     use std::os::windows::process::CommandExt;
@@ -179,6 +193,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             start_core_daemon,
             restart_core_daemon,
+            stop_core_daemon,
             get_core_status,
             read_local_auth_token,
             relaunch_app

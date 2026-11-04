@@ -25,6 +25,7 @@ export const App: React.FC = () => {
   const [games, setGames] = useState<Game[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
@@ -140,6 +141,7 @@ export const App: React.FC = () => {
       setJobs(j);
     } finally {
       setLoading(false);
+      setInitialLoadDone(true);
     }
   }, []);
 
@@ -154,13 +156,16 @@ export const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [conn, loadData]);
 
-  // Guided wizard auto-opens once when the core has no libraries configured.
+  // Guided wizard auto-opens once ONLY when initial load completes and core has no libraries.
   useEffect(() => {
-    if (conn === 'authenticated' && !loading && libraries.length === 0 && !wizardShownRef.current) {
-      wizardShownRef.current = true;
-      setIsWizardOpen(true);
+    if (conn === 'authenticated' && initialLoadDone && libraries.length === 0 && !wizardShownRef.current) {
+      const dismissed = localStorage.getItem('zapp_wizard_dismissed') === 'true';
+      if (!dismissed) {
+        wizardShownRef.current = true;
+        setIsWizardOpen(true);
+      }
     }
-  }, [conn, loading, libraries.length]);
+  }, [conn, initialLoadDone, libraries.length]);
 
   const handleDisconnect = () => {
     setHealth(null);
@@ -459,8 +464,12 @@ export const App: React.FC = () => {
 
       <LibraryWizardModal
         open={isWizardOpen}
-        onClose={() => setIsWizardOpen(false)}
+        onClose={() => {
+          localStorage.setItem('zapp_wizard_dismissed', 'true');
+          setIsWizardOpen(false);
+        }}
         onSaved={() => {
+          localStorage.setItem('zapp_wizard_dismissed', 'true');
           setIsWizardOpen(false);
           loadData();
         }}

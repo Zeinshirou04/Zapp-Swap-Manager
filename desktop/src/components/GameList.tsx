@@ -221,13 +221,25 @@ export const GameList: React.FC<GameListProps> = ({
             <div
               style={{
                 gridColumn: '1 / -1',
-                padding: '32px',
+                padding: '40px 16px',
                 textAlign: 'center',
                 color: 'var(--text-muted)',
               }}
             >
-              <HardDrive size={32} style={{ margin: '0 auto 8px auto', opacity: 0.5, display: 'block' }} />
-              <p>No matching games found.</p>
+              <HardDrive size={36} style={{ margin: '0 auto 12px auto', opacity: 0.5, display: 'block' }} />
+              {filterState === 'custom' ? (
+                <div style={{ maxWidth: '520px', margin: '0 auto' }}>
+                  <p style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.95rem', marginBottom: '6px' }}>
+                    No Non-Steam Games Detected
+                  </p>
+                  <p style={{ fontSize: '0.825rem', lineHeight: '1.5' }}>
+                    Place any standalone game folder inside your library's <code>steamapps/common/</code> directory (e.g. <code>E:\SteamLibrary\steamapps\common\MyGame</code>).
+                    Zapp Swap Manager will automatically discover it here and let you swap it between SSD and HDD via directory junctions!
+                  </p>
+                </div>
+              ) : (
+                <p>No matching games found.</p>
+              )}
             </div>
           )}
         </div>
@@ -319,9 +331,21 @@ export const GameList: React.FC<GameListProps> = ({
 
               {filteredGames.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    <HardDrive size={32} style={{ margin: '0 auto 8px auto', opacity: 0.5 }} />
-                    <p>No matching games found.</p>
+                  <td colSpan={5} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <HardDrive size={36} style={{ margin: '0 auto 12px auto', opacity: 0.5, display: 'block' }} />
+                    {filterState === 'custom' ? (
+                      <div style={{ maxWidth: '520px', margin: '0 auto' }}>
+                        <p style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.95rem', marginBottom: '6px' }}>
+                          No Non-Steam Games Detected
+                        </p>
+                        <p style={{ fontSize: '0.825rem', lineHeight: '1.5' }}>
+                          Place any standalone game folder inside your library's <code>steamapps/common/</code> directory (e.g. <code>E:\SteamLibrary\steamapps\common\MyGame</code>).
+                          Zapp Swap Manager will automatically discover it here and let you swap it between SSD and HDD via directory junctions!
+                        </p>
+                      </div>
+                    ) : (
+                      <p>No matching games found.</p>
+                    )}
                   </td>
                 </tr>
               )}

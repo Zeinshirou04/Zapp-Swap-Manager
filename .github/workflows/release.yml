@@ -28,7 +28,15 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist
           if (Test-Path "core/go.mod") {
             cd core
-            go build -v -ldflags="-s -w" -o ../dist/zapp-core.exe ./cmd/zapp-core
+            $tagVersion = "${{ github.ref_name }}"
+            if ("${{ inputs.tag }}" -ne "") {
+              $tagVersion = "${{ inputs.tag }}"
+            }
+            $tagVersion = $tagVersion.TrimStart("v")
+            if ($tagVersion -eq "" -or $tagVersion -eq "main") {
+              $tagVersion = "0.2.5"
+            }
+            go build -v -ldflags="-s -w -X main.Version=$tagVersion" -o ../dist/zapp-core.exe ./cmd/zapp-core
             cd ..
           } else {
             Set-Content -Path dist/zapp-core-placeholder.txt -Value "Core service build pipeline ready. Implement in core/."
@@ -105,6 +113,38 @@ jobs:
               Get-ChildItem -Path "src-tauri/target/release/bundle" -Filter "*.sig" -Recurse | ForEach-Object {
                 Copy-Item -Path $_.FullName -Destination "../dist-desktop/" -Force
               }
+              Get-ChildItem -Path "src-tauri/target/release/bundle" -Filter "*.zip" -Recurse | ForEach-Object {
+                Copy-Item -Path $_.FullName -Destination "../dist-desktop/" -Force
+              }
+
+              # Generate latest.json manifest for Tauri cloud auto-updater
+              $sigFile = Get-ChildItem -Path "src-tauri/target/release/bundle/nsis/*.sig" -Recurse | Select-Object -First 1
+              if (-not $sigFile) {
+                $sigFile = Get-ChildItem -Path "src-tauri/target/release/bundle" -Filter "*.sig" -Recurse | Select-Object -First 1
+              }
+              if ($sigFile) {
+                $sig = (Get-Content -Path $sigFile.FullName -Raw).Trim()
+                $relTag = "${{ github.ref_name }}"
+                if ("${{ inputs.tag }}" -ne "") {
+                  $relTag = "${{ inputs.tag }}"
+                }
+                $relTag = $relTag.TrimStart("v")
+                if ($relTag -eq "" -or $relTag -eq "main") {
+                  $relTag = "0.2.5"
+                }
+                $latestObj = [ordered]@{
+                  version = $relTag
+                  notes = "Zapp Swap Manager v$relTag release with non-Steam game support and in-app cloud updater"
+                  pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+                  platforms = @{
+                    "windows-x86_64" = @{
+                      url = "https://github.com/Zeinshirou04/Zapp-Swap-Manager/releases/download/v$relTag/Zapp.Swap.Manager_${relTag}_x64-setup.exe"
+                      signature = $sig
+                    }
+                  }
+                }
+                $latestObj | ConvertTo-Json -Depth 5 | Set-Content -Path "../dist-desktop/latest.json" -Encoding UTF8
+              }
             } elseif (Test-Path "src-tauri/target/release/zapp-desktop.exe") {
               Copy-Item -Path "src-tauri/target/release/zapp-desktop.exe" -Destination "../dist-desktop"
             }
@@ -128,6 +168,7 @@ jobs:
             dist-desktop/*-setup.exe
             dist-desktop/latest.json
             dist-desktop/*.sig
+            dist-desktop/*.zip
 
   build-mobile:
     name: Build Mobile App (Android APK)

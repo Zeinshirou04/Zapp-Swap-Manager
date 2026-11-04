@@ -13,8 +13,8 @@
     "#1": {
       "0000": {
         "fixed": {
-          "file_version": "0.1.0.0",
-          "product_version": "0.1.0.0"
+          "file_version": "0.2.5.0",
+          "product_version": "0.2.5.0"
         },
         "info": {
           "0409": {
@@ -22,8 +22,8 @@
             "CompanyName": "Zapp",
             "FileDescription": "Zapp Swap Manager Core Service",
             "LegalCopyright": "Copyright © 2026 Zapp Swap Manager Contributors",
-            "ProductVersion": "0.1.0.0",
-            "FileVersion": "0.1.0.0"
+            "ProductVersion": "0.2.5.0",
+            "FileVersion": "0.2.5.0"
           }
         }
       }
@@ -34,7 +34,7 @@
       "0409": {
         "identity": {
           "name": "zapp-core.exe",
-          "version": "0.1.0.0"
+          "version": "0.2.5.0"
         },
         "description": "Zapp Swap Manager Core Service",
         "minimum-os": "win7",

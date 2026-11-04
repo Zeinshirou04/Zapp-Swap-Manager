@@ -83,3 +83,14 @@ func TestGetMissing(t *testing.T) {
 		t.Error("Get should return nil for missing nodes")
 	}
 }
+
+func TestParseUTF8BOM(t *testing.T) {
+	bomData := append([]byte("\xef\xbb\xbf"), []byte(`"AppState" { "appid" "730" }`)...)
+	root, err := Parse(bomData)
+	if err != nil {
+		t.Fatalf("Parse with BOM failed: %v", err)
+	}
+	if got := root.Get("AppState", "appid").Value; got != "730" {
+		t.Fatalf("expected 730, got %q", got)
+	}
+}

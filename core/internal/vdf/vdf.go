@@ -3,6 +3,7 @@
 package vdf
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 )
@@ -31,6 +32,7 @@ func (kv *KeyValue) Get(path ...string) *KeyValue {
 
 // Parse parses a whole VDF document into a root block node.
 func Parse(data []byte) (*KeyValue, error) {
+	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 	p := parser{src: string(data)}
 	node, err := p.parseBlock(true)
 	if err != nil {

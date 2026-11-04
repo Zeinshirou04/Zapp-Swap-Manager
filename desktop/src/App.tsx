@@ -3,7 +3,9 @@ import { api, getApiConfig, setApiConfig } from './api/client.ts';
 import { readLocalAuthToken, restartCoreDaemon, sleep } from './api/native.ts';
 import { Game, HealthResponse, Job, JobType, Library } from './types/api.ts';
 import { ConnectView } from './components/ConnectView.tsx';
-import { Header } from './components/Header.tsx';
+import { Titlebar } from './components/Titlebar.tsx';
+import { Sidebar, NavRoute } from './components/Sidebar.tsx';
+import { DashboardView } from './components/DashboardView.tsx';
 import { DrivesOverview } from './components/DrivesOverview.tsx';
 import { GameList } from './components/GameList.tsx';
 import { QueueMonitor } from './components/QueueMonitor.tsx';
@@ -12,7 +14,7 @@ import { LibraryWizardModal } from './components/LibraryWizardModal.tsx';
 import { SwapAction, SwapConfirmModal } from './components/SwapConfirmModal.tsx';
 import { UpdateNotification } from './components/UpdateNotification.tsx';
 import { checkUpdate, UpdateDetails } from './api/updater.ts';
-import { AlertTriangle, Gamepad2, Loader2, X } from 'lucide-react';
+import { AlertTriangle, Gamepad2, Loader2, X, Wand2 } from 'lucide-react';
 
 type ConnectionStatus = 'connecting' | 'disconnected' | 'authenticated';
 
@@ -34,6 +36,39 @@ export const App: React.FC = () => {
   const [updateStatusMsg, setUpdateStatusMsg] = useState<string | null>(null);
   const wizardShownRef = useRef(false);
   const updateCheckDoneRef = useRef(false);
+
+  // Browser-style navigation history stack
+  const [activeRoute, setActiveRoute] = useState<NavRoute>('dashboard');
+  const [history, setHistory] = useState<NavRoute[]>(['dashboard']);
+  const [historyIndex, setHistoryIndex] = useState(0);
+
+  const navigate = useCallback((route: NavRoute) => {
+    setActiveRoute(route);
+    setHistory((prev) => {
+      const next = prev.slice(0, historyIndex + 1);
+      if (next[next.length - 1] !== route) {
+        next.push(route);
+      }
+      return next;
+    });
+    setHistoryIndex((prev) => prev + 1);
+  }, [historyIndex]);
+
+  const goBack = useCallback(() => {
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      setActiveRoute(history[newIndex]);
+    }
+  }, [historyIndex, history]);
+
+  const goForward = useCallback(() => {
+    if (historyIndex < history.length - 1) {
+      const newIndex = historyIndex + 1;
+      setHistoryIndex(newIndex);
+      setActiveRoute(history[newIndex]);
+    }
+  }, [historyIndex, history]);
 
   // Check for updates (background on startup, or manual via button)
   const handleCheckUpdates = useCallback(async (manual = false) => {
@@ -136,7 +171,6 @@ export const App: React.FC = () => {
     try {
       setConn('connecting');
       await restartCoreDaemon();
-      // Retry health until core is back (it may hard-stop then restart if we own the process).
       for (let i = 0; i < 30; i++) {
         try {
           setHealth(await api.getHealth());
@@ -184,7 +218,6 @@ export const App: React.FC = () => {
       setPendingAction(null);
       await loadData();
     } catch (err) {
-      // Keep the modal open; show what the core rejected.
       setActionError(err instanceof Error ? err.message : 'Failed to queue transfer');
     } finally {
       setActionLoading(false);
@@ -229,61 +262,193 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="app-container">
-      <Header
-        health={health}
-        loading={loading}
+    <div className="dashboard-root">
+      {/* Top Browser / IDE Style Titlebar */}
+      <Titlebar
+        currentRoute={activeRoute}
+        canGoBack={historyIndex > 0}
+        canGoForward={historyIndex < history.length - 1}
+        onGoBack={goBack}
+        onGoForward={goForward}
         onRefresh={loadData}
+        loading={loading}
+        onNavigateHome={() => navigate('dashboard')}
+        health={health}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onRestartCore={handleRestartCore}
         onDisconnect={handleDisconnect}
-        onConfigureLibraries={() => setIsWizardOpen(true)}
         onCheckUpdates={() => handleCheckUpdates(true)}
         checkingUpdates={checkingUpdates}
       />
 
-      {errorMsg && (
-        <div
-          style={{
-            background: 'rgba(239, 68, 68, 0.15)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            color: 'var(--danger)',
-            padding: '12px 16px',
-            borderRadius: 'var(--radius)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+      {/* Main Dashboard Layout: Sidebar + Dynamic Content Pane */}
+      <div className="dashboard-body">
+        <Sidebar
+          activeRoute={activeRoute}
+          onRouteChange={(route) => {
+            if (route === 'settings') {
+              setIsSettingsOpen(true);
+            } else {
+              navigate(route);
+            }
           }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <AlertTriangle size={18} />
-            <span>{errorMsg}</span>
-          </div>
-          <button
-            onClick={() => setErrorMsg(null)}
-            className="btn-secondary"
-            style={{ padding: '4px', border: 'none' }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-      )}
+          gamesCount={games.length}
+          drivesCount={libraries.length}
+          queueCount={jobs.filter((j) => j.status === 'running' || j.status === 'queued').length}
+          steamRunning={health?.steam_running ?? false}
+          appVersion="0.2.6"
+          onOpenWizard={() => setIsWizardOpen(true)}
+        />
 
-      <DrivesOverview libraries={libraries} />
+        <main className="content-pane" role="main">
+          {errorMsg && (
+            <div
+              style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: 'var(--danger)',
+                padding: '12px 16px',
+                borderRadius: 'var(--radius)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertTriangle size={18} />
+                <span>{errorMsg}</span>
+              </div>
+              <button
+                onClick={() => setErrorMsg(null)}
+                className="btn-secondary"
+                style={{ padding: '4px', border: 'none' }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
 
-      <QueueMonitor
-        jobs={jobs}
-        onCancelJob={handleCancelJob}
-        cancelling={actionLoading}
-      />
+          {/* View 1: Dashboard Home Overview */}
+          {activeRoute === 'dashboard' && (
+            <DashboardView
+              games={games}
+              libraries={libraries}
+              jobs={jobs}
+              onNavigate={navigate}
+              onAction={requestSwap}
+              actionLoading={actionLoading}
+              onOpenWizard={() => setIsWizardOpen(true)}
+            />
+          )}
 
-      <GameList
-        games={games}
-        libraries={libraries}
-        onAction={requestSwap}
-        actionLoading={actionLoading}
-      />
+          {/* View 2: Games Library */}
+          {activeRoute === 'games' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.4rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
+                    Games Library
+                  </h2>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    All Steam and non-Steam games detected across your configured libraries.
+                  </p>
+                </div>
+              </div>
+              <GameList
+                games={games}
+                libraries={libraries}
+                onAction={requestSwap}
+                actionLoading={actionLoading}
+              />
+            </div>
+          )}
 
+          {/* View 3: Drives & Storage */}
+          {activeRoute === 'drives' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.4rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
+                    Drives & Steam Libraries
+                  </h2>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    Configured SSD cache and HDD master storage paths with real-time disk metrics.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsWizardOpen(true)}
+                  className="btn-primary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Wand2 size={16} /> Launch Setup Wizard
+                </button>
+              </div>
+
+              <DrivesOverview libraries={libraries} />
+
+              <div className="card" style={{ padding: '20px' }}>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '12px' }}>
+                  Configured Storage Paths ({libraries.length})
+                </h3>
+                {libraries.length === 0 ? (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                    No libraries configured yet. Run the setup wizard to assign fast SSD and HDD directories.
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {libraries.map((lib) => (
+                      <div
+                        key={lib.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '12px 16px',
+                          backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span className={`badge badge-${lib.type === 'ssd_cache' ? 'ssd' : 'hdd'}`}>
+                            {lib.type === 'ssd_cache' ? 'SSD Cache' : 'HDD Master'}
+                          </span>
+                          <span style={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>{lib.name}</span>
+                        </div>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                          ID: {lib.id}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* View 4: Transfer Job Queue */}
+          {activeRoute === 'queue' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div>
+                <h2 style={{ fontSize: '1.4rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
+                  Transfer Job Queue
+                </h2>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  Monitor queued and active game migrations between SSD cache and HDD master storage.
+                </p>
+              </div>
+
+              <QueueMonitor
+                jobs={jobs}
+                onCancelJob={handleCancelJob}
+                cancelling={actionLoading}
+              />
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* Global Modals & Dialogs */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}

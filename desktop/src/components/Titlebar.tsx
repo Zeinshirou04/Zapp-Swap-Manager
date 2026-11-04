@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HealthResponse } from '../types/api.ts';
+import { isTauriEnvironment } from '../api/updater.ts';
 import {
   ChevronLeft,
   ChevronRight,
@@ -12,6 +13,9 @@ import {
   Power,
   Sparkles,
   Lock,
+  Minus,
+  Square,
+  X,
 } from 'lucide-react';
 
 export interface TitlebarProps {
@@ -29,6 +33,9 @@ export interface TitlebarProps {
   onDisconnect: () => void;
   onCheckUpdates?: () => void;
   checkingUpdates?: boolean;
+  onMinimize?: () => void;
+  onToggleMaximize?: () => void;
+  onClose?: () => void;
 }
 
 export const Titlebar: React.FC<TitlebarProps> = ({
@@ -46,27 +53,100 @@ export const Titlebar: React.FC<TitlebarProps> = ({
   onDisconnect,
   onCheckUpdates,
   checkingUpdates,
+  onMinimize,
+  onToggleMaximize,
+  onClose,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
   const isOnline = health !== null;
 
+  useEffect(() => {
+    if (!isTauriEnvironment()) return;
+    let isMounted = true;
+    let unlistenFn: (() => void) | null = null;
+
+    import('@tauri-apps/api/window')
+      .then(({ getCurrentWindow }) => {
+        const appWin = getCurrentWindow();
+        appWin
+          .isMaximized()
+          .then((max) => {
+            if (isMounted) setIsMaximized(max);
+          })
+          .catch(() => {});
+
+        appWin
+          .onResized(() => {
+            appWin
+              .isMaximized()
+              .then((max) => {
+                if (isMounted) setIsMaximized(max);
+              })
+              .catch(() => {});
+          })
+          .then((unlisten) => {
+            unlistenFn = unlisten;
+          })
+          .catch(() => {});
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+      if (unlistenFn) unlistenFn();
+    };
+  }, []);
+
+  const handleMinimize = async () => {
+    if (onMinimize) {
+      onMinimize();
+      return;
+    }
+    if (isTauriEnvironment()) {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        await getCurrentWindow().minimize();
+      } catch (err) {
+        console.warn('Failed to minimize window:', err);
+      }
+    }
+  };
+
+  const handleToggleMaximize = async () => {
+    if (onToggleMaximize) {
+      onToggleMaximize();
+      return;
+    }
+    if (isTauriEnvironment()) {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        await getCurrentWindow().toggleMaximize();
+        const max = await getCurrentWindow().isMaximized();
+        setIsMaximized(max);
+      } catch (err) {
+        console.warn('Failed to toggle maximize window:', err);
+      }
+    }
+  };
+
+  const handleClose = async () => {
+    if (onClose) {
+      onClose();
+      return;
+    }
+    if (isTauriEnvironment()) {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        await getCurrentWindow().close();
+      } catch (err) {
+        console.warn('Failed to close window:', err);
+      }
+    }
+  };
+
   return (
-    <header
-      className="titlebar"
-      data-tauri-drag-region
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        height: '42px',
-        minHeight: '42px',
-        backgroundColor: '#0b1120',
-        borderBottom: '1px solid var(--border-color)',
-        padding: '0 12px',
-        userSelect: 'none',
-        fontSize: '0.825rem',
-      }}
-    >
+    <header className="titlebar" data-tauri-drag-region>
       {/* Left: Navigation and App Identity */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         {/* App Logo / Home Trigger */}
@@ -174,12 +254,16 @@ export const Titlebar: React.FC<TitlebarProps> = ({
       </div>
 
       {/* Middle: Drag area spacer */}
-      <div style={{ flex: 1, height: '100%', cursor: 'default' }} data-tauri-drag-region />
+      <div
+        className="titlebar-drag-region"
+        data-tauri-drag-region
+        onDoubleClick={handleToggleMaximize}
+      />
 
-      {/* Right: Core Status & Settings */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      {/* Right: Core Status, Settings, and Native Window Controls */}
+      <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
         {/* Core Status Dropdown */}
-        <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative', marginRight: '6px' }}>
           <button
             onClick={() => setMenuOpen((open) => !open)}
             className="btn-secondary"
@@ -187,9 +271,9 @@ export const Titlebar: React.FC<TitlebarProps> = ({
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '4px 10px',
+              padding: '3px 8px',
               borderRadius: '9999px',
-              fontSize: '0.775rem',
+              fontSize: '0.75rem',
             }}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
@@ -270,14 +354,50 @@ export const Titlebar: React.FC<TitlebarProps> = ({
           aria-label="Settings"
           className="btn-secondary"
           style={{
-            padding: '5px 8px',
+            padding: '4px 6px',
             border: 'none',
             background: 'transparent',
             borderRadius: 'var(--radius)',
+            marginRight: '4px',
           }}
         >
           <Settings size={15} />
         </button>
+
+        {/* Frameless Window Controls (VS Code / Discord style) */}
+        <div className="titlebar-window-controls" aria-label="Window Controls">
+          <button
+            onClick={handleMinimize}
+            className="window-control-btn"
+            title="Minimize"
+            aria-label="Minimize"
+          >
+            <Minus size={14} />
+          </button>
+          <button
+            onClick={handleToggleMaximize}
+            className="window-control-btn"
+            title={isMaximized ? 'Restore Down' : 'Maximize'}
+            aria-label={isMaximized ? 'Restore' : 'Maximize'}
+          >
+            {isMaximized ? (
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="2.5" y="0.5" width="8" height="8" rx="1" />
+                <path d="M0.5 3.5v7a1 1 0 0 0 1 1h7" />
+              </svg>
+            ) : (
+              <Square size={12} strokeWidth={1.75} />
+            )}
+          </button>
+          <button
+            onClick={handleClose}
+            className="window-control-btn close"
+            title="Close"
+            aria-label="Close"
+          >
+            <X size={15} strokeWidth={1.5} />
+          </button>
+        </div>
       </div>
     </header>
   );

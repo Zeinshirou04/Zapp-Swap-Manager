@@ -247,3 +247,72 @@ dialog {
   background: var(--text-muted);
 }
 
+/* Frameless Titlebar & Window Controls (VSCode / Discord / Windows 11 style) */
+.titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  block-size: 38px;
+  min-block-size: 38px;
+  background-color: #0b1120;
+  border-bottom: 1px solid var(--border-color);
+  -webkit-user-select: none;
+  user-select: none;
+  font-size: 0.825rem;
+  padding-inline-start: 10px;
+  padding-inline-end: 0;
+  position: relative;
+  z-index: 50;
+}
+
+.titlebar-drag-region {
+  flex: 1;
+  block-size: 100%;
+  cursor: default;
+}
+
+.titlebar-window-controls {
+  display: flex;
+  align-items: center;
+  block-size: 100%;
+  margin-inline-start: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.window-control-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 46px;
+  block-size: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  transition: background-color 0.1s ease, color 0.1s ease;
+  -webkit-app-region: no-drag;
+}
+
+.window-control-btn:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+}
+
+.window-control-btn:active {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.window-control-btn.close:hover {
+  background-color: #e81123;
+  color: #ffffff;
+}
+
+.window-control-btn.close:active {
+  background-color: #c42b1c;
+  color: #ffffff;
+}
+
+

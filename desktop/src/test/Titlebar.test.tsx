@@ -18,6 +18,9 @@ describe('Titlebar Component', () => {
     onDisconnect: vi.fn(),
     onCheckUpdates: vi.fn(),
     checkingUpdates: false,
+    onMinimize: vi.fn(),
+    onToggleMaximize: vi.fn(),
+    onClose: vi.fn(),
   };
 
   it('renders omnibox route, back button, and home button', () => {
@@ -49,5 +52,21 @@ describe('Titlebar Component', () => {
     expect(screen.getByText('Check for Updates')).toBeInTheDocument();
     expect(screen.getByText('Restart Core')).toBeInTheDocument();
     expect(screen.getByText('Disconnect')).toBeInTheDocument();
+  });
+
+  it('renders native-style window controls and dispatches window callbacks', () => {
+    render(<Titlebar {...defaultProps} />);
+
+    const minimizeBtn = screen.getByLabelText('Minimize');
+    fireEvent.click(minimizeBtn);
+    expect(defaultProps.onMinimize).toHaveBeenCalledTimes(1);
+
+    const maximizeBtn = screen.getByLabelText('Maximize');
+    fireEvent.click(maximizeBtn);
+    expect(defaultProps.onToggleMaximize).toHaveBeenCalledTimes(1);
+
+    const closeBtn = screen.getByLabelText('Close');
+    fireEvent.click(closeBtn);
+    expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
   });
 });

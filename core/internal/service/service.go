@@ -131,43 +131,53 @@ func defaultExecutor(whitelist func() []steam.Library) queue.Executor {
 			return fmt.Errorf("target library %q not found in config whitelist", job.TargetLibraryID)
 		}
 
-		manifestName := fmt.Sprintf("appmanifest_%s.acf", job.AppID)
+		games, err := steam.ScanLibraries(libs)
+		if err != nil && len(games) == 0 {
+			return fmt.Errorf("scanning libraries: %w", err)
+		}
+		var foundGame *steam.Game
+		for i := range games {
+			if games[i].Manifest.AppID == job.AppID {
+				foundGame = &games[i]
+				break
+			}
+		}
+		if foundGame == nil {
+			return fmt.Errorf("game %s: not found in any whitelisted library", job.AppID)
+		}
+
 		var srcLib *steam.Library
 		for i := range libs {
-			manifestPath := filepath.Join(libs[i].Path, "steamapps", manifestName)
-			if _, err := os.Stat(manifestPath); err == nil {
+			if libs[i].ID == foundGame.LibraryID {
 				srcLib = &libs[i]
 				break
 			}
 		}
 		if srcLib == nil {
-			return fmt.Errorf("game %s: appmanifest not found in any whitelisted library", job.AppID)
+			return fmt.Errorf("source library %q not found", foundGame.LibraryID)
 		}
 
-		manifestPath := filepath.Join(srcLib.Path, "steamapps", manifestName)
-		data, err := os.ReadFile(manifestPath)
-		if err != nil {
-			return fmt.Errorf("reading manifest %q: %w", manifestPath, err)
-		}
-		m, err := steam.ParseManifest(data)
-		if err != nil {
-			return fmt.Errorf("parsing manifest: %w", err)
-		}
-
+		manifestName := fmt.Sprintf("appmanifest_%s.acf", job.AppID)
 		opts := transfer.Options{}
 
 		switch job.Type {
 		case queue.TypePromote:
 			return step(1, "promote", func() error {
-				return transfer.Promote(ctx, opts, srcLib.Path, targetLib.Path, manifestName, m.InstallDir)
+				if foundGame.IsCustom {
+					return transfer.PromoteCustom(ctx, opts, srcLib.Path, targetLib.Path, foundGame.Manifest.InstallDir)
+				}
+				return transfer.Promote(ctx, opts, srcLib.Path, targetLib.Path, manifestName, foundGame.Manifest.InstallDir)
 			})
 		case queue.TypeEvict:
 			return step(1, "evict", func() error {
-				return transfer.Evict(ctx, opts, srcLib.Path, targetLib.Path, manifestName, m.InstallDir)
+				if foundGame.IsCustom {
+					return transfer.EvictCustom(ctx, opts, srcLib.Path, targetLib.Path, foundGame.Manifest.InstallDir)
+				}
+				return transfer.Evict(ctx, opts, srcLib.Path, targetLib.Path, manifestName, foundGame.Manifest.InstallDir)
 			})
 		case queue.TypeBackup:
 			return step(1, "backup", func() error {
-				return transfer.Backup(ctx, opts, srcLib.Path, targetLib.Path, m.InstallDir)
+				return transfer.Backup(ctx, opts, srcLib.Path, targetLib.Path, foundGame.Manifest.InstallDir)
 			})
 		default:
 			return fmt.Errorf("unsupported job type %q", job.Type)

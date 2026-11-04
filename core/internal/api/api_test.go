@@ -223,6 +223,57 @@ func TestGamesEndpoints(t *testing.T) {
 	}
 }
 
+func TestCustomGamesEndpoint(t *testing.T) {
+	ts, cfg := newTestAPI(t, nil)
+	// Add an unmanifested custom game to ssd0
+	customDir := filepath.Join(cfg.Libraries[0].Path, "steamapps", "common", "UnmanifestedRPG")
+	if err := os.MkdirAll(customDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(customDir, "game.bin"), make([]byte, 512), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	code, games := doJSONArray(t, ts, "GET", "/games", true)
+	if code != http.StatusOK || len(games) != 2 {
+		t.Fatalf("games = %d %v", code, games)
+	}
+
+	var custom map[string]any
+	for _, raw := range games {
+		g := raw.(map[string]any)
+		if g["name"] == "UnmanifestedRPG" {
+			custom = g
+			break
+		}
+	}
+	if custom == nil {
+		t.Fatalf("UnmanifestedRPG not found in games: %v", games)
+	}
+	if custom["is_custom"] != true {
+		t.Errorf("expected is_custom == true, got %v", custom["is_custom"])
+	}
+	if custom["state"] != "active_ssd" {
+		t.Errorf("expected state == active_ssd, got %v", custom["state"])
+	}
+
+	appIDStr := steam.CustomAppID("UnmanifestedRPG")
+	code, single := doJSON(t, ts, "GET", "/games/"+appIDStr, nil, true)
+	if code != http.StatusOK || single["name"] != "UnmanifestedRPG" || single["is_custom"] != true {
+		t.Errorf("get single custom game = %d %v", code, single)
+	}
+
+	// Enqueue an evict job for the custom game
+	code, job := doJSON(t, ts, "POST", "/jobs", map[string]any{
+		"type":              "evict",
+		"app_id":            appIDStr,
+		"target_library_id": "hdd0",
+	}, true)
+	if code != http.StatusAccepted || job["app_id"] != appIDStr {
+		t.Errorf("enqueue custom job = %d %v", code, job)
+	}
+}
+
 func TestBearerAuth(t *testing.T) {
 	ts, _ := newTestAPI(t, nil)
 	if code, _ := doJSON(t, ts, "GET", "/health", nil, false); code != http.StatusUnauthorized {

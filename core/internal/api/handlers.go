@@ -152,6 +152,7 @@ type gameJSON struct {
 	BuildID          string     `json:"build_id"`
 	LastBackupTime   *time.Time `json:"last_backup_time"`
 	BackupClean      bool       `json:"backup_clean"`
+	IsCustom         bool       `json:"is_custom"`
 }
 
 func toGameJSON(g steam.Game) gameJSON {
@@ -166,6 +167,7 @@ func toGameJSON(g steam.Game) gameJSON {
 		BuildID:          g.Manifest.BuildID,
 		//shortcut: backup history lands with the journal wiring in Plan 00xx
 		BackupClean: false, // honest default until backup metrics are journaled
+		IsCustom:    g.IsCustom,
 	}
 }
 

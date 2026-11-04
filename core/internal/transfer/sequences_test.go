@@ -309,3 +309,50 @@ func TestRoundTrip(t *testing.T) {
 		t.Errorf("HDD master retained = %v", kept)
 	}
 }
+
+func TestCustomGameRoundTrip(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("robocopy.exe and mklink /J are Windows-only")
+	}
+	ctx := context.Background()
+	customDir := "CustomAdventure"
+	ssd := setUpLibrary(t, map[string]int{customDir + "/data.bin": 2048}, "")
+	hdd := setUpLibrary(t, nil, "")
+
+	// 1. EvictCustom: mirror SSD -> HDD, verify, delete SSD folder, create junction link
+	if err := EvictCustom(ctx, Options{}, ssd, hdd, customDir); err != nil {
+		t.Fatalf("EvictCustom: %v", err)
+	}
+
+	// Master copy must be on HDD
+	hddFiles := mustFiles(t, filepath.Join(hdd, "steamapps", "common", customDir))
+	if hddFiles["bytes"] != 2048 {
+		t.Errorf("HDD master bytes = %d, want 2048", hddFiles["bytes"])
+	}
+
+	// SSD should now be a junction pointing to HDD
+	ssdPath := filepath.Join(ssd, "steamapps", "common", customDir)
+	if !IsJunction(ssdPath) {
+		t.Errorf("expected %q on SSD to be a junction after EvictCustom", ssdPath)
+	}
+
+	// 2. PromoteCustom: remove junction, copy HDD -> SSD, verify
+	if err := PromoteCustom(ctx, Options{}, hdd, ssd, customDir); err != nil {
+		t.Fatalf("PromoteCustom: %v", err)
+	}
+
+	// SSD should no longer be a junction, but a real directory
+	if IsJunction(ssdPath) {
+		t.Errorf("expected %q on SSD to NOT be a junction after PromoteCustom", ssdPath)
+	}
+	ssdFiles := mustFiles(t, ssdPath)
+	if ssdFiles["bytes"] != 2048 {
+		t.Errorf("SSD bytes = %d, want 2048", ssdFiles["bytes"])
+	}
+
+	// HDD master copy must remain intact
+	hddKept := mustFiles(t, filepath.Join(hdd, "steamapps", "common", customDir))
+	if hddKept["bytes"] != 2048 {
+		t.Errorf("HDD master retained bytes = %d, want 2048", hddKept["bytes"])
+	}
+}

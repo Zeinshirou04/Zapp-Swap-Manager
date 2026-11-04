@@ -194,3 +194,77 @@ func TestAppIDFromManifestFilename(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestScanLibrariesCustomGames(t *testing.T) {
+	restoreDisk := stubDisk(t, 41*1<<30, 240*1<<30)
+	defer restoreDisk()
+	restoreSteam := stubSteamRunning(t, true)
+	defer restoreSteam()
+
+	ssd := t.TempDir()
+	hdd := t.TempDir()
+
+	// Steam game: Terraria in SSD with manifest
+	if err := os.MkdirAll(filepath.Join(ssd, "steamapps", "common", "Terraria"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ssd, "steamapps", "appmanifest_105600.acf"), fixture(t, "appmanifest_105600.acf"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Non-Steam custom game: "CustomRPG" in SSD steamapps/common without manifest
+	customDir := filepath.Join(ssd, "steamapps", "common", "CustomRPG")
+	if err := os.MkdirAll(customDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(customDir, "game.exe"), []byte("payload"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ignored dir: "Steam Controller Configs"
+	if err := os.MkdirAll(filepath.Join(ssd, "steamapps", "common", "Steam Controller Configs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	libs := []Library{
+		{ID: "ssd0", Name: "SSD Cache", Path: ssd, Type: TypeSSDCache},
+		{ID: "hdd0", Name: "HDD Master", Path: hdd, Type: TypeHDDMaster},
+	}
+
+	games, err := ScanLibraries(libs)
+	if err != nil {
+		t.Fatalf("ScanLibraries: %v", err)
+	}
+
+	// Should have Terraria (Steam) and CustomRPG (Custom). Ignored dir should NOT be in games.
+	if len(games) != 2 {
+		t.Fatalf("games count = %d, want 2 (Terraria and CustomRPG)", len(games))
+	}
+
+	byName := map[string]Game{}
+	for _, g := range games {
+		byName[g.Manifest.Name] = g
+	}
+
+	terraria, ok := byName["Terraria"]
+	if !ok || terraria.IsCustom {
+		t.Errorf("Terraria = %+v, want IsCustom: false", terraria)
+	}
+
+	custom, ok := byName["CustomRPG"]
+	if !ok || !custom.IsCustom {
+		t.Fatalf("CustomRPG missing or not custom: %+v", custom)
+	}
+	if custom.State != StateActiveSSD {
+		t.Errorf("CustomRPG state = %s, want %s", custom.State, StateActiveSSD)
+	}
+	if custom.LibraryID != "ssd0" {
+		t.Errorf("CustomRPG library_id = %s, want ssd0", custom.LibraryID)
+	}
+	if custom.Manifest.SizeOnDisk != int64(len("payload")) {
+		t.Errorf("CustomRPG size = %d, want %d", custom.Manifest.SizeOnDisk, len("payload"))
+	}
+	if custom.Manifest.AppID != CustomAppID("CustomRPG") {
+		t.Errorf("CustomRPG AppID = %s, want %s", custom.Manifest.AppID, CustomAppID("CustomRPG"))
+	}
+}

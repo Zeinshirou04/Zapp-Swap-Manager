@@ -252,6 +252,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 game={game}
                 onAction={onAction}
                 actionLoading={actionLoading}
+                activeJob={jobs.find(
+                  (j) =>
+                    (j.status === 'running' || j.status === 'queued') &&
+                    String(j.app_id) === String(game.app_id)
+                )}
               />
             ))}
           </div>

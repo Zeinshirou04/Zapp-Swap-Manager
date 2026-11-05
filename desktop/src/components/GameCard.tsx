@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Game, JobType } from '../types/api.ts';
-import { Database, RefreshCw, Zap } from 'lucide-react';
+import { Game, Job, JobType } from '../types/api.ts';
+import { Database, RefreshCw, Zap, Loader2 } from 'lucide-react';
 
 interface GameCardProps {
   game: Game;
   onAction: (game: Game, type: JobType) => void;
   actionLoading: boolean;
+  activeJob?: Job;
 }
 
 // Steam header capsule artwork; falls back to a gradient when missing.
@@ -20,7 +21,12 @@ function formatBytes(bytes: number): string {
   return `${gb.toFixed(2)} GB`;
 }
 
-export const GameCard: React.FC<GameCardProps> = ({ game, onAction, actionLoading }) => {
+export const GameCard: React.FC<GameCardProps> = ({
+  game,
+  onAction,
+  actionLoading,
+  activeJob,
+}) => {
   const [imgError, setImgError] = useState(false);
   const isOnSSD = game.state === 'active_ssd';
 
@@ -76,7 +82,53 @@ export const GameCard: React.FC<GameCardProps> = ({ game, onAction, actionLoadin
           {game.is_custom ? 'Non-Steam Folder' : `App ID: ${game.app_id}`} • {formatBytes(game.size_bytes)}
         </p>
 
-        {!isOnSSD && (
+        {activeJob && (activeJob.status === 'running' || activeJob.status === 'queued') ? (
+          <div
+            style={{
+              background: 'rgba(0, 0, 0, 0.3)',
+              borderRadius: 'var(--radius)',
+              padding: '8px 10px',
+              border: '1px solid var(--border-color)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: '0.75rem',
+                marginBottom: '4px',
+              }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--primary, #3b82f6)', fontWeight: 600 }}>
+                <Loader2 size={12} className="spin" />
+                {activeJob.status === 'running' ? `${activeJob.type.toUpperCase()}` : 'QUEUED'}
+              </span>
+              <span style={{ color: '#fff', fontWeight: 600 }}>
+                {activeJob.status === 'running' ? `${Math.round(activeJob.progress_percent)}%` : 'Waiting...'}
+              </span>
+            </div>
+            <div
+              style={{
+                width: '100%',
+                height: '4px',
+                background: 'rgba(255, 255, 255, 0.1)',
+                borderRadius: '2px',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  height: '100%',
+                  width: activeJob.status === 'running' ? `${Math.round(activeJob.progress_percent)}%` : '100%',
+                  backgroundColor: 'var(--primary, #3b82f6)',
+                  borderRadius: '2px',
+                  transition: 'width 0.3s ease',
+                }}
+              />
+            </div>
+          </div>
+        ) : !isOnSSD ? (
           <button
             onClick={() => onAction(game, 'promote')}
             disabled={actionLoading}
@@ -86,9 +138,7 @@ export const GameCard: React.FC<GameCardProps> = ({ game, onAction, actionLoadin
           >
             <Zap size={14} /> Move to SSD
           </button>
-        )}
-
-        {isOnSSD && (
+        ) : (
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               onClick={() => onAction(game, 'backup')}

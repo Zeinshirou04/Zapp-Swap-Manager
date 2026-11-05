@@ -52,6 +52,36 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /logs:
+    get:
+      summary: Get recent service logs
+      description: Returns recent log entries captured by the core service.
+      operationId: getLogs
+      tags: [System]
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of recent log lines to retrieve (default 200).
+          schema:
+            type: integer
+            default: 200
+            maximum: 1000
+      responses:
+        '200':
+          description: Recent log lines.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [lines]
+                properties:
+                  lines:
+                    type: array
+                    items:
+                      type: string
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /libraries/detected:
     get:
       summary: Detect Steam libraries on this machine

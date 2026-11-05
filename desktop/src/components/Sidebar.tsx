@@ -4,11 +4,12 @@ import {
   Gamepad2,
   HardDrive,
   ListOrdered,
+  Terminal,
   Settings,
   Wand2,
 } from 'lucide-react';
 
-export type NavRoute = 'dashboard' | 'games' | 'drives' | 'queue' | 'settings';
+export type NavRoute = 'dashboard' | 'games' | 'drives' | 'queue' | 'logs' | 'settings';
 
 export interface SidebarProps {
   activeRoute: NavRoute;
@@ -59,6 +60,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Transfer Queue',
       icon: <ListOrdered size={18} />,
       badge: queueCount,
+    },
+    {
+      id: 'logs',
+      label: 'Service Logs',
+      icon: <Terminal size={18} />,
     },
     {
       id: 'settings',

@@ -185,6 +185,26 @@ func TestHealth(t *testing.T) {
 	}
 }
 
+func TestLogsEndpoint(t *testing.T) {
+	ts, _ := newTestAPI(t, func(cfg *Config) {
+		cfg.LogsFn = func(limit int) []string {
+			return []string{"log line 1", "log line 2"}
+		}
+	})
+
+	code, body := doJSON(t, ts, "GET", "/logs?limit=50", nil, true)
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %v", code, body)
+	}
+	lines, ok := body["lines"].([]any)
+	if !ok || len(lines) != 2 {
+		t.Fatalf("expected 2 lines, got %v", body["lines"])
+	}
+	if lines[0] != "log line 1" || lines[1] != "log line 2" {
+		t.Errorf("unexpected lines: %v", lines)
+	}
+}
+
 func TestLibrariesExposeDiskMetrics(t *testing.T) {
 	ts, _ := newTestAPI(t, nil)
 	code, libs := doJSONArray(t, ts, "GET", "/libraries", true)

@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/config"
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/logger"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/service"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/tray"
 )
@@ -31,12 +32,14 @@ func main() {
 		os.Exit(0)
 	}
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-	slog.SetDefault(logger)
+	cleanupLogger, err := logger.Setup("")
+	if err != nil {
+		slog.Warn("failed to initialize persistent file logger, using stdout default", "err", err)
+	} else {
+		defer cleanupLogger()
+	}
 
-	slog.Info("initializing Zapp Swap Manager core", "version", Version)
+	slog.Info("initializing Zapp Swap Manager core", "version", Version, "log_file", logger.LogFilePath())
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {

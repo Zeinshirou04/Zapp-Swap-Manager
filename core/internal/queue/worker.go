@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 )
@@ -53,14 +54,17 @@ func (q *Queue) stepFn(job Job) StepFunc {
 		if q.cancelRequested(job.ID) {
 			return ErrCancelled
 		}
+		slog.Info("job step started", "job_id", job.ID, "step", index, "name", name)
 		if err := q.journal(job.ID, index, name, StatusJournalStarted, nil); err != nil {
 			return err
 		}
 		if err := run(); err != nil {
 			details := err.Error()
+			slog.Error("job step failed", "job_id", job.ID, "step", index, "name", name, "err", err)
 			q.journal(job.ID, index, name, StatusJournalFailed, &details)
 			return err
 		}
+		slog.Info("job step completed", "job_id", job.ID, "step", index, "name", name)
 		return q.journal(job.ID, index, name, StatusJournalCompleted, nil)
 	}
 }
@@ -212,6 +216,7 @@ func (q *Queue) run(executor Executor) {
 // here is always derived from what the executor reported through the step
 // journal — never from folder state.
 func (q *Queue) execute(executor Executor, job Job) {
+	slog.Info("queue starting job", "job_id", job.ID, "type", job.Type, "app_id", job.AppID, "target", job.TargetLibraryID)
 	result, execErr := StatusSucceeded, error(nil)
 	execErr = executor(context.Background(), job, q.stepFn(job))
 	switch {
@@ -251,4 +256,12 @@ func (q *Queue) execute(executor Executor, job Job) {
 		}
 	}
 	writeStatus()
+	switch result {
+	case StatusSucceeded:
+		slog.Info("queue job succeeded", "job_id", job.ID, "type", job.Type, "app_id", job.AppID)
+	case StatusCancelled:
+		slog.Warn("queue job cancelled", "job_id", job.ID, "type", job.Type, "app_id", job.AppID)
+	default:
+		slog.Error("queue job failed", "job_id", job.ID, "type", job.Type, "app_id", job.AppID, "err", execErr)
+	}
 }

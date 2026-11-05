@@ -185,6 +185,21 @@ fn relaunch_app(app: tauri::AppHandle) {
     app.restart();
 }
 
+#[tauri::command]
+fn open_logs_folder() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        if let Some(appdata) = std::env::var_os("APPDATA") {
+            let log_dir = PathBuf::from(appdata)
+                .join("Zapp-Swap-Manager")
+                .join("logs");
+            let _ = std::fs::create_dir_all(&log_dir);
+            let _ = std::process::Command::new("explorer").arg(log_dir).spawn();
+        }
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -196,7 +211,8 @@ pub fn run() {
             stop_core_daemon,
             get_core_status,
             read_local_auth_token,
-            relaunch_app
+            relaunch_app,
+            open_logs_folder
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

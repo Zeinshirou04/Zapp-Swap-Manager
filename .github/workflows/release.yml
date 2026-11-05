@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release Tag (e.g. v0.3.1-beta.1)'
+        description: 'Release Tag (e.g. v0.3.1-beta.2)'
         required: true
-        default: 'v0.3.1-beta.1'
+        default: 'v0.3.1-beta.2'
 
 permissions:
   contents: write
@@ -34,7 +34,7 @@ jobs:
             }
             $tagVersion = $tagVersion.TrimStart("v")
             if ($tagVersion -eq "" -or $tagVersion -eq "main") {
-              $tagVersion = "0.3.1-beta.1"
+              $tagVersion = "0.3.1-beta.2"
             }
             go build -v -ldflags="-s -w -X main.Version=$tagVersion" -o ../dist/zapp-core.exe ./cmd/zapp-core
             cd ..
@@ -130,7 +130,7 @@ jobs:
                 }
                 $relTag = $relTag.TrimStart("v")
                 if ($relTag -eq "" -or $relTag -eq "main") {
-                  $relTag = "0.3.1-beta.1"
+                  $relTag = "0.3.1-beta.2"
                 }
 
                 $setupFile = Get-ChildItem -Path "src-tauri/target/release/bundle/nsis" -Filter "*-setup.exe" -Recurse | Select-Object -First 1

@@ -8,11 +8,13 @@ const mockDetected: DetectedLibrary[] = [
   { id: 'lib-deadbeef', path: 'D:\\SteamLibrary', drive_type: 'fixed', total_bytes: 4000 * 1024 * 1024 * 1024, free_bytes: 3500 * 1024 * 1024 * 1024 },
 ];
 
+const listMock = vi.hoisted(() => vi.fn());
 const detectMock = vi.hoisted(() => vi.fn());
 const registerMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../api/client.ts', () => ({
   api: {
+    listLibraries: listMock,
     detectLibraries: detectMock,
     registerLibraries: registerMock,
   },
@@ -20,6 +22,7 @@ vi.mock('../api/client.ts', () => ({
 
 describe('LibraryWizardModal Component', () => {
   beforeEach(() => {
+    listMock.mockReset().mockResolvedValue([]);
     detectMock.mockReset().mockResolvedValue(mockDetected);
     registerMock.mockReset().mockResolvedValue([]);
   });

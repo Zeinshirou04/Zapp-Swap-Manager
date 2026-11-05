@@ -11,9 +11,21 @@ import (
 // below 70% of the last recorded backup (a drop of more than 30%).
 const dropFactor = 0.7
 
+func dirExists(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && fi.IsDir()
+}
+
 // gameFolder resolves where a game's data lives inside a library root.
 // Only ever built from a whitelisted library root and a manifest installDir.
+// If the library follows the Steam structure (or if libRoot doesn't exist on disk),
+// it resolves inside steamapps/common.
+// For generic/standalone games libraries where libRoot exists and has no steamapps dir,
+// it resolves directly under libRoot.
 func gameFolder(libRoot, installDir string) string {
+	if dirExists(libRoot) && !dirExists(filepath.Join(libRoot, "steamapps")) {
+		return filepath.Join(libRoot, installDir)
+	}
 	return filepath.Join(libRoot, "steamapps", "common", installDir)
 }
 

@@ -1,7 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import { Game, Job, JobType, Library } from '../types/api.ts';
 import { GameCard } from './GameCard.tsx';
-import { CheckCircle2, Database, HardDrive, LayoutGrid, List, Search, Zap } from 'lucide-react';
+import { AddGameModal } from './AddGameModal.tsx';
+import { GameDetailModal } from './GameDetailModal.tsx';
+import {
+  Database,
+  HardDrive,
+  LayoutGrid,
+  List,
+  Search,
+  Zap,
+  Plus,
+  RefreshCw,
+} from 'lucide-react';
 import { formatBytes } from '../utils/format.ts';
 
 interface GameListProps {
@@ -10,6 +21,7 @@ interface GameListProps {
   onAction: (game: Game, type: JobType) => void;
   actionLoading: boolean;
   jobs?: Job[];
+  onRefresh?: () => void;
 }
 
 export const GameList: React.FC<GameListProps> = ({
@@ -18,10 +30,13 @@ export const GameList: React.FC<GameListProps> = ({
   onAction,
   actionLoading,
   jobs,
+  onRefresh,
 }) => {
   const [search, setSearch] = useState('');
-  const [filterState, setFilterState] = useState<'all' | 'active_ssd' | 'storage_hdd' | 'custom'>('all');
+  const [filterState, setFilterState] = useState<'all' | 'active_ssd' | 'storage_hdd' | 'custom' | 'unbacked'>('all');
   const [view, setView] = useState<'grid' | 'table'>('grid');
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [selectedGame, setSelectedGame] = useState<Game | null>(null);
 
   const ssdLib = libraries.find((l) => l.type === 'ssd_cache');
   const hddLib = libraries.find((l) => l.type === 'hdd_master');
@@ -30,13 +45,21 @@ export const GameList: React.FC<GameListProps> = ({
     return games.filter((g) => {
       const matchesSearch =
         g.name.toLowerCase().includes(search.toLowerCase()) ||
-        String(g.app_id).includes(search);
-      const matchesState =
-        filterState === 'all'
-          ? true
-          : filterState === 'custom'
-            ? !!g.is_custom
-            : g.state === filterState;
+        String(g.app_id).includes(search) ||
+        g.install_dir.toLowerCase().includes(search.toLowerCase()) ||
+        (g.tags && g.tags.some((t) => t.toLowerCase().includes(search.toLowerCase())));
+
+      let matchesState = true;
+      if (filterState === 'all') {
+        matchesState = true;
+      } else if (filterState === 'custom') {
+        matchesState = !!g.is_custom;
+      } else if (filterState === 'unbacked') {
+        matchesState = g.state === 'active_ssd' && !g.has_hdd_backup;
+      } else {
+        matchesState = g.state === filterState;
+      }
+
       return matchesSearch && matchesState;
     });
   }, [games, search, filterState]);
@@ -44,31 +67,44 @@ export const GameList: React.FC<GameListProps> = ({
   const actionButtons = (game: Game) => {
     const isOnSSD = game.state === 'active_ssd';
     return !isOnSSD && ssdLib ? (
-      <button
-        onClick={() => onAction(game, 'promote')}
-        disabled={actionLoading}
-        className="btn-primary"
-        title="Move game to fast SSD"
-      >
-        <Zap size={14} /> Move to SSD
-      </button>
+      game.is_native_hdd ? (
+        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Native HDD</span>
+      ) : (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onAction(game, 'promote');
+          }}
+          disabled={actionLoading || game.swap_enabled === false}
+          className="btn-primary"
+          title="Move game to fast SSD"
+        >
+          <Zap size={14} /> Move to SSD
+        </button>
+      )
     ) : isOnSSD && hddLib ? (
       <>
         <button
-          onClick={() => onAction(game, 'backup')}
+          onClick={(e) => {
+            e.stopPropagation();
+            onAction(game, 'backup');
+          }}
           disabled={actionLoading}
-          className="btn-secondary"
+          className={game.has_hdd_backup ? 'btn-secondary' : 'btn-primary'}
           title="Mirror SSD changes to HDD"
         >
-          Backup to HDD
+          <RefreshCw size={14} /> Backup
         </button>
         <button
-          onClick={() => onAction(game, 'evict')}
+          onClick={(e) => {
+            e.stopPropagation();
+            onAction(game, 'evict');
+          }}
           disabled={actionLoading}
           className="btn-danger"
           title="Safely mirror to HDD and free SSD space"
         >
-          <Database size={14} /> Evict to HDD
+          <Database size={14} /> Evict
         </button>
       </>
     ) : null;
@@ -86,7 +122,7 @@ export const GameList: React.FC<GameListProps> = ({
           marginBottom: '20px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <h2 style={{ fontSize: '1.15rem', fontWeight: 600 }}>Games Library</h2>
           <span
             style={{
@@ -101,6 +137,13 @@ export const GameList: React.FC<GameListProps> = ({
           >
             {filteredGames.length} of {games.length}
           </span>
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="btn-secondary"
+            style={{ fontSize: '0.8rem', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Plus size={14} /> Add Non-Steam Game
+          </button>
         </div>
 
         {/* Filter, search and view controls */}
@@ -120,6 +163,7 @@ export const GameList: React.FC<GameListProps> = ({
               { id: 'active_ssd', label: 'On SSD' },
               { id: 'storage_hdd', label: 'On HDD' },
               { id: 'custom', label: 'Non-Steam' },
+              { id: 'unbacked', label: 'SSD Only' },
             ].map(({ id, label }) => (
               <button
                 key={id}
@@ -227,6 +271,7 @@ export const GameList: React.FC<GameListProps> = ({
                 game={game}
                 onAction={onAction}
                 actionLoading={actionLoading}
+                onClick={(g) => setSelectedGame(g)}
                 activeJob={jobs?.find(
                   (j) =>
                     (j.status === 'running' || j.status === 'queued') &&
@@ -250,9 +295,16 @@ export const GameList: React.FC<GameListProps> = ({
                   <p style={{ fontWeight: 600, color: 'var(--text-main)', marginBottom: '6px' }}>
                     No Non-Steam games registered yet
                   </p>
-                  <p style={{ fontSize: '0.85rem', lineHeight: '1.5' }}>
-                    You can register any folder (e.g. <code>D:\Games</code>) via the Setup Wizard, or place standalone game folders inside your library's <code>steamapps/common/</code> folder.
+                  <p style={{ fontSize: '0.85rem', lineHeight: '1.5', marginBottom: '16px' }}>
+                    Click <strong>Add Non-Steam Game</strong> above to configure games with custom metadata and cover artwork.
                   </p>
+                  <button
+                    onClick={() => setIsAddModalOpen(true)}
+                    className="btn-primary"
+                    style={{ margin: '0 auto' }}
+                  >
+                    <Plus size={14} /> Add Game Now
+                  </button>
                 </div>
               ) : (
                 <p>No matching games found.</p>
@@ -289,7 +341,9 @@ export const GameList: React.FC<GameListProps> = ({
                     style={{
                       borderBottom: '1px solid var(--border-color)',
                       transition: 'background-color 0.15s ease',
+                      cursor: 'pointer',
                     }}
+                    onClick={() => setSelectedGame(game)}
                     onMouseEnter={(e) =>
                       (e.currentTarget.style.backgroundColor = 'var(--bg-main)')
                     }
@@ -331,11 +385,17 @@ export const GameList: React.FC<GameListProps> = ({
 
                     <td style={{ padding: '12px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}>
-                        <CheckCircle2
-                          size={14}
-                          style={{ color: game.backup_clean ? 'var(--success)' : 'var(--warning)' }}
-                        />
-                        <span>{game.backup_clean ? 'In Sync' : 'Needs Sync'}</span>
+                        {isOnSSD ? (
+                          game.has_hdd_backup ? (
+                            <span style={{ color: 'var(--success)', fontWeight: 600 }}>Backed Up</span>
+                          ) : (
+                            <span style={{ color: 'var(--warning)', fontWeight: 600 }}>SSD Only</span>
+                          )
+                        ) : game.is_native_hdd ? (
+                          <span style={{ color: 'var(--text-muted)' }}>Native HDD</span>
+                        ) : (
+                          <span style={{ color: 'var(--primary)' }}>Swappable</span>
+                        )}
                       </div>
                     </td>
 
@@ -358,6 +418,35 @@ export const GameList: React.FC<GameListProps> = ({
           </table>
         </div>
       )}
+
+      {/* Add Non-Steam Game Modal */}
+      <AddGameModal
+        open={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        libraries={libraries}
+        onSuccess={(_created) => {
+          if (onRefresh) onRefresh();
+        }}
+      />
+
+      {/* Game Detail Modal */}
+      <GameDetailModal
+        game={selectedGame}
+        libraries={libraries}
+        onClose={() => setSelectedGame(null)}
+        onAction={onAction}
+        actionLoading={actionLoading}
+        activeJob={jobs?.find(
+          (j) =>
+            selectedGame &&
+            (j.status === 'running' || j.status === 'queued') &&
+            String(j.app_id) === String(selectedGame.app_id)
+        )}
+        onGameUpdated={(updated) => {
+          setSelectedGame(updated);
+          if (onRefresh) onRefresh();
+        }}
+      />
     </div>
   );
 };

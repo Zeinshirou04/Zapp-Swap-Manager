@@ -33,7 +33,7 @@ export const LibraryWizardModal: React.FC<LibraryWizardModalProps> = ({ open, on
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Fresh wizard state on every open; auto-detect step 1 immediately.
+  // Fresh wizard state on every open; load existing and auto-detect step 1 immediately.
   useEffect(() => {
     if (!open) return;
     setStep(1);
@@ -42,11 +42,47 @@ export const LibraryWizardModal: React.FC<LibraryWizardModalProps> = ({ open, on
     setSaveError(null);
     setDetectError(null);
     setDetecting(true);
-    api
-      .detectLibraries()
-      .then((found) =>
-        setEntries(found.map((lib) => ({ ...lib, selected: true, role: null })))
-      )
+
+    Promise.all([
+      api.listLibraries().catch(() => []),
+      api.detectLibraries().catch(() => []),
+    ])
+      .then(([existing, detected]) => {
+        const merged: WizardEntry[] = [];
+        const seen = new Set<string>();
+
+        // 1. Existing registered libraries (pre-selected with their configured roles)
+        for (const lib of existing) {
+          const norm = lib.path.toLowerCase();
+          if (!seen.has(norm)) {
+            seen.add(norm);
+            merged.push({
+              id: lib.id,
+              path: lib.path,
+              drive_type: 'unknown' as DriveType,
+              free_bytes: lib.free_bytes,
+              total_bytes: lib.total_bytes,
+              selected: true,
+              role: lib.type,
+            });
+          }
+        }
+
+        // 2. Newly detected Steam libraries
+        for (const lib of detected) {
+          const norm = lib.path.toLowerCase();
+          if (!seen.has(norm)) {
+            seen.add(norm);
+            merged.push({
+              ...lib,
+              selected: true,
+              role: null,
+            });
+          }
+        }
+
+        setEntries(merged);
+      })
       .catch((err) => setDetectError(err instanceof Error ? err.message : 'Detection failed'))
       .finally(() => setDetecting(false));
   }, [open]);
@@ -193,7 +229,7 @@ export const LibraryWizardModal: React.FC<LibraryWizardModalProps> = ({ open, on
                 </label>
               ))}
               {entries.length === 0 && !detecting && !detectError && (
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No Steam libraries found automatically.</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No libraries found automatically. Add any folder where your games are installed below.</p>
               )}
             </div>
 
@@ -213,7 +249,7 @@ export const LibraryWizardModal: React.FC<LibraryWizardModalProps> = ({ open, on
                 <Search size={14} style={{ color: 'var(--text-muted)' }} />
                 <input
                   type="text"
-                  placeholder="Custom Steam library path (e.g. D:\\SteamLibrary)"
+                  placeholder="Games folder path (e.g. D:\Games or D:\SteamLibrary)"
                   value={manualPath}
                   onChange={(e) => setManualPath(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addManualPath()}

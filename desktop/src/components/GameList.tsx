@@ -233,8 +233,7 @@ export const GameList: React.FC<GameListProps> = ({
                     No Non-Steam Games Detected
                   </p>
                   <p style={{ fontSize: '0.825rem', lineHeight: '1.5' }}>
-                    Place any standalone game folder inside your library's <code>steamapps/common/</code> directory (e.g. <code>E:\SteamLibrary\steamapps\common\MyGame</code>).
-                    Zapp Swap Manager will automatically discover it here and let you swap it between SSD and HDD via directory junctions!
+                    Place standalone game folders inside a library's <code>steamapps/common/</code> directory (e.g. <code>E:\SteamLibrary\steamapps\common\MyGame</code>), or register any generic folder (e.g. <code>D:\Games</code>) in the Setup Wizard! Zapp Swap Manager automatically detects them and enables seamless SSD ↔ HDD swapping via directory junctions.
                   </p>
                 </div>
               ) : (
@@ -339,8 +338,7 @@ export const GameList: React.FC<GameListProps> = ({
                           No Non-Steam Games Detected
                         </p>
                         <p style={{ fontSize: '0.825rem', lineHeight: '1.5' }}>
-                          Place any standalone game folder inside your library's <code>steamapps/common/</code> directory (e.g. <code>E:\SteamLibrary\steamapps\common\MyGame</code>).
-                          Zapp Swap Manager will automatically discover it here and let you swap it between SSD and HDD via directory junctions!
+                          Place standalone game folders inside a library's <code>steamapps/common/</code> directory (e.g. <code>E:\SteamLibrary\steamapps\common\MyGame</code>), or register any generic folder (e.g. <code>D:\Games</code>) in the Setup Wizard! Zapp Swap Manager automatically detects them and enables seamless SSD ↔ HDD swapping via directory junctions.
                         </p>
                       </div>
                     ) : (

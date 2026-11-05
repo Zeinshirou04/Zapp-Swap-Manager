@@ -6,12 +6,14 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"runtime"
 	"sync"
 	"syscall"
 	"unsafe"
 
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/logger"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/service"
 )
 
@@ -67,7 +69,8 @@ const (
 
 	cmdDashboard = 1001
 	cmdStatus    = 1002
-	cmdExit      = 1003
+	cmdLogs      = 1003
+	cmdExit      = 1004
 )
 
 type point struct {
@@ -171,6 +174,13 @@ func (r *WindowsRunner) Run(ctx context.Context, svc *service.Service) error {
 					_ = cmd.Start()
 				}
 				return 0
+			case cmdLogs:
+				logDir := logger.LogDir()
+				_ = os.MkdirAll(logDir, 0755)
+				cmd := exec.Command("explorer", logDir)
+				cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+				_ = cmd.Start()
+				return 0
 			case cmdExit:
 				if r.actions.OnExit != nil {
 					r.actions.OnExit()
@@ -238,11 +248,13 @@ func (r *WindowsRunner) Run(ctx context.Context, svc *service.Service) error {
 
 	statusStr, _ := syscall.UTF16PtrFromString("Status: Running")
 	dashStr, _ := syscall.UTF16PtrFromString("Open Web Dashboard")
+	logsStr, _ := syscall.UTF16PtrFromString("Open Logs Folder")
 	exitStr, _ := syscall.UTF16PtrFromString("Exit Zapp Swap Manager")
 
 	procAppendMenuW.Call(hMenu, mfString|mfGrayed, cmdStatus, uintptr(unsafe.Pointer(statusStr)))
 	procAppendMenuW.Call(hMenu, mfSeparator, 0, 0)
 	procAppendMenuW.Call(hMenu, mfString, cmdDashboard, uintptr(unsafe.Pointer(dashStr)))
+	procAppendMenuW.Call(hMenu, mfString, cmdLogs, uintptr(unsafe.Pointer(logsStr)))
 	procAppendMenuW.Call(hMenu, mfSeparator, 0, 0)
 	procAppendMenuW.Call(hMenu, mfString, cmdExit, uintptr(unsafe.Pointer(exitStr)))
 

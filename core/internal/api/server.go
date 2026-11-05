@@ -33,6 +33,7 @@ type Config struct {
 	SetLibraries func([]steam.Library) error
 	Queue        *queue.Queue
 	Auth         Auth
+	LogsFn       func(limit int) []string
 }
 
 // Server owns the bound http.Server.
@@ -96,6 +97,7 @@ func newRouter(cfg Config) *http.ServeMux {
 	h := handlers{cfg: cfg, start: time.Now()}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", h.health)
+	mux.HandleFunc("GET /logs", h.logs)
 	mux.HandleFunc("GET /libraries", h.libraries)
 	mux.HandleFunc("GET /libraries/detected", h.detectedLibraries)
 	mux.HandleFunc("POST /libraries", h.registerLibraries)

@@ -29,6 +29,27 @@ func (h handlers) health(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+// logs: returns recent log lines captured in the service.
+func (h handlers) logs(w http.ResponseWriter, r *http.Request) {
+	limit := 200
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+			limit = n
+			if limit > 1000 {
+				limit = 1000
+			}
+		}
+	}
+	var lines []string
+	if h.cfg.LogsFn != nil {
+		lines = h.cfg.LogsFn(limit)
+	}
+	if lines == nil {
+		lines = []string{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"lines": lines})
+}
+
 // libs reports the live whitelist: the injected LibrariesFn when set, otherwise
 // the static config list.
 func (h handlers) libs() []steam.Library {

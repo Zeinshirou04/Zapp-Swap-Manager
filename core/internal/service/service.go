@@ -11,6 +11,7 @@ import (
 
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/api"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/config"
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/logger"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/queue"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/steam"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/transfer"
@@ -102,6 +103,7 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 		},
 		Queue: q,
 		Auth:  auth,
+		LogsFn: logger.GetRecentLogs,
 	})
 	if err != nil {
 		_ = q.Close()

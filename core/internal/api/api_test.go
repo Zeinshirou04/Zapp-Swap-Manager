@@ -294,6 +294,77 @@ func TestCustomGamesEndpoint(t *testing.T) {
 	}
 }
 
+func TestCustomGamesNestedAndCoverEndpoint(t *testing.T) {
+	ts, cfg := newTestAPI(t, nil)
+
+	// Register nested non-Steam game
+	code, created := doJSON(t, ts, "POST", "/custom-games", map[string]any{
+		"library_id":   "ssd0",
+		"install_dir":  "GRYPHLINK/games/EndField Game",
+		"name":         "Arknights: Endfield",
+		"cover_url":    "cover.png",
+		"swap_enabled": true,
+	}, true)
+	if code != http.StatusCreated {
+		t.Fatalf("createCustomGame failed: %d %v", code, created)
+	}
+	if created["install_dir"] != "GRYPHLINK/games/EndField Game" {
+		t.Errorf("install_dir = %v, want GRYPHLINK/games/EndField Game", created["install_dir"])
+	}
+
+	appID := fmt.Sprintf("%.0f", created["app_id"])
+
+	// Write dummy cover.png in the game folder
+	gameDir := filepath.Join(cfg.Libraries[0].Path, "steamapps", "common", "GRYPHLINK", "games", "EndField Game")
+	if err := os.WriteFile(filepath.Join(gameDir, "cover.png"), []byte("FAKE_PNG_DATA"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test GET /games/{app_id}/cover for local image
+	client := ts.Client()
+	req, _ := http.NewRequest("GET", ts.URL+"/games/"+appID+"/cover", nil)
+	authed(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("get local cover = %d, want 200", resp.StatusCode)
+	}
+	if cType := resp.Header.Get("Content-Type"); cType != "image/png" {
+		t.Errorf("Content-Type = %q, want image/png", cType)
+	}
+
+	// Update to remote URL
+	code, updated := doJSON(t, ts, "PUT", "/custom-games/"+appID, map[string]any{
+		"cover_url": "https://example.com/banner.jpg",
+	}, true)
+	if code != http.StatusOK || updated["cover_url"] != "https://example.com/banner.jpg" {
+		t.Fatalf("updateCustomGame failed: %d %v", code, updated)
+	}
+
+	// Test GET /games/{app_id}/cover redirects for remote URL
+	noRedirectClient := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	req2, _ := http.NewRequest("GET", ts.URL+"/games/"+appID+"/cover", nil)
+	authed(req2)
+	resp2, err := noRedirectClient.Do(req2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp2.Body.Close()
+	if resp2.StatusCode != http.StatusFound {
+		t.Errorf("get remote cover status = %d, want 302", resp2.StatusCode)
+	}
+	if loc := resp2.Header.Get("Location"); loc != "https://example.com/banner.jpg" {
+		t.Errorf("redirect location = %q, want https://example.com/banner.jpg", loc)
+	}
+}
+
 func TestBearerAuth(t *testing.T) {
 	ts, _ := newTestAPI(t, nil)
 	if code, _ := doJSON(t, ts, "GET", "/health", nil, false); code != http.StatusUnauthorized {

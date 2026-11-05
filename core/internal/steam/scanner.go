@@ -113,6 +113,9 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 				for _, other := range libs {
 					if other.Type == TypeHDDMaster {
 						backupDir := filepath.Join(other.Path, "steamapps", "common", m.InstallDir)
+						if !dirExists(backupDir) {
+							backupDir = filepath.Join(other.Path, m.InstallDir)
+						}
 						if dirExists(backupDir) {
 							hasHDDBackup = true
 							break
@@ -154,32 +157,19 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 	}
 
 	// Scan unmanifested / custom directories in <lib>/steamapps/common or <lib> directly
-	customCandidates := map[string][]customCandidate{} // lowerFolderName -> list of candidates
+	customCandidates := map[string][]customCandidate{} // lowerRelativePath -> list of candidates
 	for i := range libs {
 		lib := &libs[i]
 		commonDir := filepath.Join(lib.Path, "steamapps", "common")
 		if !dirExists(commonDir) {
 			commonDir = lib.Path
 		}
-		entries, err := os.ReadDir(commonDir)
-		if err != nil {
-			continue // No accessible directory in this library
-		}
-		for _, entry := range entries {
-			name := entry.Name()
+		dirInfos := findCustomGameDirsInLib(commonDir, claimedDirs)
+		for _, info := range dirInfos {
+			name := filepath.ToSlash(info.relPath)
 			nameLower := strings.ToLower(name)
-			if claimedDirs[nameLower] || isIgnoredDir(name) {
-				continue
-			}
-			fullPath := filepath.Join(commonDir, name)
-			fi, err := os.Lstat(fullPath)
-			if err != nil {
-				continue
-			}
-			isJunc := (fi.Mode()&os.ModeSymlink != 0 || fi.Mode()&os.ModeIrregular != 0)
-			if !fi.IsDir() && !isJunc {
-				continue
-			}
+			fullPath := info.fullPath
+			isJunc := info.isJunction
 
 			var size int64
 			if !isJunc {
@@ -191,14 +181,18 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 				state = StateActiveSSD
 			}
 
-			gameTitle := name
+			gameTitle := filepath.Base(filepath.FromSlash(name))
 			var coverURL string
 			swapEnabled := true
 			isNativeHDD := false
 			var tags []string
 
 			// Check if zappmanifest.json exists inside this game directory
-			if zm, err := ReadZappManifest(fullPath); err == nil && zm != nil {
+			zm := info.zm
+			if zm == nil {
+				zm, _ = ReadZappManifest(fullPath)
+			}
+			if zm != nil {
 				if zm.Name != "" {
 					gameTitle = zm.Name
 				}
@@ -359,4 +353,192 @@ func ParseLibraryFolders(data []byte) ([]string, error) {
 		}
 	}
 	return paths, nil
+}
+
+type customGameDirInfo struct {
+	relPath    string
+	fullPath   string
+	isJunction bool
+	zm         *ZappManifest
+}
+
+func findCustomGameDirsInLib(baseDir string, claimedDirs map[string]bool) []customGameDirInfo {
+	var results []customGameDirInfo
+	if !dirExists(baseDir) {
+		return results
+	}
+
+	claimedRel := map[string]bool{}
+
+	// Pass 1: Look for any zappmanifest.json up to 4 levels deep
+	_ = filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil {
+			return nil
+		}
+		rel, err := filepath.Rel(baseDir, path)
+		if err != nil {
+			return nil
+		}
+		parts := strings.Split(rel, string(filepath.Separator))
+		if len(parts) > 5 {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if info.IsDir() && isIgnoredDir(info.Name()) {
+			return filepath.SkipDir
+		}
+		if !info.IsDir() && info.Name() == ZappManifestFilename {
+			gameDir := filepath.Dir(path)
+			gameRel, err := filepath.Rel(baseDir, gameDir)
+			if err == nil && gameRel != "." {
+				relSlash := filepath.ToSlash(gameRel)
+				relLower := strings.ToLower(relSlash)
+				if !claimedDirs[relLower] && !claimedRel[relLower] {
+					fi, _ := os.Lstat(gameDir)
+					isJunc := fi != nil && (fi.Mode()&os.ModeSymlink != 0 || fi.Mode()&os.ModeIrregular != 0)
+					zm, _ := ReadZappManifest(gameDir)
+					results = append(results, customGameDirInfo{
+						relPath:    relSlash,
+						fullPath:   gameDir,
+						isJunction: isJunc,
+						zm:         zm,
+					})
+					claimedRel[relLower] = true
+					// Mark all ancestor directories as claimed so they aren't treated as games
+					ancestor := gameRel
+					for {
+						ancestor = filepath.Dir(ancestor)
+						if ancestor == "." || ancestor == "" || ancestor == "/" || ancestor == "\\" {
+							break
+						}
+						claimedRel[strings.ToLower(filepath.ToSlash(ancestor))] = true
+					}
+				}
+			}
+		}
+		return nil
+	})
+
+	// Pass 2: Look for existing junctions/symlinks up to 4 levels deep
+	_ = filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil {
+			return nil
+		}
+		rel, err := filepath.Rel(baseDir, path)
+		if err != nil || rel == "." {
+			return nil
+		}
+		parts := strings.Split(rel, string(filepath.Separator))
+		if len(parts) > 4 {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if info.IsDir() && isIgnoredDir(info.Name()) {
+			return filepath.SkipDir
+		}
+		relSlash := filepath.ToSlash(rel)
+		relLower := strings.ToLower(relSlash)
+		if claimedDirs[relLower] || claimedRel[relLower] {
+			return nil
+		}
+
+		fi, err := os.Lstat(path)
+		if err == nil && fi != nil {
+			isJunc := (fi.Mode()&os.ModeSymlink != 0 || fi.Mode()&os.ModeIrregular != 0)
+			if isJunc {
+				zm, _ := ReadZappManifest(path)
+				results = append(results, customGameDirInfo{
+					relPath:    relSlash,
+					fullPath:   path,
+					isJunction: true,
+					zm:         zm,
+				})
+				claimedRel[relLower] = true
+				ancestor := rel
+				for {
+					ancestor = filepath.Dir(ancestor)
+					if ancestor == "." || ancestor == "" || ancestor == "/" || ancestor == "\\" {
+						break
+					}
+					claimedRel[strings.ToLower(filepath.ToSlash(ancestor))] = true
+				}
+				return filepath.SkipDir
+			}
+		}
+		return nil
+	})
+
+	// Pass 3: Unmanifested directories
+	// Check entries at level 1: if not an ancestor of claimed paths, check if it's a container or game
+	entries, err := os.ReadDir(baseDir)
+	if err == nil {
+		for _, e := range entries {
+			if !e.IsDir() || isIgnoredDir(e.Name()) {
+				continue
+			}
+			lvl1Name := e.Name()
+			lvl1Rel := filepath.ToSlash(lvl1Name)
+			lvl1Lower := strings.ToLower(lvl1Rel)
+			if claimedDirs[lvl1Lower] || claimedRel[lvl1Lower] {
+				continue
+			}
+			lvl1Path := filepath.Join(baseDir, lvl1Name)
+
+			// Check if lvl1 contains subdirectories that look like games (e.g. "Riot Games/VALORANT")
+			subEntries, err := os.ReadDir(lvl1Path)
+			hasSubGame := false
+			if err == nil {
+				for _, sub := range subEntries {
+					if !sub.IsDir() || isIgnoredDir(sub.Name()) {
+						continue
+					}
+					subRel := filepath.ToSlash(filepath.Join(lvl1Name, sub.Name()))
+					subLower := strings.ToLower(subRel)
+					if claimedRel[subLower] {
+						hasSubGame = true
+						break
+					}
+					subPath := filepath.Join(lvl1Path, sub.Name())
+					if hasGameFiles(subPath) {
+						hasSubGame = true
+						claimedRel[subLower] = true
+						results = append(results, customGameDirInfo{
+							relPath:    subRel,
+							fullPath:   subPath,
+							isJunction: false,
+						})
+					}
+				}
+			}
+
+			if !hasSubGame {
+				// Level 1 directory itself is the game!
+				claimedRel[lvl1Lower] = true
+				results = append(results, customGameDirInfo{
+					relPath:    lvl1Rel,
+					fullPath:   lvl1Path,
+					isJunction: false,
+				})
+			}
+		}
+	}
+
+	return results
+}
+
+func hasGameFiles(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			return true
+		}
+	}
+	return false
 }

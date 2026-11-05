@@ -305,6 +305,79 @@ func TestScanGenericGamesDirectory(t *testing.T) {
 	}
 }
 
+func TestScanNestedGenericGamesDirectory(t *testing.T) {
+	// Standalone games directory on SSD with multi-level publisher/launcher hierarchy:
+	// - GRYPHLINK/games/EndField Game
+	// - Riot Games/VALORANT
+	ssdGamesDir := filepath.Join(t.TempDir(), "Games")
+	endfieldDir := filepath.Join(ssdGamesDir, "GRYPHLINK", "games", "EndField Game")
+	if err := os.MkdirAll(endfieldDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(endfieldDir, "Endfield.exe"), []byte("endfield_binary"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Add zappmanifest.json to Endfield
+	zm := ZappManifest{
+		Name:        "Arknights: Endfield",
+		InstallDir:  "GRYPHLINK/games/EndField Game",
+		CoverURL:    "cover.png",
+		SwapEnabled: true,
+	}
+	if err := WriteZappManifest(endfieldDir, zm); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(endfieldDir, "cover.png"), []byte("png_bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	valorantDir := filepath.Join(ssdGamesDir, "Riot Games", "VALORANT")
+	if err := os.MkdirAll(valorantDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(valorantDir, "VALORANT.exe"), []byte("valorant_binary"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	libs := []Library{
+		{ID: "games_ssd", Path: ssdGamesDir, Type: TypeSSDCache},
+	}
+
+	games, err := ScanLibraries(libs)
+	if err != nil {
+		t.Fatalf("ScanLibraries: %v", err)
+	}
+
+	if len(games) != 2 {
+		t.Fatalf("games count = %d, want 2; got: %+v", len(games), games)
+	}
+
+	var foundEndfield, foundValorant bool
+	for _, g := range games {
+		if g.Manifest.Name == "Arknights: Endfield" {
+			foundEndfield = true
+			if g.Manifest.InstallDir != "GRYPHLINK/games/EndField Game" {
+				t.Errorf("Endfield InstallDir = %q, want GRYPHLINK/games/EndField Game", g.Manifest.InstallDir)
+			}
+			if g.CoverURL != "cover.png" {
+				t.Errorf("Endfield CoverURL = %q, want cover.png", g.CoverURL)
+			}
+		}
+		if g.Manifest.Name == "VALORANT" {
+			foundValorant = true
+			if g.Manifest.InstallDir != "Riot Games/VALORANT" {
+				t.Errorf("Valorant InstallDir = %q, want Riot Games/VALORANT", g.Manifest.InstallDir)
+			}
+		}
+	}
+	if !foundEndfield {
+		t.Error("expected Arknights: Endfield to be discovered")
+	}
+	if !foundValorant {
+		t.Error("expected VALORANT to be discovered")
+	}
+}
+
 func TestZappManifestAndRealFolderSize(t *testing.T) {
 	tmp := t.TempDir()
 	ssd := filepath.Join(tmp, "SSD")

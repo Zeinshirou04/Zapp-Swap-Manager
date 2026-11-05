@@ -40,6 +40,24 @@ export function setApiConfig(config: ApiConfig): void {
   localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
+export function getGameCoverUrl(appId: number | string): string {
+  const config = getApiConfig();
+  return `${config.baseUrl}/games/${appId}/cover`;
+}
+
+export function resolveCoverUrl(game: Game): string | null {
+  if (game.cover_url) {
+    if (game.cover_url.startsWith('http://') || game.cover_url.startsWith('https://')) {
+      return game.cover_url;
+    }
+    return getGameCoverUrl(game.app_id);
+  }
+  if (!game.is_custom) {
+    return `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${game.app_id}/header.jpg`;
+  }
+  return null;
+}
+
 class ApiClient {
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const config = getApiConfig();

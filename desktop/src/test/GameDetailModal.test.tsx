@@ -8,6 +8,8 @@ vi.mock('../api/client.ts', () => ({
   api: {
     updateCustomGame: vi.fn(),
   },
+  resolveCoverUrl: (game: { cover_url?: string | null }) => game.cover_url || null,
+  getGameCoverUrl: (appId: string | number) => `http://127.0.0.1:8765/games/${appId}/cover`,
 }));
 
 describe('GameDetailModal Component', () => {

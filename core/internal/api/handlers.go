@@ -412,15 +412,21 @@ func (h handlers) createCustomGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
 		return
 	}
-	if strings.TrimSpace(in.InstallDir) == "" {
+	rawInstallDir := strings.TrimSpace(in.InstallDir)
+	if rawInstallDir == "" {
 		writeError(w, http.StatusBadRequest, "invalid_install_dir", "install_dir cannot be empty")
 		return
 	}
-	// Validate bare directory name (no path separators)
-	if strings.ContainsAny(in.InstallDir, `/\:`) || in.InstallDir == "." || in.InstallDir == ".." {
-		writeError(w, http.StatusBadRequest, "invalid_install_dir", "install_dir must be a simple directory name")
+	if filepath.IsAbs(rawInstallDir) || strings.Contains(rawInstallDir, ":") || strings.Contains(rawInstallDir, "..") {
+		writeError(w, http.StatusBadRequest, "invalid_install_dir", "install_dir must be a safe relative path without traversal")
 		return
 	}
+	cleanedInstallDir := filepath.Clean(filepath.FromSlash(rawInstallDir))
+	if cleanedInstallDir == "." || strings.HasPrefix(cleanedInstallDir, "..") {
+		writeError(w, http.StatusBadRequest, "invalid_install_dir", "install_dir must be a valid directory path")
+		return
+	}
+	in.InstallDir = filepath.ToSlash(cleanedInstallDir)
 
 	libs := h.libs()
 	var targetLib *steam.Library
@@ -438,11 +444,11 @@ func (h handlers) createCustomGame(w http.ResponseWriter, r *http.Request) {
 	commonDir := filepath.Join(targetLib.Path, "steamapps", "common")
 	var gameDir string
 	if fi, err := os.Stat(commonDir); err == nil && fi.IsDir() {
-		gameDir = filepath.Join(commonDir, in.InstallDir)
+		gameDir = filepath.Join(commonDir, filepath.FromSlash(in.InstallDir))
 	} else {
-		gameDir = filepath.Join(targetLib.Path, in.InstallDir)
+		gameDir = filepath.Join(targetLib.Path, filepath.FromSlash(in.InstallDir))
 	}
-	// Create folder if not yet existing
+	// Create folder if not yet existing (including intermediate parent directories)
 	if err := os.MkdirAll(gameDir, 0755); err != nil {
 		writeError(w, http.StatusInternalServerError, "mkdir_failed", err.Error())
 		return
@@ -545,12 +551,12 @@ func (h handlers) updateCustomGame(w http.ResponseWriter, r *http.Request) {
 	var gameDir string
 	for _, l := range libs {
 		if l.ID == foundGame.LibraryID {
-			p1 := filepath.Join(l.Path, "steamapps", "common", foundGame.Manifest.InstallDir)
+			p1 := filepath.Join(l.Path, "steamapps", "common", filepath.FromSlash(foundGame.Manifest.InstallDir))
 			if _, err := os.Stat(p1); err == nil {
 				gameDir = p1
 				break
 			}
-			p2 := filepath.Join(l.Path, foundGame.Manifest.InstallDir)
+			p2 := filepath.Join(l.Path, filepath.FromSlash(foundGame.Manifest.InstallDir))
 			if _, err := os.Stat(p2); err == nil {
 				gameDir = p2
 				break
@@ -598,4 +604,99 @@ func (h handlers) updateCustomGame(w http.ResponseWriter, r *http.Request) {
 	foundGame.Tags = zm.Tags
 
 	writeJSON(w, http.StatusOK, toGameJSON(*foundGame))
+}
+
+// getGameCover: GET /games/{app_id}/cover
+func (h handlers) getGameCover(w http.ResponseWriter, r *http.Request) {
+	appID := r.PathValue("app_id")
+	games, err := h.scanGames()
+	if err != nil && len(games) == 0 {
+		writeError(w, http.StatusInternalServerError, "scan_failed", err.Error())
+		return
+	}
+
+	var foundGame *steam.Game
+	for i := range games {
+		gID := games[i].Manifest.AppID
+		gAppID, _ := strconv.ParseInt(gID, 10, 64)
+		if gID == appID || fmt.Sprint(gAppID) == appID || strings.EqualFold(games[i].Manifest.InstallDir, appID) || steam.CustomAppID(games[i].Manifest.InstallDir) == appID {
+			foundGame = &games[i]
+			break
+		}
+	}
+	if foundGame == nil {
+		writeError(w, http.StatusNotFound, "game_not_found", "game not found")
+		return
+	}
+
+	coverURL := strings.TrimSpace(foundGame.CoverURL)
+	if coverURL == "" {
+		if !foundGame.IsCustom {
+			http.Redirect(w, r, fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", foundGame.Manifest.AppID), http.StatusFound)
+			return
+		}
+		writeError(w, http.StatusNotFound, "no_cover", "no cover image configured for this game")
+		return
+	}
+
+	if strings.HasPrefix(coverURL, "http://") || strings.HasPrefix(coverURL, "https://") {
+		http.Redirect(w, r, coverURL, http.StatusFound)
+		return
+	}
+
+	// Local file path
+	localPath := coverURL
+	if !filepath.IsAbs(localPath) {
+		libs := h.libs()
+		for _, l := range libs {
+			if l.ID == foundGame.LibraryID {
+				p1 := filepath.Join(l.Path, "steamapps", "common", filepath.FromSlash(foundGame.Manifest.InstallDir), localPath)
+				if fi, err := os.Stat(p1); err == nil && !fi.IsDir() {
+					localPath = p1
+					break
+				}
+				p2 := filepath.Join(l.Path, filepath.FromSlash(foundGame.Manifest.InstallDir), localPath)
+				if fi, err := os.Stat(p2); err == nil && !fi.IsDir() {
+					localPath = p2
+					break
+				}
+			}
+		}
+	}
+
+	f, err := os.Open(localPath)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "cover_file_missing", fmt.Sprintf("local cover file not found: %s", err))
+		return
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil || fi.IsDir() {
+		writeError(w, http.StatusNotFound, "cover_file_invalid", "cover path is not a file")
+		return
+	}
+
+	ext := strings.ToLower(filepath.Ext(localPath))
+	var cType string
+	switch ext {
+	case ".png":
+		cType = "image/png"
+	case ".jpg", ".jpeg":
+		cType = "image/jpeg"
+	case ".webp":
+		cType = "image/webp"
+	case ".gif":
+		cType = "image/gif"
+	case ".svg":
+		cType = "image/svg+xml"
+	case ".ico":
+		cType = "image/x-icon"
+	default:
+		cType = "application/octet-stream"
+	}
+
+	w.Header().Set("Content-Type", cType)
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	http.ServeContent(w, r, filepath.Base(localPath), fi.ModTime(), f)
 }

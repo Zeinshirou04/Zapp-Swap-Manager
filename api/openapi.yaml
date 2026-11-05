@@ -214,6 +214,29 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /games/{app_id}/cover:
+    get:
+      summary: Get game cover artwork
+      description: Streams local cover artwork or redirects to remote cover image URL.
+      operationId: getGameCover
+      tags: [Games]
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      responses:
+        '200':
+          description: Cover image data.
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        '302':
+          description: Redirect to remote cover URL.
+        '404':
+          description: No cover artwork found for this game.
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /preferences:
     get:
       summary: Get core preferences
@@ -561,7 +584,7 @@ components:
           type: string
         install_dir:
           type: string
-          description: Steam install directory name (the folder under steamapps\common), not a filesystem path.
+          description: Game install directory name or safe relative path (under steamapps\common or library root), not an absolute filesystem path.
         size_bytes:
           type: integer
           format: int64

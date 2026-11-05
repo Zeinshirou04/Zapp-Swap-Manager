@@ -33,13 +33,24 @@ func steamappsFolder(libRoot string) string {
 	return filepath.Join(libRoot, "steamapps")
 }
 
-// validateInstallDir rejects the parts of an installDir that could escape the
-// planned path. Installdirs come from appmanifest data, which we mostly trust
-// but never hand raw paths to.
+// validateInstallDir rejects paths that could escape the library root.
+// Allows simple folder names (e.g. "Terraria") or safe relative subpaths (e.g. "GRYPHLINK/games/EndField Game").
 func validateInstallDir(installDir string) error {
-	if installDir == "" || filepath.IsAbs(installDir) || strings.Contains(installDir, "..") ||
-		strings.ContainsAny(installDir, `/\:`) {
-		return fmt.Errorf("unsafe install directory name %q", installDir)
+	if strings.TrimSpace(installDir) == "" {
+		return fmt.Errorf("empty install directory name")
+	}
+	if filepath.IsAbs(installDir) {
+		return fmt.Errorf("unsafe install directory %q: absolute paths are forbidden", installDir)
+	}
+	if strings.Contains(installDir, ":") {
+		return fmt.Errorf("unsafe install directory %q: colons or drive letters are forbidden", installDir)
+	}
+	if strings.Contains(installDir, "..") {
+		return fmt.Errorf("unsafe install directory %q: directory traversal is forbidden", installDir)
+	}
+	cleaned := filepath.Clean(installDir)
+	if cleaned == "." || strings.HasPrefix(cleaned, "..") {
+		return fmt.Errorf("unsafe install directory %q: invalid directory", installDir)
 	}
 	return nil
 }

@@ -174,7 +174,6 @@ jobs:
           name: zapp-desktop-windows-x64
           path: |
             zapp-desktop-windows-x64.zip
-            dist-desktop/*.msi
             dist-desktop/*-setup.exe
             dist-desktop/latest.json
             dist-desktop/latest-beta.json

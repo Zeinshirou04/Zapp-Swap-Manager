@@ -28,6 +28,15 @@
   - `Sidebar.tsx`: Add Settings navigation item.
 
 ## Verification
-- Core unit & integration tests (`cd core && go test -v ./...`).
-- Desktop lint, build, vitest suites (`cd desktop && npm run lint && npm run build && npm test`).
-- Full repository check via `just check`.
+- Core unit & integration tests (`cd core && go test -v ./...` - all packages passed).
+- Desktop lint, build, vitest suites (`cd desktop && npm run lint && npm run build && npm test` - 15 test files, 45 tests passed).
+- Full repository check via `just check` (passed with code 0).
+
+## Implementation Summary
+- **Core Real Disk Size Calculation**: In `core/internal/steam/scanner.go`, `dirSize` calculates actual on-disk folder size; if `dirSize > m.SizeOnDisk`, it dynamically updates the game's disk size so live patchers (WuWa, Genshin, Warframe) show accurate 100+ GB sizes.
+- **Core Zapp Manifests**: Created `core/internal/steam/zappmanifest.go` supporting `zappmanifest.json` per game directory with custom name, custom cover URL, swap eligibility, native HDD flag, and tag chips.
+- **Core Steam Lifecycle Automation**: Created `core/internal/steam/steam_lifecycle_windows.go` (and `_other.go`) implementing graceful exit via `steam://exit` and restart via `steam://open/main`.
+- **Core Preferences & API Endpoints**: Added `/preferences` (GET/PUT) and `/custom-games` (POST/PUT) with SQLite / file persistence and tests in `api_test.go`.
+- **Desktop Settings View**: Added `desktop/src/components/SettingsView.tsx` as a full page in the navigation sidebar, featuring Steam lifecycle toggles, core daemon connection & tokens, test connection, restart daemon, system startup, theme preferences, and updater controls.
+- **Desktop Custom Game & Detail Manager**: Created `desktop/src/components/AddGameModal.tsx` and `desktop/src/components/GameDetailModal.tsx` allowing users to register and configure non-Steam games, inspect backup status ("Backed Up", "SSD Only", "Swappable", "Native HDD"), and edit metadata.
+- **API Contract**: Updated `api/openapi.yaml` documenting `/preferences`, `/custom-games`, `/custom-games/{app_id}`, and new `Game` fields.

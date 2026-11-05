@@ -82,6 +82,7 @@ var runRobocopy = runRobocopyReal
 // it in the Result.
 func runRobocopyReal(ctx context.Context, src, dst string, flags ...string) (Result, error) {
 	cmd := exec.CommandContext(ctx, "robocopy", buildArgs(src, dst, flags...)...)
+	hideConsole(cmd)
 	out, err := cmd.CombinedOutput()
 	res := Result{Output: string(out)}
 	var exitErr *exec.ExitError

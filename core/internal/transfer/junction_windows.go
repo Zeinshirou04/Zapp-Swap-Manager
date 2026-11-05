@@ -13,6 +13,7 @@ const fileAttributeReparsePoint = 0x400
 
 func defaultCreateJunction(link, target string) error {
 	cmd := exec.Command("cmd.exe", "/c", "mklink", "/J", link, target)
+	hideConsole(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("mklink /J %s %s: %s: %w", link, target, string(out), err)

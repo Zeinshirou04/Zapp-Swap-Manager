@@ -268,3 +268,39 @@ func TestScanLibrariesCustomGames(t *testing.T) {
 		t.Errorf("CustomRPG AppID = %s, want %s", custom.Manifest.AppID, CustomAppID("CustomRPG"))
 	}
 }
+
+func TestScanGenericGamesDirectory(t *testing.T) {
+	// Standalone games directory on SSD without steamapps/common structure
+	ssdGamesDir := filepath.Join(t.TempDir(), "StandaloneGames")
+	gameDir := filepath.Join(ssdGamesDir, "GenshinImpact")
+	if err := os.MkdirAll(gameDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(gameDir, "launcher.exe"), []byte("genshin_data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	libs := []Library{
+		{ID: "generic_ssd", Path: ssdGamesDir, Type: TypeSSDCache},
+	}
+
+	games, err := ScanLibraries(libs)
+	if err != nil {
+		t.Fatalf("ScanLibraries: %v", err)
+	}
+
+	if len(games) != 1 {
+		t.Fatalf("games count = %d, want 1", len(games))
+	}
+
+	g := games[0]
+	if g.Manifest.Name != "GenshinImpact" || !g.IsCustom {
+		t.Errorf("game = %+v, want GenshinImpact custom", g)
+	}
+	if g.State != StateActiveSSD {
+		t.Errorf("state = %s, want %s", g.State, StateActiveSSD)
+	}
+	if g.LibraryID != "generic_ssd" {
+		t.Errorf("library_id = %s, want generic_ssd", g.LibraryID)
+	}
+}

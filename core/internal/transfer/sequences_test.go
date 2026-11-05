@@ -356,3 +356,46 @@ func TestCustomGameRoundTrip(t *testing.T) {
 		t.Errorf("HDD master retained bytes = %d, want 2048", hddKept["bytes"])
 	}
 }
+
+func TestGenericDirectoryRoundTrip(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("robocopy.exe and mklink /J are Windows-only")
+	}
+	ctx := context.Background()
+	gameDirName := "EpicShooter"
+	ssd := filepath.Join(t.TempDir(), "SSDGames")
+	hdd := filepath.Join(t.TempDir(), "HDDGUID")
+	if err := os.MkdirAll(filepath.Join(ssd, gameDirName), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(hdd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ssd, gameDirName, "game.dat"), []byte("epic_payload"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Evict from generic SSD directly to generic HDD
+	if err := EvictCustom(ctx, Options{}, ssd, hdd, gameDirName); err != nil {
+		t.Fatalf("EvictCustom generic: %v", err)
+	}
+
+	ssdPath := filepath.Join(ssd, gameDirName)
+	if !IsJunction(ssdPath) {
+		t.Errorf("expected %q on SSD to be a junction", ssdPath)
+	}
+
+	hddPath := filepath.Join(hdd, gameDirName)
+	if _, err := os.Stat(filepath.Join(hddPath, "game.dat")); err != nil {
+		t.Errorf("expected %q on HDD to exist: %v", hddPath, err)
+	}
+
+	// Promote back
+	if err := PromoteCustom(ctx, Options{}, hdd, ssd, gameDirName); err != nil {
+		t.Fatalf("PromoteCustom generic: %v", err)
+	}
+
+	if IsJunction(ssdPath) {
+		t.Errorf("expected %q on SSD to NOT be a junction", ssdPath)
+	}
+}

@@ -95,14 +95,17 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 		}
 	}
 
-	// Scan unmanifested / custom directories in <lib>/steamapps/common
+	// Scan unmanifested / custom directories in <lib>/steamapps/common or <lib> directly
 	customCandidates := map[string][]customCandidate{} // lowerFolderName -> list of candidates
 	for i := range libs {
 		lib := &libs[i]
 		commonDir := filepath.Join(lib.Path, "steamapps", "common")
+		if !dirExists(commonDir) {
+			commonDir = lib.Path
+		}
 		entries, err := os.ReadDir(commonDir)
 		if err != nil {
-			continue // No steamapps/common folder in this library
+			continue // No accessible directory in this library
 		}
 		for _, entry := range entries {
 			name := entry.Name()
@@ -184,11 +187,11 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 }
 
 func isIgnoredDir(name string) bool {
-	if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "__") {
+	if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "__") || strings.HasPrefix(name, "$") {
 		return true
 	}
 	switch strings.ToLower(name) {
-	case "steam controller configs", "steamworks shared", "downloading", "temp":
+	case "steam controller configs", "steamworks shared", "downloading", "temp", "steamapps", "system volume information", "recycle.bin", "recovery", "config":
 		return true
 	}
 	return false

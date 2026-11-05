@@ -145,6 +145,16 @@ func TestCheckDestination(t *testing.T) {
 	if err := CheckDestination(filepath.Join(lib, "steamapps", "common", "Terrariax"), lib, "Terraria"); err == nil {
 		t.Error("appended path must be rejected")
 	}
+
+	// For an existing generic standalone folder without steamapps:
+	genericLib := t.TempDir()
+	genericWant := ExpectedGameFolder(genericLib, "Genshin")
+	if genericWant != filepath.Join(genericLib, "Genshin") {
+		t.Errorf("generic ExpectedGameFolder got %q, want %q", genericWant, filepath.Join(genericLib, "Genshin"))
+	}
+	if err := CheckDestination(genericWant, genericLib, "Genshin"); err != nil {
+		t.Errorf("generic destination rejected: %v", err)
+	}
 }
 
 func TestValidateInstallDir(t *testing.T) {

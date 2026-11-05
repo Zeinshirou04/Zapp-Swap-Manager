@@ -166,7 +166,9 @@ func (r *WindowsRunner) Run(ctx context.Context, svc *service.Service) error {
 					r.actions.OnOpenDashboard()
 				} else {
 					url := fmt.Sprintf("http://%s/health", svc.Config().BindAddr)
-					_ = exec.Command("cmd", "/c", "start", url).Start()
+					cmd := exec.Command("cmd", "/c", "start", url)
+					cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+					_ = cmd.Start()
 				}
 				return 0
 			case cmdExit:

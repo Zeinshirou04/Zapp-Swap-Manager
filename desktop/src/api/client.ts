@@ -124,6 +124,10 @@ class ApiClient {
       method: 'POST',
     });
   }
+
+  async getLogs(limit: number = 200): Promise<{ lines: string[] }> {
+    return this.request<{ lines: string[] }>(`/logs?limit=${limit}`);
+  }
 }
 
 export const api = new ApiClient();

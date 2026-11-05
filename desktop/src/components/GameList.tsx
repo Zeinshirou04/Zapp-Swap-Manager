@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Game, JobType, Library } from '../types/api.ts';
+import { Game, Job, JobType, Library } from '../types/api.ts';
 import { GameCard } from './GameCard.tsx';
 import { CheckCircle2, Database, HardDrive, LayoutGrid, List, Search, Zap } from 'lucide-react';
 
@@ -8,6 +8,7 @@ interface GameListProps {
   libraries: Library[];
   onAction: (game: Game, type: JobType) => void;
   actionLoading: boolean;
+  jobs?: Job[];
 }
 
 function formatBytes(bytes: number): string {
@@ -21,6 +22,7 @@ export const GameList: React.FC<GameListProps> = ({
   libraries,
   onAction,
   actionLoading,
+  jobs,
 }) => {
   const [search, setSearch] = useState('');
   const [filterState, setFilterState] = useState<'all' | 'active_ssd' | 'storage_hdd' | 'custom'>('all');
@@ -214,9 +216,22 @@ export const GameList: React.FC<GameListProps> = ({
             gap: '14px',
           }}
         >
-          {filteredGames.map((game) => (
-            <GameCard key={game.app_id} game={game} onAction={onAction} actionLoading={actionLoading} />
-          ))}
+          {filteredGames.map((game) => {
+            const activeJob = jobs?.find(
+              (j) =>
+                (j.status === 'running' || j.status === 'queued') &&
+                String(j.app_id) === String(game.app_id)
+            );
+            return (
+              <GameCard
+                key={game.app_id}
+                game={game}
+                onAction={onAction}
+                actionLoading={actionLoading}
+                activeJob={activeJob}
+              />
+            );
+          })}
           {filteredGames.length === 0 && (
             <div
               style={{

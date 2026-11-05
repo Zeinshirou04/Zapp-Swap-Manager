@@ -20,5 +20,6 @@ export const restartCoreDaemon = (): Promise<StartResult> => invoke('restart_cor
 export const stopCoreDaemon = (): Promise<boolean> => invoke('stop_core_daemon');
 export const getCoreStatus = (): Promise<CoreStatus> => invoke('get_core_status');
 export const readLocalAuthToken = (): Promise<string | null> => invoke('read_local_auth_token');
+export const openLogsFolder = (): Promise<void> => invoke('open_logs_folder');
 
 export const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));

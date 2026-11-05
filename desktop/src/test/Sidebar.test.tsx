@@ -21,6 +21,7 @@ describe('Sidebar Component', () => {
     expect(screen.getByText('Games Library')).toBeInTheDocument();
     expect(screen.getByText('Drives & Storage')).toBeInTheDocument();
     expect(screen.getByText('Transfer Queue')).toBeInTheDocument();
+    expect(screen.getByText('Service Logs')).toBeInTheDocument();
     expect(screen.getByText('Settings')).toBeInTheDocument();
 
     expect(screen.getByText('15')).toBeInTheDocument();

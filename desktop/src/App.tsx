@@ -13,6 +13,10 @@ import { SettingsModal } from './components/SettingsModal.tsx';
 import { LibraryWizardModal } from './components/LibraryWizardModal.tsx';
 import { SwapAction, SwapConfirmModal } from './components/SwapConfirmModal.tsx';
 import { UpdateNotification } from './components/UpdateNotification.tsx';
+import { ActiveTransferBanner } from './components/ActiveTransferBanner.tsx';
+import { LogsView } from './components/LogsView.tsx';
+import { ToastContainer } from './components/Toast.tsx';
+import { ToastMessage } from './types/toast.ts';
 import { checkUpdate, UpdateDetails } from './api/updater.ts';
 import { AlertTriangle, Gamepad2, Loader2, X, Wand2 } from 'lucide-react';
 
@@ -35,8 +39,18 @@ export const App: React.FC = () => {
   const [availableUpdate, setAvailableUpdate] = useState<UpdateDetails | null>(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [updateStatusMsg, setUpdateStatusMsg] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const prevJobsRef = useRef<Record<string, string>>({});
   const wizardShownRef = useRef(false);
   const updateCheckDoneRef = useRef(false);
+
+  const addToast = useCallback((toast: ToastMessage) => {
+    setToasts((prev) => [...prev, toast]);
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   // Browser-style navigation history stack
   const [activeRoute, setActiveRoute] = useState<NavRoute>('dashboard');
@@ -155,6 +169,67 @@ export const App: React.FC = () => {
     }, 3000);
     return () => clearInterval(interval);
   }, [conn, loadData]);
+
+  // Request notification permissions once on startup if supported
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, []);
+
+  // Monitor job state transitions for completion and failure toasts
+  useEffect(() => {
+    if (!jobs || jobs.length === 0) return;
+
+    jobs.forEach((job) => {
+      const prev = prevJobsRef.current[job.id];
+      if (prev && prev !== job.status) {
+        const game = games.find((g) => String(g.app_id) === String(job.app_id));
+        const gameName = game ? game.name : `App ID ${job.app_id}`;
+
+        if (job.status === 'succeeded' && prev === 'running') {
+          const actionText =
+            job.type === 'promote'
+              ? 'moved to fast SSD'
+              : job.type === 'evict'
+              ? 'evicted to HDD master'
+              : 'backed up to HDD master';
+          const msg = `${gameName} was successfully ${actionText}.`;
+          addToast({
+            id: `success-${job.id}-${Date.now()}`,
+            type: 'success',
+            title: 'Transfer Completed',
+            message: msg,
+          });
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+            try {
+              new Notification('Transfer Complete', { body: msg });
+            } catch (err) {
+              console.debug('Notification dispatch failed', err);
+            }
+          }
+        } else if (job.status === 'failed') {
+          const errMsg = job.error || 'Transfer encountered an error.';
+          addToast({
+            id: `error-${job.id}-${Date.now()}`,
+            type: 'error',
+            title: 'Transfer Failed',
+            message: `${gameName}: ${errMsg}`,
+            actionLabel: 'View Logs',
+            onAction: () => navigate('logs'),
+          });
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+            try {
+              new Notification('Transfer Failed', { body: `${gameName}: ${errMsg}` });
+            } catch (err) {
+              console.debug('Notification dispatch failed', err);
+            }
+          }
+        }
+      }
+      prevJobsRef.current[job.id] = job.status;
+    });
+  }, [jobs, games, addToast, navigate]);
 
   // Guided wizard auto-opens once ONLY when initial load completes and core has no libraries.
   useEffect(() => {
@@ -301,11 +376,20 @@ export const App: React.FC = () => {
           drivesCount={libraries.length}
           queueCount={jobs.filter((j) => j.status === 'running' || j.status === 'queued').length}
           steamRunning={health?.steam_running ?? false}
-          appVersion="0.2.6"
+          appVersion="0.2.7"
           onOpenWizard={() => setIsWizardOpen(true)}
         />
 
         <main className="content-pane" role="main">
+          {/* Active Transfer Progress Banner */}
+          <ActiveTransferBanner
+            runningJob={jobs.find((j) => j.status === 'running')}
+            games={games}
+            onCancel={handleCancelJob}
+            onNavigateQueue={() => navigate('queue')}
+            cancelling={actionLoading}
+          />
+
           {errorMsg && (
             <div
               style={{
@@ -362,6 +446,7 @@ export const App: React.FC = () => {
               <GameList
                 games={games}
                 libraries={libraries}
+                jobs={jobs}
                 onAction={requestSwap}
                 actionLoading={actionLoading}
               />
@@ -450,6 +535,9 @@ export const App: React.FC = () => {
               />
             </div>
           )}
+
+          {/* View 5: Logs */}
+          {activeRoute === 'logs' && <LogsView />}
         </main>
       </div>
 
@@ -493,6 +581,9 @@ export const App: React.FC = () => {
         statusMessage={updateStatusMsg}
         onClearStatus={() => setUpdateStatusMsg(null)}
       />
+
+      {/* Global Toast Notifications */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 };

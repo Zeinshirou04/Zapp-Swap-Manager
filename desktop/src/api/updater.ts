@@ -1,5 +1,6 @@
-import { check, DownloadEvent } from '@tauri-apps/plugin-updater';
+import { check } from '@tauri-apps/plugin-updater';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 export interface UpdateDetails {
   version: string;
@@ -26,28 +27,19 @@ export async function checkUpdate(): Promise<UpdateDetails | null> {
       date: update.date,
       body: update.body,
       downloadAndInstall: async (onProgress: (percent: number) => void) => {
-        let total = 0;
-        let downloaded = 0;
-        // 1. Download installer package with live progress reporting
-        await update.download((event: DownloadEvent) => {
-          if (event.event === 'Started') {
-            total = event.data.contentLength ?? 0;
-          } else if (event.event === 'Progress') {
-            downloaded += event.data.chunkLength;
-            if (total > 0) {
-              const pct = Math.min(100, Math.round((downloaded / total) * 100));
-              onProgress(pct);
-            }
-          } else if (event.event === 'Finished') {
-            onProgress(100);
+        // Stream progress updates from the Rust installer handler to UI
+        const unlisten = await listen<{ percent: number }>('update-progress', (event) => {
+          if (typeof event.payload?.percent === 'number') {
+            onProgress(event.payload.percent);
           }
         });
-        // 2. Cleanly stop core daemon so resources/zapp-core.exe is not locked when installer runs
-        await invoke('stop_core_daemon').catch((err) => {
-          console.warn('Failed to stop core daemon prior to installer execution:', err);
-        });
-        // 3. Launch the installer (on Windows NSIS, this spawns the installer and cleanly terminates the app)
-        await update.install();
+        try {
+          // invoke custom Rust command which executes update.download_and_install with
+          // a non-blocking on_before_exit hook, avoiding Windows WebView2 deadlock (Tauri #2558)
+          await invoke('install_update_now');
+        } finally {
+          unlisten();
+        }
       },
     };
   } catch (err) {

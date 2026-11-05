@@ -194,6 +194,81 @@ fn open_logs_folder() -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Clone, Serialize)]
+struct UpdateProgressPayload {
+    percent: u8,
+}
+
+#[tauri::command]
+async fn install_update_now(
+    app: tauri::AppHandle,
+    state: State<'_, CoreState>,
+) -> Result<(), String> {
+    use tauri::Emitter;
+    use tauri_plugin_updater::UpdaterExt;
+
+    // 1. Cleanly stop core daemon so resources/zapp-core.exe is not locked when installer runs
+    stop_spawned_core(&state);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("taskkill")
+            .args(["/IM", "zapp-core.exe", "/F"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+    }
+
+    // 2. Build an updater instance overriding on_before_exit with a non-blocking hook.
+    // This bypasses the known Tauri v2 WebView2 cleanup_before_exit deadlock (Issue #2558)
+    // where window.hide() blocks the main thread during IPC execution.
+    let updater = app
+        .updater_builder()
+        .on_before_exit(|| {
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                let _ = std::process::Command::new("taskkill")
+                    .args(["/IM", "zapp-core.exe", "/F"])
+                    .creation_flags(0x0800_0000)
+                    .output();
+            }
+        })
+        .build()
+        .map_err(|e| format!("Failed to build updater: {e}"))?;
+
+    // 3. Check for available update package
+    let Some(update) = updater
+        .check()
+        .await
+        .map_err(|e| format!("Failed to check for update: {e}"))?
+    else {
+        return Err("No update available to install".into());
+    };
+
+    // 4. Download and install with live progress streaming
+    let app_clone = app.clone();
+    let mut downloaded_bytes: usize = 0;
+    update
+        .download_and_install(
+            move |chunk_length, content_length| {
+                downloaded_bytes += chunk_length;
+                if let Some(total) = content_length {
+                    if total > 0 {
+                        let pct = ((downloaded_bytes as f64 / total as f64) * 100.0).min(100.0) as u8;
+                        let _ = app_clone.emit("update-progress", UpdateProgressPayload { percent: pct });
+                    }
+                }
+            },
+            || {
+                let _ = app.emit("update-progress", UpdateProgressPayload { percent: 100 });
+            },
+        )
+        .await
+        .map_err(|e| format!("Update installation failed: {e}"))?;
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -206,7 +281,8 @@ pub fn run() {
             get_core_status,
             read_local_auth_token,
             relaunch_app,
-            open_logs_folder
+            open_logs_folder,
+            install_update_now
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -26,7 +26,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onCheckUpdates,
   checkingUpdates = false,
   onSaved,
-  appVersion = 'v0.2.9',
+  appVersion = 'v0.3.0',
   steamRunning = false,
 }) => {
   const [baseUrl, setBaseUrl] = useState('http://127.0.0.1:8765');

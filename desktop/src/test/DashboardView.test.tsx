@@ -4,8 +4,8 @@ import { DashboardView } from '../components/DashboardView.tsx';
 import { Game, Job, Library } from '../types/api.ts';
 
 const mockLibraries: Library[] = [
-  { id: 'ssd1', name: 'Fast SSD', type: 'ssd_cache', total_bytes: 1000000000000, free_bytes: 500000000000 },
-  { id: 'hdd1', name: 'Master HDD', type: 'hdd_master', total_bytes: 4000000000000, free_bytes: 2000000000000 },
+  { id: 'ssd1', name: 'Steam Library (C: Drive)', type: 'ssd_cache', total_bytes: 1000000000000, free_bytes: 500000000000 },
+  { id: 'hdd1', name: 'Games Library (D: Drive)', type: 'hdd_master', total_bytes: 4000000000000, free_bytes: 2000000000000 },
 ];
 
 const mockGames: Game[] = [
@@ -67,8 +67,8 @@ describe('DashboardView Component', () => {
     );
 
     expect(screen.getByText('TOTAL GAMES')).toBeInTheDocument();
-    expect(screen.getByText('SSD CACHE')).toBeInTheDocument();
-    expect(screen.getByText('HDD MASTER')).toBeInTheDocument();
+    expect(screen.getAllByText('Steam Library (C: Drive)')).toHaveLength(2);
+    expect(screen.getAllByText('Games Library (D: Drive)')).toHaveLength(2);
     expect(screen.getByText('TRANSFER QUEUE')).toBeInTheDocument();
 
     // Check game preview

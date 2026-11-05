@@ -474,7 +474,7 @@ export const App: React.FC = () => {
                 </button>
               </div>
 
-              <DrivesOverview libraries={libraries} />
+              <DrivesOverview libraries={libraries} games={games} />
 
               <div className="card" style={{ padding: '20px' }}>
                 <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '12px' }}>
@@ -494,16 +494,16 @@ export const App: React.FC = () => {
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           padding: '12px 16px',
-                          backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                          backgroundColor: 'var(--bg-main)',
                           border: '1px solid var(--border-color)',
                           borderRadius: 'var(--radius)',
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <span className={`badge badge-${lib.type === 'ssd_cache' ? 'ssd' : 'hdd'}`}>
-                            {lib.type === 'ssd_cache' ? 'SSD Cache' : 'HDD Master'}
+                          <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>{lib.name}</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            ({lib.type === 'ssd_cache' ? 'Fast SSD' : 'Storage HDD'})
                           </span>
-                          <span style={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>{lib.name}</span>
                         </div>
                         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                           ID: {lib.id}

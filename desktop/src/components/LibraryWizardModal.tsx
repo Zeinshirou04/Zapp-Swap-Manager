@@ -164,7 +164,8 @@ export const LibraryWizardModal: React.FC<LibraryWizardModalProps> = ({ open, on
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(2, 6, 23, 0.7)',
+        background: 'rgba(15, 23, 42, 0.6)',
+        backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -271,7 +272,7 @@ export const LibraryWizardModal: React.FC<LibraryWizardModalProps> = ({ open, on
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
-                  background: 'rgba(0, 0, 0, 0.2)',
+                  background: 'var(--bg-main)',
                   border: '1px solid var(--border-color)',
                   borderRadius: 'var(--radius)',
                   padding: '6px 10px',

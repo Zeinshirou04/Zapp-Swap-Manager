@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Game, Job, JobType, Library } from '../types/api.ts';
 import { GameCard } from './GameCard.tsx';
 import { CheckCircle2, Database, HardDrive, LayoutGrid, List, Search, Zap } from 'lucide-react';
+import { formatBytes } from '../utils/format.ts';
 
 interface GameListProps {
   games: Game[];
@@ -9,12 +10,6 @@ interface GameListProps {
   onAction: (game: Game, type: JobType) => void;
   actionLoading: boolean;
   jobs?: Job[];
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 GB';
-  const gb = bytes / (1024 * 1024 * 1024);
-  return `${gb.toFixed(2)} GB`;
 }
 
 export const GameList: React.FC<GameListProps> = ({
@@ -53,7 +48,7 @@ export const GameList: React.FC<GameListProps> = ({
         onClick={() => onAction(game, 'promote')}
         disabled={actionLoading}
         className="btn-primary"
-        title="Copy to SSD cache and activate manifest"
+        title="Move game to fast SSD"
       >
         <Zap size={14} /> Move to SSD
       </button>
@@ -63,7 +58,7 @@ export const GameList: React.FC<GameListProps> = ({
           onClick={() => onAction(game, 'backup')}
           disabled={actionLoading}
           className="btn-secondary"
-          title="Mirror SSD file changes to the HDD master"
+          title="Mirror SSD changes to HDD"
         >
           Backup to HDD
         </button>
@@ -88,20 +83,23 @@ export const GameList: React.FC<GameListProps> = ({
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '12px',
-          marginBottom: '16px',
+          marginBottom: '20px',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <h2 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Steam Games</h2>
+          <h2 style={{ fontSize: '1.15rem', fontWeight: 600 }}>Games Library</h2>
           <span
             style={{
-              background: 'rgba(255, 255, 255, 0.1)',
+              backgroundColor: 'var(--bg-main)',
+              border: '1px solid var(--border-color)',
+              color: 'var(--text-muted)',
               padding: '2px 8px',
-              borderRadius: '9999px',
+              borderRadius: '4px',
               fontSize: '0.75rem',
+              fontWeight: 600,
             }}
           >
-            {filteredGames.length} / {games.length}
+            {filteredGames.length} of {games.length}
           </span>
         </div>
 
@@ -111,13 +109,14 @@ export const GameList: React.FC<GameListProps> = ({
           <div
             style={{
               display: 'flex',
-              background: 'rgba(0, 0, 0, 0.2)',
+              backgroundColor: 'var(--bg-main)',
+              border: '1px solid var(--border-color)',
               borderRadius: 'var(--radius)',
               padding: '2px',
             }}
           >
             {[
-              { id: 'all', label: 'All' },
+              { id: 'all', label: 'All Games' },
               { id: 'active_ssd', label: 'On SSD' },
               { id: 'storage_hdd', label: 'On HDD' },
               { id: 'custom', label: 'Non-Steam' },
@@ -128,8 +127,10 @@ export const GameList: React.FC<GameListProps> = ({
                 style={{
                   padding: '6px 12px',
                   fontSize: '0.8rem',
-                  background: filterState === id ? 'var(--bg-card-hover)' : 'transparent',
-                  color: filterState === id ? 'var(--text-main)' : 'var(--text-muted)',
+                  borderRadius: '4px',
+                  backgroundColor: filterState === id ? 'var(--primary)' : 'transparent',
+                  color: filterState === id ? '#ffffff' : 'var(--text-muted)',
+                  fontWeight: filterState === id ? 600 : 500,
                 }}
               >
                 {label}
@@ -144,7 +145,7 @@ export const GameList: React.FC<GameListProps> = ({
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              background: 'rgba(0, 0, 0, 0.2)',
+              backgroundColor: 'var(--bg-main)',
               border: '1px solid var(--border-color)',
               borderRadius: 'var(--radius)',
               padding: '6px 10px',
@@ -153,7 +154,7 @@ export const GameList: React.FC<GameListProps> = ({
             <Search size={16} style={{ color: 'var(--text-muted)' }} />
             <input
               type="search"
-              placeholder="Search games or App ID..."
+              placeholder="Search games..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{
@@ -173,7 +174,8 @@ export const GameList: React.FC<GameListProps> = ({
             aria-label="View"
             style={{
               display: 'flex',
-              background: 'rgba(0, 0, 0, 0.2)',
+              backgroundColor: 'var(--bg-main)',
+              border: '1px solid var(--border-color)',
               borderRadius: 'var(--radius)',
               padding: '2px',
             }}
@@ -185,8 +187,9 @@ export const GameList: React.FC<GameListProps> = ({
               style={{
                 padding: '6px 10px',
                 fontSize: '0.8rem',
-                background: view === 'grid' ? 'var(--bg-card-hover)' : 'transparent',
-                color: view === 'grid' ? 'var(--text-main)' : 'var(--text-muted)',
+                borderRadius: '4px',
+                backgroundColor: view === 'grid' ? 'var(--primary)' : 'transparent',
+                color: view === 'grid' ? '#ffffff' : 'var(--text-muted)',
               }}
             >
               <LayoutGrid size={15} />
@@ -198,8 +201,9 @@ export const GameList: React.FC<GameListProps> = ({
               style={{
                 padding: '6px 10px',
                 fontSize: '0.8rem',
-                background: view === 'table' ? 'var(--bg-card-hover)' : 'transparent',
-                color: view === 'table' ? 'var(--text-main)' : 'var(--text-muted)',
+                borderRadius: '4px',
+                backgroundColor: view === 'table' ? 'var(--primary)' : 'transparent',
+                color: view === 'table' ? '#ffffff' : 'var(--text-muted)',
               }}
             >
               <List size={15} />
@@ -209,46 +213,45 @@ export const GameList: React.FC<GameListProps> = ({
       </div>
 
       {view === 'grid' ? (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))',
-            gap: '14px',
-          }}
-        >
-          {filteredGames.map((game) => {
-            const activeJob = jobs?.find(
-              (j) =>
-                (j.status === 'running' || j.status === 'queued') &&
-                String(j.app_id) === String(game.app_id)
-            );
-            return (
+        <div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+              gap: '16px',
+            }}
+          >
+            {filteredGames.map((game) => (
               <GameCard
                 key={game.app_id}
                 game={game}
                 onAction={onAction}
                 actionLoading={actionLoading}
-                activeJob={activeJob}
+                activeJob={jobs?.find(
+                  (j) =>
+                    (j.status === 'running' || j.status === 'queued') &&
+                    String(j.app_id) === String(game.app_id)
+                )}
               />
-            );
-          })}
+            ))}
+          </div>
+
           {filteredGames.length === 0 && (
             <div
               style={{
-                gridColumn: '1 / -1',
-                padding: '40px 16px',
                 textAlign: 'center',
+                padding: '48px 16px',
                 color: 'var(--text-muted)',
               }}
             >
-              <HardDrive size={36} style={{ margin: '0 auto 12px auto', opacity: 0.5, display: 'block' }} />
+              <HardDrive size={36} style={{ margin: '0 auto 12px auto', opacity: 0.4 }} />
               {filterState === 'custom' ? (
-                <div style={{ maxWidth: '520px', margin: '0 auto' }}>
-                  <p style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.95rem', marginBottom: '6px' }}>
-                    No Non-Steam Games Detected
+                <div style={{ maxWidth: '480px', margin: '0 auto' }}>
+                  <p style={{ fontWeight: 600, color: 'var(--text-main)', marginBottom: '6px' }}>
+                    No Non-Steam games registered yet
                   </p>
-                  <p style={{ fontSize: '0.825rem', lineHeight: '1.5' }}>
-                    Place standalone game folders inside a library's <code>steamapps/common/</code> directory (e.g. <code>E:\SteamLibrary\steamapps\common\MyGame</code>), or register any generic folder (e.g. <code>D:\Games</code>) in the Setup Wizard! Zapp Swap Manager automatically detects them and enables seamless SSD ↔ HDD swapping via directory junctions.
+                  <p style={{ fontSize: '0.85rem', lineHeight: '1.5' }}>
+                    You can register any folder (e.g. <code>D:\Games</code>) via the Setup Wizard, or place standalone game folders inside your library's <code>steamapps/common/</code> folder.
                   </p>
                 </div>
               ) : (
@@ -284,23 +287,23 @@ export const GameList: React.FC<GameListProps> = ({
                   <tr
                     key={game.app_id}
                     style={{
-                      borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                      borderBottom: '1px solid var(--border-color)',
                       transition: 'background-color 0.15s ease',
                     }}
                     onMouseEnter={(e) =>
-                      (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.02)')
+                      (e.currentTarget.style.backgroundColor = 'var(--bg-main)')
                     }
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                   >
                     <td style={{ padding: '12px 16px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{game.name}</span>
                         {game.is_custom && (
                           <span
                             style={{
-                              background: 'rgba(234, 88, 12, 0.2)',
-                              color: '#ea580c',
-                              border: '1px solid rgba(234, 88, 12, 0.4)',
+                              backgroundColor: 'var(--bg-main)',
+                              color: 'var(--text-muted)',
+                              border: '1px solid var(--border-color)',
                               borderRadius: '4px',
                               padding: '1px 6px',
                               fontSize: '0.7rem',
@@ -316,9 +319,9 @@ export const GameList: React.FC<GameListProps> = ({
                       </div>
                     </td>
 
-                    <td style={{ padding: '12px 16px' }}>
-                      <span className={isOnSSD ? 'badge badge-ssd' : 'badge badge-hdd'}>
-                        {isOnSSD ? '⚡ Ready on Fast SSD' : '💾 Stored on HDD Master'}
+                    <td style={{ padding: '12px 16px', fontSize: '0.85rem' }}>
+                      <span style={{ fontWeight: 500, color: isOnSSD ? 'var(--primary)' : 'var(--text-muted)' }}>
+                        {isOnSSD ? 'Fast SSD' : 'Storage HDD'}
                       </span>
                     </td>
 
@@ -346,19 +349,8 @@ export const GameList: React.FC<GameListProps> = ({
               {filteredGames.length === 0 && (
                 <tr>
                   <td colSpan={5} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    <HardDrive size={36} style={{ margin: '0 auto 12px auto', opacity: 0.5, display: 'block' }} />
-                    {filterState === 'custom' ? (
-                      <div style={{ maxWidth: '520px', margin: '0 auto' }}>
-                        <p style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.95rem', marginBottom: '6px' }}>
-                          No Non-Steam Games Detected
-                        </p>
-                        <p style={{ fontSize: '0.825rem', lineHeight: '1.5' }}>
-                          Place standalone game folders inside a library's <code>steamapps/common/</code> directory (e.g. <code>E:\SteamLibrary\steamapps\common\MyGame</code>), or register any generic folder (e.g. <code>D:\Games</code>) in the Setup Wizard! Zapp Swap Manager automatically detects them and enables seamless SSD ↔ HDD swapping via directory junctions.
-                        </p>
-                      </div>
-                    ) : (
-                      <p>No matching games found.</p>
-                    )}
+                    <HardDrive size={36} style={{ margin: '0 auto 12px auto', opacity: 0.4, display: 'block' }} />
+                    <p>No matching games found.</p>
                   </td>
                 </tr>
               )}

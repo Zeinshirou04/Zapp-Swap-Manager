@@ -64,7 +64,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+        backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -120,7 +121,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               style={{
                 width: '100%',
                 padding: '10px 12px',
-                background: 'rgba(0, 0, 0, 0.3)',
+                background: 'var(--bg-main)',
                 border: '1px solid var(--border-color)',
                 borderRadius: 'var(--radius)',
                 color: 'var(--text-main)',
@@ -155,7 +156,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               style={{
                 width: '100%',
                 padding: '10px 12px',
-                background: 'rgba(0, 0, 0, 0.3)',
+                background: 'var(--bg-main)',
                 border: '1px solid var(--border-color)',
                 borderRadius: 'var(--radius)',
                 color: 'var(--text-main)',

@@ -176,7 +176,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
               htmlFor="add-game-library"
               style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}
             >
-              Storage Library Location *
+              Target Drive / Library *
             </label>
             <select
               id="add-game-library"
@@ -194,10 +194,13 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
             >
               {libraries.map((lib) => (
                 <option key={lib.id} value={lib.id}>
-                  {lib.name} ({lib.type === 'ssd_cache' ? 'Fast SSD Cache' : 'Storage HDD Master'})
+                  {lib.name} ({lib.type === 'ssd_cache' ? 'Fast SSD' : 'Storage HDD'})
                 </option>
               ))}
             </select>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+              Select the registered library drive (e.g. your SSD Cache or HDD Master).
+            </span>
           </div>
 
           {/* Folder Name */}
@@ -206,7 +209,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
               htmlFor="add-game-folder"
               style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}
             >
-              Folder Path (relative to library root)
+              Folder Path (relative to drive library root)
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Folder size={16} style={{ color: 'var(--text-muted)' }} />
@@ -228,7 +231,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
               />
             </div>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-              Relative path inside the library (supports nested publisher folders). Creates a dedicated <code>zappmanifest.json</code> inside this directory.
+              Subfolder path inside the selected library (supports nested publisher directories like <code>GRYPHLINK/games/EndField Game</code>). Creates a dedicated <code>zappmanifest.json</code> inside this directory.
             </span>
           </div>
 

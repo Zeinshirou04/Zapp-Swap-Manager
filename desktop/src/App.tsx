@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api, getApiConfig, setApiConfig } from './api/client.ts';
-import { readLocalAuthToken, restartCoreDaemon, sleep } from './api/native.ts';
+import { readLocalAuthToken, restartCoreDaemon, startCoreDaemon, sleep } from './api/native.ts';
 import { Game, HealthResponse, Job, JobType, Library } from './types/api.ts';
 import { ConnectView } from './components/ConnectView.tsx';
 import { LoginView } from './components/LoginView.tsx';
@@ -123,16 +123,32 @@ export const App: React.FC = () => {
     (async () => {
       try {
         const cfg = getApiConfig();
-        if (!cfg.bearerToken && (cfg.baseUrl.includes('127.0.0.1') || cfg.baseUrl.includes('localhost'))) {
+        const isLoopback = cfg.baseUrl.includes('127.0.0.1') || cfg.baseUrl.includes('localhost');
+        if (!cfg.bearerToken && isLoopback) {
           const localToken = await readLocalAuthToken().catch(() => null);
           if (localToken) {
             setApiConfig({ baseUrl: cfg.baseUrl, bearerToken: localToken });
           }
         }
-        const h = await api.getHealth();
-        if (!cancelled) {
+        let h = null;
+        try {
+          h = await api.getHealth();
+        } catch {
+          if (isLoopback) {
+            await startCoreDaemon().catch(() => null);
+            await sleep(400);
+            const token = (await readLocalAuthToken().catch(() => null)) || '';
+            if (token) {
+              setApiConfig({ baseUrl: cfg.baseUrl, bearerToken: token });
+            }
+            h = await api.getHealth().catch(() => null);
+          }
+        }
+        if (h && !cancelled) {
           setHealth(h);
           setConn('authenticated');
+        } else if (!cancelled) {
+          setConn('disconnected');
         }
       } catch {
         if (!cancelled) setConn('disconnected');
@@ -342,49 +358,53 @@ export const App: React.FC = () => {
   }
 
   if (conn === 'disconnected') {
-    if (showManualConnect) {
-      return (
-        <ConnectView
-          onConnected={() => {
-            setShowManualConnect(false);
-            setConn('authenticated');
-            loadData();
-          }}
-          onBackToLogin={() => setShowManualConnect(false)}
-        />
-      );
-    }
     return (
-      <LoginView
-        onConnected={async () => {
-          try {
-            const h = await api.getHealth();
-            setHealth(h);
-          } catch {
-            // Server mode
-          }
-          setConn('authenticated');
-          loadData();
-        }}
-        onDirectLocalMode={async () => {
-          try {
-            const localToken = (await readLocalAuthToken().catch(() => null)) || '';
-            setApiConfig({ baseUrl: 'http://127.0.0.1:8765', bearerToken: localToken });
-            const h = await api.getHealth();
-            setHealth(h);
-            setConn('authenticated');
-            loadData();
-          } catch {
-            addToast({
-              id: 'direct-connect-fail',
-              type: 'error',
-              title: 'Local Core Unreachable',
-              message: 'Could not connect to local core at 127.0.0.1:8765. Make sure zapp-core is running.',
-            });
-          }
-        }}
-        onManualConnect={() => setShowManualConnect(true)}
-      />
+      <>
+        {showManualConnect ? (
+          <ConnectView
+            onConnected={() => {
+              setShowManualConnect(false);
+              setConn('authenticated');
+              loadData();
+            }}
+            onBackToLogin={() => setShowManualConnect(false)}
+          />
+        ) : (
+          <LoginView
+            onConnected={async () => {
+              try {
+                const h = await api.getHealth();
+                setHealth(h);
+              } catch {
+                // Server mode
+              }
+              setConn('authenticated');
+              loadData();
+            }}
+            onDirectLocalMode={async () => {
+              try {
+                await startCoreDaemon().catch(() => null);
+                await sleep(400);
+                const localToken = (await readLocalAuthToken().catch(() => null)) || '';
+                setApiConfig({ baseUrl: 'http://127.0.0.1:8765', bearerToken: localToken });
+                const h = await api.getHealth();
+                setHealth(h);
+                setConn('authenticated');
+                loadData();
+              } catch {
+                addToast({
+                  id: 'direct-connect-fail',
+                  type: 'error',
+                  title: 'Local Core Unreachable',
+                  message: 'Could not connect to local core at 127.0.0.1:8765. Make sure zapp-core is running.',
+                });
+              }
+            }}
+            onManualConnect={() => setShowManualConnect(true)}
+          />
+        )}
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      </>
     );
   }
 

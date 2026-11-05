@@ -139,7 +139,7 @@ fn stop_core_daemon(state: State<'_, CoreState>) -> Result<bool, String> {
         let _ = std::process::Command::new("taskkill")
             .args(["/IM", "zapp-core.exe", "/F"])
             .creation_flags(CREATE_NO_WINDOW)
-            .status();
+            .output();
     }
     Ok(true)
 }
@@ -151,13 +151,7 @@ fn stop_spawned_core(state: &State<'_, CoreState>) {
         let _ = std::process::Command::new("taskkill")
             .args(["/PID", &pid.to_string(), "/F"])
             .creation_flags(CREATE_NO_WINDOW)
-            .spawn();
-        for _ in 0..30 {
-            if !core_port_listening() {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(100));
-        }
+            .output();
         *state.spawned_pid.lock().unwrap() = None;
     }
 }

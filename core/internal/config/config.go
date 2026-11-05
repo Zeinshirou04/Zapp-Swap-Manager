@@ -26,6 +26,10 @@ type Preferences struct {
 	RelaunchSteamAfterTransfer bool   `json:"relaunch_steam_after_transfer"`
 	RunOnStartup               bool   `json:"run_on_startup"`
 	Theme                      string `json:"theme"`
+	RelayEnabled               bool   `json:"relay_enabled"`
+	RelayServerURL             string `json:"relay_server_url"`
+	RelayDeviceID              string `json:"relay_device_id"`
+	RelayDeviceSecret          string `json:"relay_device_secret"`
 }
 
 // Config represents runtime settings for the Zapp Swap Manager core daemon.

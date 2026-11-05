@@ -11,7 +11,7 @@ check-core:
     cd core && go vet ./... && go test -v ./...
 
 check-desktop:
-    cd desktop && npm run lint && npm test
+    cd desktop && npm run lint && npm run build && npm test
 
 [windows]
 check-mobile:

@@ -206,7 +206,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
               htmlFor="add-game-folder"
               style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}
             >
-              Folder Name (under steamapps\common)
+              Folder Path (relative to library root)
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Folder size={16} style={{ color: 'var(--text-muted)' }} />
@@ -215,7 +215,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
                 type="text"
                 value={installDir}
                 onChange={(e) => setInstallDir(e.target.value)}
-                placeholder="e.g. WutheringWaves"
+                placeholder="e.g. GRYPHLINK/games/EndField Game, Riot Games/VALORANT, or WutheringWaves"
                 style={{
                   flex: 1,
                   padding: '10px 12px',
@@ -228,7 +228,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
               />
             </div>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-              Creates a dedicated <code>zappmanifest.json</code> inside this directory.
+              Relative path inside the library (supports nested publisher folders). Creates a dedicated <code>zappmanifest.json</code> inside this directory.
             </span>
           </div>
 
@@ -238,16 +238,16 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
               htmlFor="add-game-cover"
               style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}
             >
-              Custom Cover Artwork URL (Optional)
+              Custom Cover Artwork (Web URL or Local File Path)
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Image size={16} style={{ color: 'var(--text-muted)' }} />
               <input
                 id="add-game-cover"
-                type="url"
+                type="text"
                 value={coverUrl}
                 onChange={(e) => setCoverUrl(e.target.value)}
-                placeholder="https://.../capsule_616x353.jpg"
+                placeholder="https://.../cover.jpg, C:\path\to\cover.png, or cover.png"
                 style={{
                   flex: 1,
                   padding: '10px 12px',

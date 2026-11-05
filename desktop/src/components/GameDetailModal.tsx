@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../api/client.ts';
+import { api, resolveCoverUrl } from '../api/client.ts';
 import { Game, Job, JobType, Library } from '../types/api.ts';
 import { formatBytes } from '../utils/format.ts';
 import {
@@ -59,12 +59,7 @@ export const GameDetailModal: React.FC<GameDetailModalProps> = ({
   const isOnSSD = game.state === 'active_ssd';
   const currentLib = libraries.find((l) => l.id === game.current_library_id);
 
-  // Cover image fallback chain
-  const steamCapsuleUrls = [
-    `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${game.app_id}/header.jpg`,
-    `https://cdn.akamai.steamstatic.com/steam/apps/${game.app_id}/header.jpg`,
-  ];
-  const finalCoverSrc = game.cover_url || (!game.is_custom ? steamCapsuleUrls[0] : null);
+  const finalCoverSrc = resolveCoverUrl(game);
 
   const handleSaveMetadata = async () => {
     setSaving(true);
@@ -438,13 +433,13 @@ export const GameDetailModal: React.FC<GameDetailModalProps> = ({
 
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '4px' }}>
-                    Custom Cover Artwork URL
+                    Custom Cover Artwork (Web URL or Local File Path)
                   </label>
                   <input
-                    type="url"
+                    type="text"
                     value={coverUrl}
                     onChange={(e) => setCoverUrl(e.target.value)}
-                    placeholder="https://.../capsule.jpg"
+                    placeholder="https://.../capsule.jpg, C:\path\to\cover.png, or cover.png"
                     style={{
                       width: '100%',
                       padding: '8px 10px',

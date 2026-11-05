@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Game, Job, JobType } from '../types/api.ts';
 import { Database, RefreshCw, Zap, Loader2, Gamepad2, Folder } from 'lucide-react';
 import { formatBytes } from '../utils/format.ts';
+import { resolveCoverUrl } from '../api/client.ts';
 
 interface GameCardProps {
   game: Game;
@@ -30,10 +31,12 @@ export const GameCard: React.FC<GameCardProps> = ({
   ];
 
   let displayUrl: string | null = null;
-  if (game.cover_url && !imgFailed) {
-    displayUrl = game.cover_url;
-  } else if (!game.is_custom && imgAttempt < steamCapsuleUrls.length && !imgFailed) {
-    displayUrl = steamCapsuleUrls[imgAttempt];
+  if (!imgFailed) {
+    if (game.cover_url && imgAttempt === 0) {
+      displayUrl = resolveCoverUrl(game);
+    } else if (!game.is_custom && imgAttempt < steamCapsuleUrls.length) {
+      displayUrl = steamCapsuleUrls[imgAttempt];
+    }
   }
 
   const handleImgError = () => {

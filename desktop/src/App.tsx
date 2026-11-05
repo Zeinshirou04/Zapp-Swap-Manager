@@ -9,6 +9,7 @@ import { DashboardView } from './components/DashboardView.tsx';
 import { DrivesOverview } from './components/DrivesOverview.tsx';
 import { GameList } from './components/GameList.tsx';
 import { QueueMonitor } from './components/QueueMonitor.tsx';
+import { SettingsView } from './components/SettingsView.tsx';
 import { SettingsModal } from './components/SettingsModal.tsx';
 import { LibraryWizardModal } from './components/LibraryWizardModal.tsx';
 import { SwapAction, SwapConfirmModal } from './components/SwapConfirmModal.tsx';
@@ -354,7 +355,7 @@ export const App: React.FC = () => {
         loading={loading}
         onNavigateHome={() => navigate('dashboard')}
         health={health}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={() => navigate('settings')}
         onRestartCore={handleRestartCore}
         onDisconnect={handleDisconnect}
         onCheckUpdates={() => handleCheckUpdates(true)}
@@ -365,13 +366,7 @@ export const App: React.FC = () => {
       <div className="dashboard-body">
         <Sidebar
           activeRoute={activeRoute}
-          onRouteChange={(route) => {
-            if (route === 'settings') {
-              setIsSettingsOpen(true);
-            } else {
-              navigate(route);
-            }
-          }}
+          onRouteChange={(route) => navigate(route)}
           gamesCount={games.length}
           drivesCount={libraries.length}
           queueCount={jobs.filter((j) => j.status === 'running' || j.status === 'queued').length}
@@ -449,6 +444,7 @@ export const App: React.FC = () => {
                 jobs={jobs}
                 onAction={requestSwap}
                 actionLoading={actionLoading}
+                onRefresh={loadData}
               />
             </div>
           )}
@@ -538,6 +534,17 @@ export const App: React.FC = () => {
 
           {/* View 5: Logs */}
           {activeRoute === 'logs' && <LogsView />}
+
+          {/* View 6: Settings */}
+          {activeRoute === 'settings' && (
+            <SettingsView
+              appVersion={health?.version ? `v${health.version}` : 'v0.2.9'}
+              steamRunning={!!health?.steam_running}
+              onCheckUpdates={() => handleCheckUpdates(true)}
+              checkingUpdates={checkingUpdates}
+              onSaved={loadData}
+            />
+          )}
         </main>
       </div>
 

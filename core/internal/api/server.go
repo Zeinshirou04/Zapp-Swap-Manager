@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/config"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/queue"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/steam"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/transfer"
@@ -28,11 +29,14 @@ import (
 type Config struct {
 	Port         int
 	Version      string
-	Libraries    []steam.Library
-	LibrariesFn  func() []steam.Library
-	SetLibraries func([]steam.Library) error
-	Queue        *queue.Queue
-	Auth         Auth
+	Libraries      []steam.Library
+	LibrariesFn    func() []steam.Library
+	SetLibraries   func([]steam.Library) error
+	Preferences    config.Preferences
+	PreferencesFn  func() config.Preferences
+	SetPreferences func(config.Preferences) error
+	Queue          *queue.Queue
+	Auth           Auth
 	LogsFn       func(limit int) []string
 }
 
@@ -107,6 +111,10 @@ func newRouter(cfg Config) *http.ServeMux {
 	mux.HandleFunc("POST /jobs", h.createJob)
 	mux.HandleFunc("GET /jobs/{job_id}", h.getJob)
 	mux.HandleFunc("POST /jobs/{job_id}/cancel", h.cancelJob)
+	mux.HandleFunc("GET /preferences", h.getPreferences)
+	mux.HandleFunc("PUT /preferences", h.updatePreferences)
+	mux.HandleFunc("POST /custom-games", h.createCustomGame)
+	mux.HandleFunc("PUT /custom-games/{app_id}", h.updateCustomGame)
 	return mux
 }
 

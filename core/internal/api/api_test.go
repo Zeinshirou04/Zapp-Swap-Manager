@@ -676,3 +676,68 @@ func TestGamesReflectDynamicLibraries(t *testing.T) {
 	}
 }
 
+func TestPreferencesEndpoints(t *testing.T) {
+	ts, _ := newTestAPI(t, nil)
+	defer ts.Close()
+
+	// 1. GET /preferences returns default
+	status, _ := doJSON(t, ts, "GET", "/preferences", nil, true)
+	if status != http.StatusOK {
+		t.Fatalf("GET /preferences status = %d, want 200", status)
+	}
+
+	// 2. PUT /preferences updates settings
+	newPrefs := map[string]any{
+		"close_steam_on_transfer":       true,
+		"relaunch_steam_after_transfer": true,
+		"run_on_startup":               true,
+		"theme":                         "light",
+	}
+	status, updated := doJSON(t, ts, "PUT", "/preferences", newPrefs, true)
+	if status != http.StatusOK {
+		t.Fatalf("PUT /preferences status = %d, want 200", status)
+	}
+	if updated["close_steam_on_transfer"] != true || updated["theme"] != "light" {
+		t.Fatalf("unexpected updated prefs: %v", updated)
+	}
+}
+
+func TestCustomGameManifestEndpoints(t *testing.T) {
+	ts, _ := newTestAPI(t, nil)
+	defer ts.Close()
+
+	// 1. POST /custom-games
+	swapEnabled := true
+	createReq := map[string]any{
+		"name":         "Wuthering Waves",
+		"library_id":   "ssd0",
+		"install_dir":  "WutheringWaves",
+		"cover_url":    "https://example.com/wuwa.jpg",
+		"swap_enabled": swapEnabled,
+		"tags":         []string{"rpg", "open-world"},
+	}
+	status, created := doJSON(t, ts, "POST", "/custom-games", createReq, true)
+	if status != http.StatusCreated {
+		t.Fatalf("POST /custom-games status = %d, want 201; body: %v", status, created)
+	}
+	if created["name"] != "Wuthering Waves" || created["cover_url"] != "https://example.com/wuwa.jpg" {
+		t.Fatalf("unexpected created custom game: %v", created)
+	}
+
+	appID := fmt.Sprintf("%.0f", created["app_id"].(float64))
+
+	// 2. PUT /custom-games/{app_id}
+	updateReq := map[string]any{
+		"name":      "Wuthering Waves (Updated)",
+		"cover_url": "https://example.com/wuwa-v2.jpg",
+		"tags":      []string{"rpg", "updated"},
+	}
+	status, updated := doJSON(t, ts, "PUT", "/custom-games/"+appID, updateReq, true)
+	if status != http.StatusOK {
+		t.Fatalf("PUT /custom-games/%s status = %d, want 200; body: %v", appID, status, updated)
+	}
+	if updated["name"] != "Wuthering Waves (Updated)" {
+		t.Fatalf("expected updated name, got %v", updated["name"])
+	}
+}
+

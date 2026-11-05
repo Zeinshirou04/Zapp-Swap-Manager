@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/api"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/config"
@@ -65,9 +66,22 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 		}
 	}
 
+	prefLock := sync.RWMutex{}
+	getPrefs := func() config.Preferences {
+		prefLock.RLock()
+		defer prefLock.RUnlock()
+		return cfg.Preferences
+	}
+	setPrefs := func(p config.Preferences) error {
+		prefLock.Lock()
+		cfg.Preferences = p
+		prefLock.Unlock()
+		return cfg.Save()
+	}
+
 	libs := &libRegistry{list: cfg.Libraries}
 	if executor == nil {
-		executor = defaultExecutor(libs.Get)
+		executor = defaultExecutor(libs.Get, getPrefs)
 	}
 
 	q, err := queue.New(cfg.DBPath, executor)
@@ -86,10 +100,10 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 	}
 
 	apiServer, err := api.New(api.Config{
-		Port:        cfg.Port(),
-		Version:     version,
-		Libraries:   cfg.Libraries,
-		LibrariesFn: libs.Get,
+		Port:           cfg.Port(),
+		Version:        version,
+		Libraries:      cfg.Libraries,
+		LibrariesFn:    libs.Get,
 		SetLibraries: func(list []steam.Library) error {
 			libs.mu.Lock()
 			libs.list = list
@@ -101,9 +115,12 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 			}
 			return nil
 		},
-		Queue: q,
-		Auth:  auth,
-		LogsFn: logger.GetRecentLogs,
+		Preferences:    cfg.Preferences,
+		PreferencesFn:  getPrefs,
+		SetPreferences: setPrefs,
+		Queue:          q,
+		Auth:           auth,
+		LogsFn:         logger.GetRecentLogs,
 	})
 	if err != nil {
 		_ = q.Close()
@@ -119,8 +136,23 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 	}, nil
 }
 
-func defaultExecutor(whitelist func() []steam.Library) queue.Executor {
+func defaultExecutor(whitelist func() []steam.Library, prefFn func() config.Preferences) queue.Executor {
 	return func(ctx context.Context, job queue.Job, step queue.StepFunc) error {
+		prefs := config.Preferences{}
+		if prefFn != nil {
+			prefs = prefFn()
+		}
+
+		wasSteamRunning := false
+		if prefs.CloseSteamOnTransfer && (job.Type == queue.TypePromote || job.Type == queue.TypeEvict) {
+			wasSteamRunning = steam.CloseSteamGracefully(5 * time.Second)
+		}
+		defer func() {
+			if wasSteamRunning && prefs.RelaunchSteamAfterTransfer {
+				steam.RelaunchSteam()
+			}
+		}()
+
 		libs := whitelist()
 		var targetLib *steam.Library
 		for i := range libs {

@@ -304,3 +304,95 @@ func TestScanGenericGamesDirectory(t *testing.T) {
 		t.Errorf("library_id = %s, want generic_ssd", g.LibraryID)
 	}
 }
+
+func TestZappManifestAndRealFolderSize(t *testing.T) {
+	tmp := t.TempDir()
+	ssd := filepath.Join(tmp, "SSD")
+	hdd := filepath.Join(tmp, "HDD")
+
+	// Setup SSD library with a game that has a manifest stating 100 bytes,
+	// but actual folder has 5000 bytes (mimicking WuWa/launcher game patching).
+	ssdCommon := filepath.Join(ssd, "steamapps", "common", "WutheringWaves")
+	if err := os.MkdirAll(ssdCommon, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bigPayload := make([]byte, 5000)
+	if err := os.WriteFile(filepath.Join(ssdCommon, "Client-Win64-Shipping.exe"), bigPayload, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create appmanifest with SizeOnDisk = 100
+	manifestPath := filepath.Join(ssd, "steamapps", "appmanifest_12345.acf")
+	acfContent := `"AppState"
+{
+	"appid"		"12345"
+	"name"		"Wuthering Waves"
+	"installdir"		"WutheringWaves"
+	"SizeOnDisk"		"100"
+	"buildid"		"999"
+}
+`
+	if err := os.WriteFile(manifestPath, []byte(acfContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write custom zappmanifest.json into WutheringWaves
+	zappMan := ZappManifest{
+		ID:           "12345",
+		Name:         "Wuthering Waves (Custom)",
+		InstallDir:   "WutheringWaves",
+		CoverURL:     "https://example.com/cover.png",
+		SwapEnabled:  true,
+		IsNativeHDD:  false,
+		Tags:         []string{"RPG", "OpenWorld"},
+	}
+	if err := WriteZappManifest(ssdCommon, zappMan); err != nil {
+		t.Fatalf("WriteZappManifest: %v", err)
+	}
+
+	// Setup HDD library with backup of WutheringWaves folder
+	hddCommon := filepath.Join(hdd, "steamapps", "common", "WutheringWaves")
+	if err := os.MkdirAll(hddCommon, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hddCommon, "backup.pak"), []byte("backup"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	libs := []Library{
+		{ID: "ssd0", Name: "SSD Cache", Path: ssd, Type: TypeSSDCache},
+		{ID: "hdd0", Name: "HDD Master", Path: hdd, Type: TypeHDDMaster},
+	}
+
+	games, err := ScanLibraries(libs)
+	if err != nil {
+		t.Fatalf("ScanLibraries: %v", err)
+	}
+
+	if len(games) != 1 {
+		t.Fatalf("got %d games, want 1", len(games))
+	}
+
+	g := games[0]
+	// Check size calculation updated to real folder size (5000 payload + zappmanifest.json)
+	if g.Manifest.SizeOnDisk < 5000 {
+		t.Errorf("SizeOnDisk = %d, want >= 5000", g.Manifest.SizeOnDisk)
+	}
+
+	// Check zapp manifest metadata
+	if g.Manifest.Name != "Wuthering Waves (Custom)" {
+		t.Errorf("Name = %s, want Wuthering Waves (Custom)", g.Manifest.Name)
+	}
+	if g.CoverURL != "https://example.com/cover.png" {
+		t.Errorf("CoverURL = %s, want https://example.com/cover.png", g.CoverURL)
+	}
+	if !g.SwapEnabled {
+		t.Errorf("SwapEnabled = false, want true")
+	}
+	if !g.HasHDDBackup {
+		t.Errorf("HasHDDBackup = false, want true because HDD has folder")
+	}
+	if len(g.Tags) != 2 || g.Tags[0] != "RPG" {
+		t.Errorf("Tags = %v, want [RPG OpenWorld]", g.Tags)
+	}
+}

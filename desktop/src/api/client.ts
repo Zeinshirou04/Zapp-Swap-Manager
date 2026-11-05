@@ -1,4 +1,5 @@
 import {
+  CreateCustomGameRequest,
   CreateJobRequest,
   DetectedLibrary,
   ErrorResponse,
@@ -9,6 +10,8 @@ import {
   JobStatus,
   Library,
   LibraryInput,
+  Preferences,
+  UpdateCustomGameRequest,
 } from '../types/api.ts';
 
 const CONFIG_KEY = 'zapp_api_config';
@@ -127,6 +130,31 @@ class ApiClient {
 
   async getLogs(limit: number = 200): Promise<{ lines: string[] }> {
     return this.request<{ lines: string[] }>(`/logs?limit=${limit}`);
+  }
+
+  async getPreferences(): Promise<Preferences> {
+    return this.request<Preferences>('/preferences');
+  }
+
+  async updatePreferences(prefs: Preferences): Promise<Preferences> {
+    return this.request<Preferences>('/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(prefs),
+    });
+  }
+
+  async createCustomGame(req: CreateCustomGameRequest): Promise<Game> {
+    return this.request<Game>('/custom-games', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+  }
+
+  async updateCustomGame(appId: string | number, req: UpdateCustomGameRequest): Promise<Game> {
+    return this.request<Game>(`/custom-games/${appId}`, {
+      method: 'PUT',
+      body: JSON.stringify(req),
+    });
   }
 }
 

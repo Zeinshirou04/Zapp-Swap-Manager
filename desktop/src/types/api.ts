@@ -39,6 +39,36 @@ export interface Game {
   last_backup_time: string | null;
   backup_clean: boolean;
   is_custom?: boolean;
+  cover_url?: string | null;
+  swap_enabled?: boolean;
+  has_hdd_backup?: boolean;
+  is_native_hdd?: boolean;
+  tags?: string[];
+}
+
+export interface Preferences {
+  close_steam_on_transfer: boolean;
+  relaunch_steam_after_transfer: boolean;
+  run_on_startup: boolean;
+  theme: 'system' | 'light' | 'dark';
+}
+
+export interface CreateCustomGameRequest {
+  name: string;
+  library_id: string;
+  install_dir: string;
+  cover_url?: string;
+  swap_enabled?: boolean;
+  is_native_hdd?: boolean;
+  tags?: string[];
+}
+
+export interface UpdateCustomGameRequest {
+  name?: string;
+  cover_url?: string;
+  swap_enabled?: boolean;
+  is_native_hdd?: boolean;
+  tags?: string[];
 }
 
 export type JobType = 'promote' | 'evict' | 'backup';

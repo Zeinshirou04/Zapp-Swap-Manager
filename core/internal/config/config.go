@@ -20,6 +20,14 @@ const (
 	DefaultHost = "127.0.0.1"
 )
 
+// Preferences represents user-configurable core and transfer preferences.
+type Preferences struct {
+	CloseSteamOnTransfer       bool   `json:"close_steam_on_transfer"`
+	RelaunchSteamAfterTransfer bool   `json:"relaunch_steam_after_transfer"`
+	RunOnStartup               bool   `json:"run_on_startup"`
+	Theme                      string `json:"theme"`
+}
+
 // Config represents runtime settings for the Zapp Swap Manager core daemon.
 type Config struct {
 	BindAddr      string          `json:"bind_addr"`
@@ -29,6 +37,7 @@ type Config struct {
 	DBPath        string          `json:"db_path"`
 	Headless      bool            `json:"headless"`
 	Libraries     []steam.Library `json:"libraries"`
+	Preferences   Preferences     `json:"preferences"`
 
 	// ConfigPath records where this config is persisted (Plan 017: POST
 	// /libraries writes the whitelist back). Empty loads use DefaultConfigPath.

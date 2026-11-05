@@ -46,12 +46,8 @@ export async function checkUpdate(): Promise<UpdateDetails | null> {
         await invoke('stop_core_daemon').catch((err) => {
           console.warn('Failed to stop core daemon prior to installer execution:', err);
         });
-        // 3. Launch the Windows installer
+        // 3. Launch the installer (on Windows NSIS, this spawns the installer and cleanly terminates the app)
         await update.install();
-        // 4. Immediately trigger relaunch so zapp-desktop exits and installer replaces files
-        await invoke('relaunch_app').catch((err) => {
-          console.warn('Failed to relaunch after update:', err);
-        });
       },
     };
   } catch (err) {

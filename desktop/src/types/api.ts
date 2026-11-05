@@ -51,6 +51,10 @@ export interface Preferences {
   relaunch_steam_after_transfer: boolean;
   run_on_startup: boolean;
   theme: 'system' | 'light' | 'dark';
+  relay_enabled?: boolean;
+  relay_server_url?: string;
+  relay_device_id?: string;
+  relay_device_secret?: string;
 }
 
 export interface CreateCustomGameRequest {

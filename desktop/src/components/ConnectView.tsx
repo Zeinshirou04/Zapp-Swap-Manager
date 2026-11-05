@@ -23,6 +23,7 @@ type Stage = 'idle' | 'starting' | 'connecting' | 'connected' | 'error';
 
 interface ConnectViewProps {
   onConnected: () => void;
+  onBackToLogin?: () => void;
 }
 
 const LOCAL_BASE_URL = 'http://127.0.0.1:8765';
@@ -40,7 +41,7 @@ const stageLabel = (stage: Stage): string => {
   }
 };
 
-export const ConnectView: React.FC<ConnectViewProps> = ({ onConnected }) => {
+export const ConnectView: React.FC<ConnectViewProps> = ({ onConnected, onBackToLogin }) => {
   const [tab, setTab] = useState<Tab>('local');
   const [stage, setStage] = useState<Stage>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -364,6 +365,24 @@ export const ConnectView: React.FC<ConnectViewProps> = ({ onConnected }) => {
           >
             <AlertCircle size={15} />
             <span>{error}</span>
+          </div>
+        )}
+
+        {onBackToLogin && (
+          <div style={{ marginTop: '20px', textAlign: 'center' }}>
+            <button
+              type="button"
+              onClick={onBackToLogin}
+              style={{
+                fontSize: '0.8rem',
+                color: 'var(--primary)',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              ← Back to Homeserver Sign In
+            </button>
           </div>
         )}
       </div>

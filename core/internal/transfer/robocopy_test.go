@@ -158,14 +158,22 @@ func TestCheckDestination(t *testing.T) {
 }
 
 func TestValidateInstallDir(t *testing.T) {
-	bad := []string{"", "..", `..\evil`, `C:\abs`, `a\..\b`}
+	bad := []string{"", "..", `..\evil`, `C:\abs`, `a\..\b`, `D:/games`, `foo/../../bar`}
 	for _, b := range bad {
 		if err := validateInstallDir(b); err == nil {
 			t.Errorf("installDir %q must be rejected", b)
 		}
 	}
-	if err := validateInstallDir("Terraria"); err != nil {
-		t.Errorf("normal installDir rejected: %v", err)
+	good := []string{
+		"Terraria",
+		"GRYPHLINK/games/EndField Game",
+		`Riot Games\VALORANT`,
+		"Epic Games/SubFolder/Game",
+	}
+	for _, g := range good {
+		if err := validateInstallDir(g); err != nil {
+			t.Errorf("valid installDir %q rejected: %v", g, err)
+		}
 	}
 }
 

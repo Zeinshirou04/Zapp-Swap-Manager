@@ -107,6 +107,7 @@ func newRouter(cfg Config) *http.ServeMux {
 	mux.HandleFunc("POST /libraries", h.registerLibraries)
 	mux.HandleFunc("GET /games", h.listGames)
 	mux.HandleFunc("GET /games/{app_id}", h.getGame)
+	mux.HandleFunc("GET /games/{app_id}/cover", h.getGameCover)
 	mux.HandleFunc("GET /jobs", h.listJobs)
 	mux.HandleFunc("POST /jobs", h.createJob)
 	mux.HandleFunc("GET /jobs/{job_id}", h.getJob)

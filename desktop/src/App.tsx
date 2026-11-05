@@ -376,7 +376,7 @@ export const App: React.FC = () => {
           drivesCount={libraries.length}
           queueCount={jobs.filter((j) => j.status === 'running' || j.status === 'queued').length}
           steamRunning={health?.steam_running ?? false}
-          appVersion="0.2.8"
+          appVersion="0.2.9"
           onOpenWizard={() => setIsWizardOpen(true)}
         />
 

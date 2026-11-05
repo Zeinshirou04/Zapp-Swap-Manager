@@ -26,8 +26,13 @@ type Game struct {
 	State    string // StateActiveSSD or StateStorageHDD
 	// Library currently holding this game's appmanifest (and thus the one
 	// Steam considers it installed in). ID, not path.
-	LibraryID string
-	IsCustom  bool
+	LibraryID    string
+	IsCustom     bool
+	CoverURL     string
+	SwapEnabled  bool
+	HasHDDBackup bool
+	IsNativeHDD  bool
+	Tags         []string
 }
 
 type customCandidate struct {
@@ -91,7 +96,60 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 			if lib.Type == TypeSSDCache {
 				state = StateActiveSSD
 			}
-			games = append(games, Game{Manifest: m, State: state, LibraryID: lib.ID, IsCustom: false})
+
+			// Measure true disk size if game directory on disk is larger than manifest
+			// (handles live-patcher games like Wuthering Waves, Genshin, Warframe)
+			actualDir := filepath.Join(lib.Path, "steamapps", "common", m.InstallDir)
+			if dirExists(actualDir) {
+				realSize := dirSize(actualDir)
+				if realSize > m.SizeOnDisk {
+					m.SizeOnDisk = realSize
+				}
+			}
+
+			// Check if SSD game has an existing backup in an HDD master library
+			hasHDDBackup := false
+			if state == StateActiveSSD {
+				for _, other := range libs {
+					if other.Type == TypeHDDMaster {
+						backupDir := filepath.Join(other.Path, "steamapps", "common", m.InstallDir)
+						if dirExists(backupDir) {
+							hasHDDBackup = true
+							break
+						}
+					}
+				}
+			} else {
+				hasHDDBackup = true
+			}
+
+			var coverURL string
+			swapEnabled := true
+			isNativeHDD := false
+			var tags []string
+			if zm, err := ReadZappManifest(actualDir); err == nil && zm != nil {
+				if zm.Name != "" {
+					m.Name = zm.Name
+				}
+				if zm.CoverURL != "" {
+					coverURL = zm.CoverURL
+				}
+				swapEnabled = zm.SwapEnabled
+				isNativeHDD = zm.IsNativeHDD
+				tags = zm.Tags
+			}
+
+			games = append(games, Game{
+				Manifest:     m,
+				State:        state,
+				LibraryID:    lib.ID,
+				IsCustom:     false,
+				CoverURL:     coverURL,
+				SwapEnabled:  swapEnabled,
+				HasHDDBackup: hasHDDBackup,
+				IsNativeHDD:  isNativeHDD,
+				Tags:         tags,
+			})
 		}
 	}
 
@@ -133,19 +191,42 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 				state = StateActiveSSD
 			}
 
+			gameTitle := name
+			var coverURL string
+			swapEnabled := true
+			isNativeHDD := false
+			var tags []string
+
+			// Check if zappmanifest.json exists inside this game directory
+			if zm, err := ReadZappManifest(fullPath); err == nil && zm != nil {
+				if zm.Name != "" {
+					gameTitle = zm.Name
+				}
+				if zm.CoverURL != "" {
+					coverURL = zm.CoverURL
+				}
+				swapEnabled = zm.SwapEnabled
+				isNativeHDD = zm.IsNativeHDD
+				tags = zm.Tags
+			}
+
 			cand := customCandidate{
 				game: Game{
 					Manifest: Manifest{
 						AppID:      appID,
-						Name:       name,
+						Name:       gameTitle,
 						InstallDir: name,
 						SizeOnDisk: size,
 						BuildID:    "custom",
 						StateFlags: 4,
 					},
-					State:     state,
-					LibraryID: lib.ID,
-					IsCustom:  true,
+					State:        state,
+					LibraryID:    lib.ID,
+					IsCustom:     true,
+					CoverURL:     coverURL,
+					SwapEnabled:  swapEnabled,
+					IsNativeHDD:  isNativeHDD,
+					Tags:         tags,
 				},
 				isJunction: isJunc,
 				libType:    lib.Type,
@@ -191,6 +272,27 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 		if chosen.game.Manifest.SizeOnDisk == 0 && realSize > 0 {
 			chosen.game.Manifest.SizeOnDisk = realSize
 		}
+
+		// Check if HDD backup exists
+		hasHDDBackup := false
+		if chosen.game.State == StateActiveSSD {
+			for _, other := range libs {
+				if other.Type == TypeHDDMaster {
+					hddPath := filepath.Join(other.Path, "steamapps", "common", chosen.game.Manifest.InstallDir)
+					if !dirExists(hddPath) {
+						hddPath = filepath.Join(other.Path, chosen.game.Manifest.InstallDir)
+					}
+					if dirExists(hddPath) {
+						hasHDDBackup = true
+						break
+					}
+				}
+			}
+		} else {
+			hasHDDBackup = true
+		}
+		chosen.game.HasHDDBackup = hasHDDBackup
+
 		games = append(games, chosen.game)
 	}
 
@@ -208,12 +310,15 @@ func isIgnoredDir(name string) bool {
 	return false
 }
 
-// CustomAppID generates a deterministic positive 64-bit integer string
-// from a folder name (case-insensitive) for non-Steam games.
+// CustomAppID generates a deterministic safe 53-bit integer string
+// (fitting within JSON/JS Number.MAX_SAFE_INTEGER) from a folder name.
 func CustomAppID(folderName string) string {
 	h := fnv.New64a()
 	h.Write([]byte(strings.ToLower(folderName)))
-	val := int64(h.Sum64() & 0x7FFFFFFFFFFFFFFF)
+	val := int64(h.Sum64() & 0x001FFFFFFFFFFFFF)
+	if val == 0 {
+		val = 1
+	}
 	return strconv.FormatInt(val, 10)
 }
 

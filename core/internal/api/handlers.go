@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/config"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/queue"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/steam"
 )
@@ -186,6 +188,11 @@ type gameJSON struct {
 	LastBackupTime   *time.Time `json:"last_backup_time"`
 	BackupClean      bool       `json:"backup_clean"`
 	IsCustom         bool       `json:"is_custom"`
+	CoverURL         string     `json:"cover_url,omitempty"`
+	SwapEnabled      bool       `json:"swap_enabled"`
+	HasHDDBackup     bool       `json:"has_hdd_backup"`
+	IsNativeHDD      bool       `json:"is_native_hdd"`
+	Tags             []string   `json:"tags,omitempty"`
 }
 
 func toGameJSON(g steam.Game) gameJSON {
@@ -198,9 +205,13 @@ func toGameJSON(g steam.Game) gameJSON {
 		State:            g.State,
 		CurrentLibraryID: g.LibraryID,
 		BuildID:          g.Manifest.BuildID,
-		//shortcut: backup history lands with the journal wiring in Plan 00xx
-		BackupClean: false, // honest default until backup metrics are journaled
-		IsCustom:    g.IsCustom,
+		BackupClean:      false, // honest default until backup metrics are journaled
+		IsCustom:         g.IsCustom,
+		CoverURL:         g.CoverURL,
+		SwapEnabled:      g.SwapEnabled,
+		HasHDDBackup:     g.HasHDDBackup,
+		IsNativeHDD:      g.IsNativeHDD,
+		Tags:             g.Tags,
 	}
 }
 
@@ -357,4 +368,234 @@ func pathLike(s string) bool {
 	return strings.ContainsAny(s, `\/: `) ||
 		strings.HasPrefix(s, ".") ||
 		strings.Contains(s, "..")
+}
+
+// getPreferences: GET /preferences
+func (h handlers) getPreferences(w http.ResponseWriter, _ *http.Request) {
+	if h.cfg.PreferencesFn != nil {
+		writeJSON(w, http.StatusOK, h.cfg.PreferencesFn())
+		return
+	}
+	writeJSON(w, http.StatusOK, h.cfg.Preferences)
+}
+
+// updatePreferences: PUT /preferences
+func (h handlers) updatePreferences(w http.ResponseWriter, r *http.Request) {
+	var p config.Preferences
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
+		return
+	}
+	if h.cfg.SetPreferences != nil {
+		if err := h.cfg.SetPreferences(p); err != nil {
+			writeError(w, http.StatusInternalServerError, "persist_failed", err.Error())
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+type createCustomGameInput struct {
+	Name        string   `json:"name"`
+	LibraryID   string   `json:"library_id"`
+	InstallDir  string   `json:"install_dir"`
+	CoverURL    string   `json:"cover_url,omitempty"`
+	SwapEnabled *bool    `json:"swap_enabled,omitempty"`
+	IsNativeHDD *bool    `json:"is_native_hdd,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+}
+
+// createCustomGame: POST /custom-games
+func (h handlers) createCustomGame(w http.ResponseWriter, r *http.Request) {
+	var in createCustomGameInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
+		return
+	}
+	if strings.TrimSpace(in.InstallDir) == "" {
+		writeError(w, http.StatusBadRequest, "invalid_install_dir", "install_dir cannot be empty")
+		return
+	}
+	// Validate bare directory name (no path separators)
+	if strings.ContainsAny(in.InstallDir, `/\:`) || in.InstallDir == "." || in.InstallDir == ".." {
+		writeError(w, http.StatusBadRequest, "invalid_install_dir", "install_dir must be a simple directory name")
+		return
+	}
+
+	libs := h.libs()
+	var targetLib *steam.Library
+	for i := range libs {
+		if libs[i].ID == in.LibraryID {
+			targetLib = &libs[i]
+			break
+		}
+	}
+	if targetLib == nil {
+		writeError(w, http.StatusBadRequest, "invalid_library", "library not found in whitelist")
+		return
+	}
+
+	commonDir := filepath.Join(targetLib.Path, "steamapps", "common")
+	var gameDir string
+	if fi, err := os.Stat(commonDir); err == nil && fi.IsDir() {
+		gameDir = filepath.Join(commonDir, in.InstallDir)
+	} else {
+		gameDir = filepath.Join(targetLib.Path, in.InstallDir)
+	}
+	// Create folder if not yet existing
+	if err := os.MkdirAll(gameDir, 0755); err != nil {
+		writeError(w, http.StatusInternalServerError, "mkdir_failed", err.Error())
+		return
+	}
+
+	swapEnabled := true
+	if in.SwapEnabled != nil {
+		swapEnabled = *in.SwapEnabled
+	}
+	isNativeHDD := false
+	if in.IsNativeHDD != nil {
+		isNativeHDD = *in.IsNativeHDD
+	}
+
+	name := in.Name
+	if name == "" {
+		name = in.InstallDir
+	}
+
+	zm := steam.ZappManifest{
+		ID:          strings.ToLower(strings.ReplaceAll(in.InstallDir, " ", "-")),
+		Name:        name,
+		InstallDir:  in.InstallDir,
+		CoverURL:    in.CoverURL,
+		SwapEnabled: swapEnabled,
+		IsNativeHDD: isNativeHDD,
+		Tags:        in.Tags,
+	}
+
+	if err := steam.WriteZappManifest(gameDir, zm); err != nil {
+		writeError(w, http.StatusInternalServerError, "write_manifest_failed", err.Error())
+		return
+	}
+
+	// Rescan and return the created game
+	games, err := h.scanGames()
+	if err == nil {
+		for _, g := range games {
+			if strings.EqualFold(g.Manifest.InstallDir, in.InstallDir) {
+				writeJSON(w, http.StatusCreated, toGameJSON(g))
+				return
+			}
+		}
+	}
+
+	appID, _ := strconv.ParseInt(steam.CustomAppID(in.InstallDir), 10, 64)
+	writeJSON(w, http.StatusCreated, gameJSON{
+		AppID:            appID,
+		Name:             name,
+		InstallDir:       in.InstallDir,
+		State:            targetLib.Type,
+		CurrentLibraryID: targetLib.ID,
+		IsCustom:         true,
+		CoverURL:         in.CoverURL,
+		SwapEnabled:      swapEnabled,
+		IsNativeHDD:      isNativeHDD,
+		Tags:             in.Tags,
+	})
+}
+
+type updateCustomGameInput struct {
+	Name        string   `json:"name"`
+	CoverURL    string   `json:"cover_url"`
+	SwapEnabled *bool    `json:"swap_enabled,omitempty"`
+	IsNativeHDD *bool    `json:"is_native_hdd,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+}
+
+// updateCustomGame: PUT /custom-games/{app_id}
+func (h handlers) updateCustomGame(w http.ResponseWriter, r *http.Request) {
+	appID := r.PathValue("app_id")
+	var in updateCustomGameInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
+		return
+	}
+
+	games, err := h.scanGames()
+	if err != nil && len(games) == 0 {
+		writeError(w, http.StatusInternalServerError, "scan_failed", err.Error())
+		return
+	}
+
+	var foundGame *steam.Game
+	for i := range games {
+		gID := games[i].Manifest.AppID
+		gAppID, _ := strconv.ParseInt(gID, 10, 64)
+		if gID == appID || fmt.Sprint(gAppID) == appID || strings.EqualFold(games[i].Manifest.InstallDir, appID) || steam.CustomAppID(games[i].Manifest.InstallDir) == appID {
+			foundGame = &games[i]
+			break
+		}
+	}
+	if foundGame == nil {
+		writeError(w, http.StatusNotFound, "not_found", "game not found")
+		return
+	}
+
+	// Locate game directory in its library
+	libs := h.libs()
+	var gameDir string
+	for _, l := range libs {
+		if l.ID == foundGame.LibraryID {
+			p1 := filepath.Join(l.Path, "steamapps", "common", foundGame.Manifest.InstallDir)
+			if _, err := os.Stat(p1); err == nil {
+				gameDir = p1
+				break
+			}
+			p2 := filepath.Join(l.Path, foundGame.Manifest.InstallDir)
+			if _, err := os.Stat(p2); err == nil {
+				gameDir = p2
+				break
+			}
+		}
+	}
+
+	if gameDir == "" {
+		writeError(w, http.StatusNotFound, "not_found", "game folder not found on disk")
+		return
+	}
+
+	zm, _ := steam.ReadZappManifest(gameDir)
+	if zm == nil {
+		zm = &steam.ZappManifest{
+			ID:         foundGame.Manifest.AppID,
+			InstallDir: foundGame.Manifest.InstallDir,
+		}
+	}
+	if in.Name != "" {
+		zm.Name = in.Name
+	}
+	if in.CoverURL != "" {
+		zm.CoverURL = in.CoverURL
+	}
+	if in.SwapEnabled != nil {
+		zm.SwapEnabled = *in.SwapEnabled
+	}
+	if in.IsNativeHDD != nil {
+		zm.IsNativeHDD = *in.IsNativeHDD
+	}
+	if in.Tags != nil {
+		zm.Tags = in.Tags
+	}
+
+	if err := steam.WriteZappManifest(gameDir, *zm); err != nil {
+		writeError(w, http.StatusInternalServerError, "write_manifest_failed", err.Error())
+		return
+	}
+
+	foundGame.Manifest.Name = zm.Name
+	foundGame.CoverURL = zm.CoverURL
+	foundGame.SwapEnabled = zm.SwapEnabled
+	foundGame.IsNativeHDD = zm.IsNativeHDD
+	foundGame.Tags = zm.Tags
+
+	writeJSON(w, http.StatusOK, toGameJSON(*foundGame))
 }

@@ -150,7 +150,19 @@ func (h handlers) registerLibraries(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_library", "library id must be a bare identifier")
 			return
 		}
-		merged = append(merged, steam.Library{ID: id, Name: filepath.Base(path), Path: path, Type: in.Type})
+		vol := filepath.VolumeName(path)
+		var name string
+		isSteam := strings.Contains(strings.ToLower(path), "steam")
+		base := "Steam Library"
+		if !isSteam {
+			base = "Games Library"
+		}
+		if vol != "" {
+			name = fmt.Sprintf("%s (%s Drive)", base, strings.ToUpper(vol))
+		} else {
+			name = filepath.Base(path)
+		}
+		merged = append(merged, steam.Library{ID: id, Name: name, Path: path, Type: in.Type})
 	}
 	for i := range merged {
 		_ = merged[i].RefreshDiskSpace()

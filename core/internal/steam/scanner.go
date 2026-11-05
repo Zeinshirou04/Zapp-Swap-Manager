@@ -180,6 +180,17 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 		if chosen == nil {
 			chosen = &candidates[0]
 		}
+		// Propagate real folder size to the chosen candidate if chosen was a junction
+		var realSize int64
+		for _, c := range candidates {
+			if c.game.Manifest.SizeOnDisk > 0 {
+				realSize = c.game.Manifest.SizeOnDisk
+				break
+			}
+		}
+		if chosen.game.Manifest.SizeOnDisk == 0 && realSize > 0 {
+			chosen.game.Manifest.SizeOnDisk = realSize
+		}
 		games = append(games, chosen.game)
 	}
 

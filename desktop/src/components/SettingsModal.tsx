@@ -193,7 +193,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <span style={{ fontSize: '0.875rem', fontWeight: 600, display: 'block' }}>Desktop App Updates</span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>v0.3.0 • Cloud Auto-Updater</span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>v0.3.1-beta.1 • Cloud Auto-Updater</span>
               </div>
               {onCheckUpdates && (
                 <button

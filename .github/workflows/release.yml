@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release Tag (e.g. v1.0.0)'
+        description: 'Release Tag (e.g. v0.3.1-beta.1)'
         required: true
-        default: 'v1.0.0'
+        default: 'v0.3.1-beta.1'
 
 permissions:
   contents: write
@@ -34,7 +34,7 @@ jobs:
             }
             $tagVersion = $tagVersion.TrimStart("v")
             if ($tagVersion -eq "" -or $tagVersion -eq "main") {
-              $tagVersion = "0.2.5"
+              $tagVersion = "0.3.1-beta.1"
             }
             go build -v -ldflags="-s -w -X main.Version=$tagVersion" -o ../dist/zapp-core.exe ./cmd/zapp-core
             cd ..
@@ -130,20 +130,30 @@ jobs:
                 }
                 $relTag = $relTag.TrimStart("v")
                 if ($relTag -eq "" -or $relTag -eq "main") {
-                  $relTag = "0.2.5"
+                  $relTag = "0.3.1-beta.1"
                 }
+
+                $setupFile = Get-ChildItem -Path "src-tauri/target/release/bundle/nsis" -Filter "*-setup.exe" -Recurse | Select-Object -First 1
+                if (-not $setupFile) {
+                  $setupFile = Get-ChildItem -Path "src-tauri/target/release/bundle" -Filter "*-setup.exe" -Recurse | Select-Object -First 1
+                }
+                $installerName = if ($setupFile) { $setupFile.Name } else { "Zapp.Swap.Manager_${relTag}_x64-setup.exe" }
+
                 $latestObj = [ordered]@{
                   version = $relTag
-                  notes = "Zapp Swap Manager v$relTag release with non-Steam game support and in-app cloud updater"
+                  notes = "Zapp Swap Manager v$relTag release"
                   pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
                   platforms = @{
                     "windows-x86_64" = @{
-                      url = "https://github.com/Zeinshirou04/Zapp-Swap-Manager/releases/download/v$relTag/Zapp.Swap.Manager_${relTag}_x64-setup.exe"
+                      url = "https://github.com/Zeinshirou04/Zapp-Swap-Manager/releases/download/v$relTag/$installerName"
                       signature = $sig
                     }
                   }
                 }
                 $latestObj | ConvertTo-Json -Depth 5 | Set-Content -Path "../dist-desktop/latest.json" -Encoding UTF8
+                if ($relTag -match "beta|alpha|rc") {
+                  Copy-Item -Path "../dist-desktop/latest.json" -Destination "../dist-desktop/latest-beta.json" -Force
+                }
               }
             } elseif (Test-Path "src-tauri/target/release/zapp-desktop.exe") {
               Copy-Item -Path "src-tauri/target/release/zapp-desktop.exe" -Destination "../dist-desktop"
@@ -167,6 +177,7 @@ jobs:
             dist-desktop/*.msi
             dist-desktop/*-setup.exe
             dist-desktop/latest.json
+            dist-desktop/latest-beta.json
             dist-desktop/*.sig
             dist-desktop/*.zip
 

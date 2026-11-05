@@ -214,6 +214,119 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /preferences:
+    get:
+      summary: Get core preferences
+      description: Returns user preferences for Steam lifecycle, startup, and transfer automation.
+      operationId: getPreferences
+      tags: [System]
+      responses:
+        '200':
+          description: Preferences.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Preferences'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    put:
+      summary: Update core preferences
+      description: Updates and persists user preferences.
+      operationId: updatePreferences
+      tags: [System]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Preferences'
+      responses:
+        '200':
+          description: Updated preferences.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Preferences'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /custom-games:
+    post:
+      summary: Register a non-Steam game
+      description: Creates a Zapp manifest and directories for a custom non-Steam game.
+      operationId: createCustomGame
+      tags: [Games]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [library_id, install_dir]
+              properties:
+                name:
+                  type: string
+                library_id:
+                  type: string
+                install_dir:
+                  type: string
+                cover_url:
+                  type: string
+                swap_enabled:
+                  type: boolean
+                is_native_hdd:
+                  type: boolean
+                tags:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Game registered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Game'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /custom-games/{app_id}:
+    put:
+      summary: Update a custom game manifest
+      description: Updates name, cover URL, swap eligibility, or tags for a non-Steam game.
+      operationId: updateCustomGame
+      tags: [Games]
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                cover_url:
+                  type: string
+                swap_enabled:
+                  type: boolean
+                is_native_hdd:
+                  type: boolean
+                tags:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Updated game.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Game'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /jobs:
     get:
       summary: List queue jobs
@@ -469,6 +582,39 @@ components:
         is_custom:
           type: boolean
           description: True if this is an unmanifested or non-Steam game folder.
+        cover_url:
+          type: string
+          nullable: true
+          description: Custom cover artwork image URL or local path.
+        swap_enabled:
+          type: boolean
+          description: True if this game can be swapped/promoted to SSD.
+        has_hdd_backup:
+          type: boolean
+          description: True if a verified copy of this game exists on an HDD master library.
+        is_native_hdd:
+          type: boolean
+          description: True if this game is intended to stay on HDD and not be swapped.
+        tags:
+          type: array
+          items:
+            type: string
+
+    Preferences:
+      type: object
+      properties:
+        close_steam_on_transfer:
+          type: boolean
+          description: Automatically close Steam before moving/evicting games.
+        relaunch_steam_after_transfer:
+          type: boolean
+          description: Automatically relaunch Steam when transfer finishes.
+        run_on_startup:
+          type: boolean
+          description: Run Zapp core on Windows startup.
+        theme:
+          type: string
+          enum: [system, light, dark]
 
     JobType:
       type: string

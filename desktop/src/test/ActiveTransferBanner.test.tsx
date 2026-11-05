@@ -10,9 +10,10 @@ describe('ActiveTransferBanner Component', () => {
       name: 'Terraria',
       state: 'active_ssd',
       size_bytes: 500000000,
-      library_id: 'ssd0',
+      current_library_id: 'ssd0',
+      build_id: '105600',
       backup_clean: true,
-      last_backup: null,
+      last_backup_time: null,
       install_dir: 'Terraria',
     },
   ];
@@ -20,7 +21,7 @@ describe('ActiveTransferBanner Component', () => {
   const mockRunningJob: Job = {
     id: 'job-123',
     type: 'backup',
-    app_id: 105600,
+    app_id: '105600',
     target_library_id: 'hdd0',
     status: 'running',
     progress_percent: 65,
@@ -30,7 +31,6 @@ describe('ActiveTransferBanner Component', () => {
     created_at: '2026-11-05T00:00:00Z',
     started_at: '2026-11-05T00:00:01Z',
     completed_at: null,
-    steps: [],
   };
 
   it('renders nothing when there is no running job', () => {

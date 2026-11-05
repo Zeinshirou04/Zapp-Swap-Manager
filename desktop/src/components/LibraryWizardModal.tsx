@@ -50,31 +50,44 @@ export const LibraryWizardModal: React.FC<LibraryWizardModalProps> = ({ open, on
       .then(([existing, detected]) => {
         const merged: WizardEntry[] = [];
         const seen = new Set<string>();
+        const existingById = new Map(existing.map((l) => [l.id, l]));
 
-        // 1. Existing registered libraries (pre-selected with their configured roles)
-        for (const lib of existing) {
-          const norm = lib.path.toLowerCase();
-          if (!seen.has(norm)) {
-            seen.add(norm);
-            merged.push({
-              id: lib.id,
-              path: lib.path,
-              drive_type: 'unknown' as DriveType,
-              free_bytes: lib.free_bytes,
-              total_bytes: lib.total_bytes,
-              selected: true,
-              role: lib.type,
-            });
+        // Load custom paths previously added if cached in localStorage
+        let customPaths: string[] = [];
+        try {
+          const cached = localStorage.getItem('zapp_custom_library_paths');
+          if (cached) {
+            customPaths = JSON.parse(cached);
           }
+        } catch {
+          // ignore parsing error
         }
 
-        // 2. Newly detected Steam libraries
+        // 1. Detected Steam libraries (pre-select role if already registered)
         for (const lib of detected) {
           const norm = lib.path.toLowerCase();
           if (!seen.has(norm)) {
             seen.add(norm);
+            const matched = existingById.get(lib.id);
             merged.push({
               ...lib,
+              selected: true,
+              role: matched ? matched.type : null,
+            });
+          }
+        }
+
+        // 2. Previously entered custom paths from localStorage
+        for (const p of customPaths) {
+          const norm = p.toLowerCase();
+          if (!seen.has(norm)) {
+            seen.add(norm);
+            merged.push({
+              id: '',
+              path: p,
+              drive_type: 'unknown' as DriveType,
+              free_bytes: 0,
+              total_bytes: 0,
               selected: true,
               role: null,
             });
@@ -107,6 +120,17 @@ export const LibraryWizardModal: React.FC<LibraryWizardModalProps> = ({ open, on
       },
     ]);
     setManualPath('');
+
+    try {
+      const cached = localStorage.getItem('zapp_custom_library_paths');
+      const list: string[] = cached ? JSON.parse(cached) : [];
+      if (!list.some((item) => item.toLowerCase() === p.toLowerCase())) {
+        list.push(p);
+        localStorage.setItem('zapp_custom_library_paths', JSON.stringify(list));
+      }
+    } catch {
+      // ignore
+    }
   };
 
   const save = async () => {
@@ -114,6 +138,14 @@ export const LibraryWizardModal: React.FC<LibraryWizardModalProps> = ({ open, on
       setSaving(true);
       setSaveError(null);
       await api.registerLibraries(selected.map((e) => ({ type: e.role as LibraryType, path: e.path })));
+      try {
+        const custom = selected.filter((e) => !e.id).map((e) => e.path);
+        if (custom.length > 0) {
+          localStorage.setItem('zapp_custom_library_paths', JSON.stringify(custom));
+        }
+      } catch {
+        // ignore
+      }
       onSaved();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to register libraries');

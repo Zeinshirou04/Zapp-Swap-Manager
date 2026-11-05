@@ -615,6 +615,18 @@ components:
         theme:
           type: string
           enum: [system, light, dark]
+        relay_enabled:
+          type: boolean
+          description: Whether outbound WebSocket relay to homeserver is enabled.
+        relay_server_url:
+          type: string
+          description: URL of the homeserver relay (e.g. https://zapp.example.com).
+        relay_device_id:
+          type: string
+          description: Registered device ID on the homeserver.
+        relay_device_secret:
+          type: string
+          description: Secret token for device authentication on the homeserver.
 
     JobType:
       type: string

@@ -5,10 +5,13 @@ default:
     @just --list
 
 # Run every component's checks (lint + tests).
-check: check-core check-desktop check-mobile
+check: check-core check-server check-desktop check-mobile
 
 check-core:
     cd core && go vet ./... && go test -v ./...
+
+check-server:
+    cd server && go vet ./... && go test -v ./...
 
 check-desktop:
     cd desktop && npm run lint && npm run build && npm test
@@ -22,7 +25,7 @@ check-mobile:
     cd mobile && (chmod +x ./gradlew 2>/dev/null || true) && if which java >/dev/null 2>&1; then ./gradlew testDebugUnitTest --no-daemon; else echo "Java not installed locally; mobile tests verified in CI"; fi
 
 # Build all components.
-build: build-core build-desktop build-mobile
+build: build-core build-server build-desktop build-mobile
 
 # Build the Core daemon binary.
 [windows]
@@ -32,6 +35,15 @@ build-core:
 [unix]
 build-core:
     cd core && go build -v -o ../bin/zapp-core ./cmd/zapp-core
+
+# Build the Relay Server binary.
+[windows]
+build-server:
+    cd server && go build -v -o ../bin/zapp-server.exe ./cmd/zapp-server
+
+[unix]
+build-server:
+    cd server && go build -v -o ../bin/zapp-server ./cmd/zapp-server
 
 # Build Desktop dashboard frontend assets.
 build-desktop:

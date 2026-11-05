@@ -14,6 +14,7 @@ import (
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/config"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/logger"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/queue"
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/relay"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/steam"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/transfer"
 )
@@ -21,10 +22,11 @@ import (
 // Service coordinates all core background components: SQLite queue worker,
 // HTTP API server, Steam library scans, and safe lifecycle management.
 type Service struct {
-	cfg     *config.Config
-	version string
-	queue   *queue.Queue
-	server  *api.Server
+	cfg         *config.Config
+	version     string
+	queue       *queue.Queue
+	server      *api.Server
+	relayClient *relay.Client
 
 	mu      sync.Mutex
 	libs    *libRegistry
@@ -127,12 +129,26 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 		return nil, fmt.Errorf("initializing api server: %w", err)
 	}
 
+	relayClient := relay.NewClient(
+		getPrefs,
+		func(req queue.CreateJobRequest) (queue.Job, error) {
+			return q.Enqueue(req)
+		},
+		func(jobID string) error {
+			return q.CancelJob(jobID)
+		},
+		func() ([]queue.Job, error) {
+			return q.ListJobs("")
+		},
+	)
+
 	return &Service{
-		cfg:     cfg,
-		version: version,
-		queue:   q,
-		server:  apiServer,
-		libs:    libs,
+		cfg:         cfg,
+		version:     version,
+		queue:       q,
+		server:      apiServer,
+		relayClient: relayClient,
+		libs:        libs,
 	}, nil
 }
 
@@ -240,6 +256,12 @@ func (s *Service) Start(parentCtx context.Context) error {
 			slog.Error("http api server stopped with error", "err", err)
 		}
 		slog.Info("http api server exited")
+	}()
+
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.relayClient.Run(ctx)
 	}()
 
 	return nil

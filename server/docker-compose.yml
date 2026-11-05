@@ -1,0 +1,13 @@
+services:
+  zapp-relay:
+    build: .
+    container_name: zapp-relay-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - ZAPP_SERVER_BIND=0.0.0.0:8080
+      - ZAPP_SERVER_DB=/app/data/relay.db
+      - ZAPP_SERVER_SECRET=change-this-to-a-secure-random-secret
+    volumes:
+      - ./data:/app/data

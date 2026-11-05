@@ -8,9 +8,10 @@ import {
   HardDrive,
   Layers,
   ArrowRight,
-  Zap,
   FolderOpen,
+  FolderKanban,
 } from 'lucide-react';
+import { formatBytes, formatLibraryName } from '../utils/format.ts';
 
 export interface DashboardViewProps {
   games: Game[];
@@ -36,48 +37,35 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const ssdGames = games.filter((g) => g.state === 'active_ssd');
   const hddGames = games.filter((g) => g.state === 'storage_hdd');
+
+  const ssdGamesSize = ssdGames.reduce((acc, g) => acc + g.size_bytes, 0);
+  const hddGamesSize = hddGames.reduce((acc, g) => acc + g.size_bytes, 0);
+
   const activeJobs = jobs.filter((j) => j.status === 'running' || j.status === 'queued');
   const runningJob = jobs.find((j) => j.status === 'running');
 
-  const formatBytes = (bytes?: number) => {
-    if (!bytes || bytes <= 0) return '0 GB';
-    const gb = bytes / 1024 / 1024 / 1024;
-    return gb >= 1000 ? `${(gb / 1024).toFixed(1)} TB` : `${gb.toFixed(1)} GB`;
-  };
-
-  const getPercent = (total?: number, free?: number) => {
-    if (!total || total <= 0 || free === undefined) return 0;
-    const used = total - free;
-    return Math.min(100, Math.max(0, Math.round((used / total) * 100)));
-  };
-
-  const ssdPercent = getPercent(ssdLib?.total_bytes, ssdLib?.free_bytes);
-  const hddPercent = getPercent(hddLib?.total_bytes, hddLib?.free_bytes);
+  const ssdName = ssdLib ? formatLibraryName(ssdLib) : 'Fast SSD Library';
+  const hddName = hddLib ? formatLibraryName(hddLib) : 'Storage HDD Library';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Welcome Banner */}
+      {/* Overview Banner */}
       <div
         className="card"
         style={{
-          background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%)',
-          border: '1px solid rgba(56, 189, 248, 0.2)',
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
           padding: '24px',
           position: 'relative',
-          overflow: 'hidden',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-              <span className="badge badge-running">Dashboard</span>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>High-Performance Storage Controller</span>
-            </div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-main)' }}>
-              Overview & Cache Performance
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-main)' }}>
+              Storage Overview & Game Manager
             </h2>
             <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '600px' }}>
-              Seamlessly swap games between your ultra-fast SSD cache and bulk HDD cold storage with zero reinstalling.
+              Seamlessly swap and backup games between your SSD and HDD storage without reinstalling.
             </p>
           </div>
 
@@ -86,7 +74,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <Gamepad2 size={16} /> Browse Games
             </button>
             <button onClick={onOpenWizard} className="btn-secondary" style={{ display: 'flex', gap: '6px' }}>
-              <FolderOpen size={16} /> Manage Libraries
+              <FolderOpen size={16} /> Configure Drives
             </button>
           </div>
         </div>
@@ -107,84 +95,74 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '8px' }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>TOTAL GAMES</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              TOTAL GAMES
+            </span>
             <Gamepad2 size={18} style={{ color: 'var(--primary)' }} />
           </div>
           <div style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--text-main)' }}>
             {games.length}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: '8px' }}>
-            <span style={{ color: 'var(--ssd-color)' }}>{ssdGames.length} on SSD</span>
+            <span>{ssdGames.length} on SSD</span>
             <span>•</span>
-            <span style={{ color: 'var(--hdd-color)' }}>{hddGames.length} on HDD</span>
+            <span>{hddGames.length} on HDD</span>
           </div>
         </div>
 
-        {/* Metric 2: SSD NVMe Cache */}
+        {/* Metric 2: SSD Library */}
         <div
           className="card"
           onClick={() => onNavigate('drives')}
           style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '8px' }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>SSD CACHE</span>
-            <Zap size={18} style={{ color: 'var(--ssd-color)' }} />
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {ssdName}
+            </span>
+            <FolderKanban size={18} style={{ color: 'var(--primary)' }} />
           </div>
-          <div style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--ssd-color)' }}>
-            {ssdLib ? `${ssdPercent}%` : 'N/A'}
-          </div>
-          <div className="progress-bar-bg" style={{ height: '6px' }}>
-            <div
-              className="progress-bar-fill"
-              style={{
-                width: `${ssdPercent}%`,
-                backgroundColor: 'var(--ssd-color)',
-              }}
-            />
+          <div style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--text-main)' }}>
+            {formatBytes(ssdGamesSize)}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            {ssdLib ? `${formatBytes(ssdLib.free_bytes)} free of ${formatBytes(ssdLib.total_bytes)}` : 'Not configured'}
+            {ssdLib ? `${ssdGames.length} games • ${formatBytes(ssdLib.free_bytes)} free on drive` : 'Not configured'}
           </div>
         </div>
 
-        {/* Metric 3: HDD Cold Storage */}
+        {/* Metric 3: HDD Library */}
         <div
           className="card"
           onClick={() => onNavigate('drives')}
           style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '8px' }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>HDD MASTER</span>
-            <HardDrive size={18} style={{ color: 'var(--hdd-color)' }} />
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {hddName}
+            </span>
+            <HardDrive size={18} style={{ color: 'var(--text-muted)' }} />
           </div>
-          <div style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--hdd-color)' }}>
-            {hddLib ? `${hddPercent}%` : 'N/A'}
-          </div>
-          <div className="progress-bar-bg" style={{ height: '6px' }}>
-            <div
-              className="progress-bar-fill"
-              style={{
-                width: `${hddPercent}%`,
-                backgroundColor: 'var(--hdd-color)',
-              }}
-            />
+          <div style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--text-main)' }}>
+            {formatBytes(hddGamesSize)}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            {hddLib ? `${formatBytes(hddLib.free_bytes)} free of ${formatBytes(hddLib.total_bytes)}` : 'Not configured'}
+            {hddLib ? `${hddGames.length} games • ${formatBytes(hddLib.free_bytes)} free on drive` : 'Not configured'}
           </div>
         </div>
 
-        {/* Metric 4: Queue Status */}
+        {/* Metric 4: Transfer Queue */}
         <div
           className="card"
           onClick={() => onNavigate('queue')}
           style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '8px' }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>TRANSFER QUEUE</span>
-            <Layers size={18} style={{ color: activeJobs.length > 0 ? 'var(--warning)' : 'var(--text-muted)' }} />
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              TRANSFER QUEUE
+            </span>
+            <Layers size={18} style={{ color: activeJobs.length > 0 ? 'var(--primary)' : 'var(--text-muted)' }} />
           </div>
-          <div style={{ fontSize: '1.8rem', fontWeight: 700, color: activeJobs.length > 0 ? 'var(--warning)' : 'var(--text-main)' }}>
+          <div style={{ fontSize: '1.8rem', fontWeight: 700, color: activeJobs.length > 0 ? 'var(--primary)' : 'var(--text-main)' }}>
             {activeJobs.length}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -196,7 +174,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Drives Overview Bar Section */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Drive Capacity & Allocations</h3>
+          <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>Drive Storage & Allocation</h3>
           <button
             onClick={() => onNavigate('drives')}
             className="btn-secondary"
@@ -205,16 +183,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             Manage Drives <ArrowRight size={14} />
           </button>
         </div>
-        <DrivesOverview libraries={libraries} />
+        <DrivesOverview libraries={libraries} games={games} />
       </div>
 
       {/* Fast SSD Games Drawer Preview */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
           <div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Active Games on SSD Hot Cache</h3>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>Active Games on SSD</h3>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Ready to launch at NVMe speeds ({ssdGames.length} games)
+              Installed and playable from your fast SSD ({ssdGames.length} {ssdGames.length === 1 ? 'game' : 'games'})
             </span>
           </div>
           <button
@@ -236,7 +214,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               fontSize: '0.875rem',
             }}
           >
-            No games currently reside on your SSD cache. Promote games from your HDD master to play at peak speed!
+            No games currently on your SSD. Move games from your HDD to play them from SSD!
           </div>
         ) : (
           <div

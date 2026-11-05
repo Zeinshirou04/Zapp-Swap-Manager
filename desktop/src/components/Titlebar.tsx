@@ -170,7 +170,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({
           <div
             style={{
               background: 'var(--primary)',
-              color: '#0f172a',
+              color: '#ffffff',
               padding: '4px',
               borderRadius: '4px',
               display: 'flex',

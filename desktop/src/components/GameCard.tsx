@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Game, Job, JobType } from '../types/api.ts';
-import { Database, RefreshCw, Zap, Loader2 } from 'lucide-react';
+import { Database, RefreshCw, Zap, Loader2, Gamepad2, Folder } from 'lucide-react';
+import { formatBytes } from '../utils/format.ts';
 
 interface GameCardProps {
   game: Game;
@@ -9,29 +10,27 @@ interface GameCardProps {
   activeJob?: Job;
 }
 
-// Steam header capsule artwork; falls back to a gradient when missing.
-function coverUrl(appId: number): string {
-  return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 GB';
-  const gb = bytes / (1024 * 1024 * 1024);
-  if (gb >= 1000) return `${(gb / 1024).toFixed(2)} TB`;
-  return `${gb.toFixed(2)} GB`;
-}
-
 export const GameCard: React.FC<GameCardProps> = ({
   game,
   onAction,
   actionLoading,
   activeJob,
 }) => {
-  const [imgError, setImgError] = useState(false);
+  const [imgAttempt, setImgAttempt] = useState(0);
   const isOnSSD = game.state === 'active_ssd';
 
-  // Deterministic gradient per game so the fallback looks intentional.
-  const hue = (game.app_id * 137) % 360;
+  // Try Steam CDN primary URL, then fallback CDN URL
+  const steamCapsuleUrls = [
+    `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${game.app_id}/header.jpg`,
+    `https://cdn.akamai.steamstatic.com/steam/apps/${game.app_id}/header.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.app_id}/capsule_616x353.jpg`,
+  ];
+
+  const hasArtwork = !game.is_custom && imgAttempt < steamCapsuleUrls.length;
+
+  const handleImgError = () => {
+    setImgAttempt((prev) => prev + 1);
+  };
 
   return (
     <div className="card game-card" data-testid="game-card">
@@ -41,51 +40,86 @@ export const GameCard: React.FC<GameCardProps> = ({
           aspectRatio: '460 / 215',
           borderRadius: 'var(--radius) var(--radius) 0 0',
           overflow: 'hidden',
-          background: `linear-gradient(135deg, hsl(${hue}, 60%, 30%), hsl(${(hue + 60) % 360}, 60%, 18%))`,
+          backgroundColor: 'var(--bg-card-hover)',
+          borderBottom: '1px solid var(--border-color)',
         }}
       >
-        {!imgError && (
+        {hasArtwork ? (
           <img
-            src={coverUrl(game.app_id)}
+            src={steamCapsuleUrls[imgAttempt]}
             alt={`${game.name} cover art`}
             loading="lazy"
-            onError={() => setImgError(true)}
+            onError={handleImgError}
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
+        ) : (
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '16px',
+              textAlign: 'center',
+              backgroundColor: 'var(--bg-card-hover)',
+              color: 'var(--text-main)',
+            }}
+          >
+            <div
+              style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: '8px',
+                backgroundColor: 'var(--border-color)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '6px',
+                color: 'var(--text-muted)',
+              }}
+            >
+              {game.is_custom ? <Folder size={24} /> : <Gamepad2 size={24} />}
+            </div>
+            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+              {game.is_custom ? 'Folder Game' : 'No Cover Art'}
+            </span>
+          </div>
         )}
         {game.is_custom && (
           <span
-            className="badge"
             style={{
               position: 'absolute',
               top: '8px',
               left: '8px',
-              background: 'rgba(234, 88, 12, 0.9)',
-              color: '#fff',
-              backdropFilter: 'blur(4px)',
+              backgroundColor: 'var(--bg-card)',
+              color: 'var(--text-main)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '4px',
+              padding: '2px 8px',
+              fontSize: '0.7rem',
+              fontWeight: 600,
+              boxShadow: 'var(--shadow-sm)',
             }}
           >
             Custom / Non-Steam
           </span>
         )}
-        <span
-          className={isOnSSD ? 'badge badge-ssd' : 'badge badge-hdd'}
-          style={{ position: 'absolute', top: '8px', right: '8px', backdropFilter: 'blur(4px)' }}
-        >
-          {isOnSSD ? '⚡ Ready on Fast SSD' : '💾 Stored on HDD Master'}
-        </span>
       </div>
 
       <div style={{ padding: '12px' }}>
-        <h3 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '2px' }}>{game.name}</h3>
+        <h3 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {game.name}
+        </h3>
         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '10px' }}>
-          {game.is_custom ? 'Non-Steam Folder' : `App ID: ${game.app_id}`} • {formatBytes(game.size_bytes)}
+          {formatBytes(game.size_bytes)} • {game.is_custom ? 'Non-Steam Folder' : `App ID: ${game.app_id}`}
         </p>
 
         {activeJob && (activeJob.status === 'running' || activeJob.status === 'queued') ? (
           <div
             style={{
-              background: 'rgba(0, 0, 0, 0.3)',
+              backgroundColor: 'var(--bg-card-hover)',
               borderRadius: 'var(--radius)',
               padding: '8px 10px',
               border: '1px solid var(--border-color)',
@@ -100,30 +134,20 @@ export const GameCard: React.FC<GameCardProps> = ({
                 marginBottom: '4px',
               }}
             >
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--primary, #3b82f6)', fontWeight: 600 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--primary)', fontWeight: 600 }}>
                 <Loader2 size={12} className="spin" />
-                {activeJob.status === 'running' ? `${activeJob.type.toUpperCase()}` : 'QUEUED'}
+                {activeJob.status === 'running' ? activeJob.type.toUpperCase() : 'QUEUED'}
               </span>
-              <span style={{ color: '#fff', fontWeight: 600 }}>
+              <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>
                 {activeJob.status === 'running' ? `${Math.round(activeJob.progress_percent)}%` : 'Waiting...'}
               </span>
             </div>
-            <div
-              style={{
-                width: '100%',
-                height: '4px',
-                background: 'rgba(255, 255, 255, 0.1)',
-                borderRadius: '2px',
-                overflow: 'hidden',
-              }}
-            >
+            <div className="progress-bar-bg" style={{ height: '4px' }}>
               <div
+                className="progress-bar-fill"
                 style={{
-                  height: '100%',
                   width: activeJob.status === 'running' ? `${Math.round(activeJob.progress_percent)}%` : '100%',
-                  backgroundColor: 'var(--primary, #3b82f6)',
-                  borderRadius: '2px',
-                  transition: 'width 0.3s ease',
+                  backgroundColor: 'var(--primary)',
                 }}
               />
             </div>
@@ -134,7 +158,7 @@ export const GameCard: React.FC<GameCardProps> = ({
             disabled={actionLoading}
             className="btn-primary"
             style={{ width: '100%', justifyContent: 'center' }}
-            title="Copy to SSD cache and activate manifest"
+            title="Move game to fast SSD and activate manifest"
           >
             <Zap size={14} /> Move to SSD
           </button>
@@ -145,7 +169,7 @@ export const GameCard: React.FC<GameCardProps> = ({
               disabled={actionLoading}
               className="btn-secondary"
               style={{ flex: 1, justifyContent: 'center' }}
-              title="Mirror SSD file changes to the HDD master"
+              title="Mirror SSD file changes to HDD"
             >
               <RefreshCw size={14} /> Backup to HDD
             </button>

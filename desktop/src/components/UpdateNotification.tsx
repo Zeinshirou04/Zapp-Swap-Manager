@@ -183,7 +183,10 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
         <div style={{ marginTop: '12px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '6px' }}>
             <span style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Loader2 size={12} className="spin" /> Downloading & installing update...
+              <Loader2 size={12} className="spin" />
+              {progress >= 100
+                ? 'Installing update & restarting...'
+                : 'Downloading update package...'}
             </span>
             <span style={{ fontWeight: 600 }}>{progress}%</span>
           </div>

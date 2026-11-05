@@ -79,7 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       style={{
         width: '220px',
         minWidth: '220px',
-        backgroundColor: '#0d1527',
+        backgroundColor: 'var(--bg-card)',
         borderRight: '1px solid var(--border-color)',
         display: 'flex',
         flexDirection: 'column',
@@ -118,7 +118,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 padding: '8px 12px',
                 borderRadius: 'var(--radius)',
                 border: 'none',
-                backgroundColor: isActive ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                backgroundColor: isActive ? 'var(--primary-subtle)' : 'transparent',
                 color: isActive ? 'var(--primary)' : 'var(--text-muted)',
                 fontWeight: isActive ? 600 : 500,
                 fontSize: '0.85rem',
@@ -135,12 +135,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {typeof item.badge === 'number' && item.badge > 0 && (
                 <span
                   style={{
-                    backgroundColor: isActive ? 'var(--primary)' : 'rgba(255, 255, 255, 0.1)',
-                    color: isActive ? '#0f172a' : 'var(--text-muted)',
+                    backgroundColor: isActive ? 'var(--primary)' : 'var(--border-color)',
+                    color: isActive ? '#ffffff' : 'var(--text-muted)',
                     fontSize: '0.7rem',
                     fontWeight: 700,
                     padding: '2px 6px',
-                    borderRadius: '9999px',
+                    borderRadius: '4px',
                   }}
                 >
                   {item.badge}
@@ -151,7 +151,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
 
         {/* Quick Setup Wizard Launcher */}
-        <div style={{ marginTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '16px' }}>
+        <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
           <button
             onClick={onOpenWizard}
             className="btn-secondary"
@@ -164,7 +164,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               borderRadius: 'var(--radius)',
               fontSize: '0.8rem',
               border: '1px dashed var(--border-color)',
-              backgroundColor: 'rgba(255, 255, 255, 0.02)',
+              backgroundColor: 'transparent',
               color: 'var(--text-main)',
             }}
           >
@@ -177,7 +177,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Bottom Environment Status Section */}
       <div
         style={{
-          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+          borderTop: '1px solid var(--border-color)',
           paddingTop: '12px',
           display: 'flex',
           flexDirection: 'column',

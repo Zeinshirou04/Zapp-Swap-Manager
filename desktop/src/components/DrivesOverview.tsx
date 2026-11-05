@@ -1,21 +1,14 @@
 import React from 'react';
-import { Library } from '../types/api.ts';
-import { HardDrive, Zap, Database } from 'lucide-react';
+import { Game, Library } from '../types/api.ts';
+import { HardDrive, FolderKanban } from 'lucide-react';
+import { formatBytes, formatLibraryName } from '../utils/format.ts';
 
 interface DrivesOverviewProps {
   libraries: Library[];
+  games?: Game[];
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 GB';
-  const gb = bytes / (1024 * 1024 * 1024);
-  if (gb >= 1000) {
-    return `${(gb / 1024).toFixed(2)} TB`;
-  }
-  return `${gb.toFixed(1)} GB`;
-}
-
-export const DrivesOverview: React.FC<DrivesOverviewProps> = ({ libraries }) => {
+export const DrivesOverview: React.FC<DrivesOverviewProps> = ({ libraries, games = [] }) => {
   return (
     <section>
       <div
@@ -27,13 +20,16 @@ export const DrivesOverview: React.FC<DrivesOverviewProps> = ({ libraries }) => 
       >
         {libraries.map((lib) => {
           const isSSD = lib.type === 'ssd_cache';
+          const libGames = games.filter((g) => g.current_library_id === lib.id);
+          const libraryGamesSize = libGames.reduce((acc, g) => acc + g.size_bytes, 0);
+
           const usedBytes = Math.max(0, lib.total_bytes - lib.free_bytes);
           const usedPercent =
             lib.total_bytes > 0
               ? Math.min(100, Math.round((usedBytes / lib.total_bytes) * 100))
               : 0;
 
-          const color = isSSD ? 'var(--ssd-color)' : 'var(--hdd-color)';
+          const displayName = formatLibraryName(lib);
 
           return (
             <div key={lib.id} className="card">
@@ -42,53 +38,72 @@ export const DrivesOverview: React.FC<DrivesOverviewProps> = ({ libraries }) => 
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  marginBottom: '12px',
+                  marginBottom: '16px',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div
                     style={{
-                      background: `rgba(${isSSD ? '129, 140, 248' : '52, 211, 153'}, 0.15)`,
-                      color: color,
+                      background: 'var(--primary-subtle)',
+                      color: 'var(--primary)',
                       padding: '8px',
                       borderRadius: 'var(--radius)',
                       display: 'flex',
                     }}
                   >
-                    {isSSD ? <Zap size={20} /> : <Database size={20} />}
+                    <FolderKanban size={20} />
                   </div>
                   <div>
-                    <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>{lib.name}</h2>
+                    <h2 style={{ fontSize: '1.05rem', fontWeight: 600 }}>{displayName}</h2>
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      ID: {lib.id}
+                      Library ID: {lib.id} • {isSSD ? 'Fast Cache Storage' : 'Master Storage'}
                     </span>
                   </div>
                 </div>
-
-                <span className={isSSD ? 'badge badge-ssd' : 'badge badge-hdd'}>
-                  {isSSD ? 'SSD Cache (Fast)' : 'HDD Master (Cold)'}
-                </span>
               </div>
 
-              {/* Progress bar */}
+              {/* Primary Metric: Steam Library Storage Size */}
+              <div
+                style={{
+                  backgroundColor: 'var(--bg-main)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius)',
+                  padding: '12px 14px',
+                  marginBottom: '16px',
+                }}
+              >
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Library Games Storage
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '2px' }}>
+                  <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                    {formatBytes(libraryGamesSize)}
+                  </span>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    in {libGames.length} {libGames.length === 1 ? 'game' : 'games'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Secondary Metric: Entire Drive Storage */}
               <div style={{ marginBottom: '8px' }}>
                 <div
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    fontSize: '0.85rem',
+                    fontSize: '0.8rem',
                     marginBottom: '6px',
                   }}
                 >
-                  <span style={{ color: 'var(--text-muted)' }}>Storage Used</span>
-                  <span style={{ fontWeight: 600 }}>{usedPercent}%</span>
+                  <span style={{ color: 'var(--text-muted)' }}>Drive Used</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{usedPercent}%</span>
                 </div>
                 <div className="progress-bar-bg">
                   <div
                     className="progress-bar-fill"
                     style={{
                       width: `${usedPercent}%`,
-                      backgroundColor: color,
+                      backgroundColor: 'var(--primary)',
                     }}
                   />
                 </div>
@@ -103,7 +118,7 @@ export const DrivesOverview: React.FC<DrivesOverviewProps> = ({ libraries }) => 
                 }}
               >
                 <span>Free: {formatBytes(lib.free_bytes)}</span>
-                <span>Total: {formatBytes(lib.total_bytes)}</span>
+                <span>Drive Capacity: {formatBytes(lib.total_bytes)}</span>
               </div>
             </div>
           );
@@ -120,7 +135,7 @@ export const DrivesOverview: React.FC<DrivesOverviewProps> = ({ libraries }) => 
             }}
           >
             <HardDrive size={36} style={{ margin: '0 auto 12px auto', opacity: 0.5 }} />
-            <p>No Steam libraries discovered. Check core configuration.</p>
+            <p>No game libraries discovered. Use the Setup Wizard to add your games folders.</p>
           </div>
         )}
       </div>

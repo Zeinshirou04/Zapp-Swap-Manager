@@ -48,6 +48,10 @@ export async function checkUpdate(): Promise<UpdateDetails | null> {
         });
         // 3. Launch the Windows installer
         await update.install();
+        // 4. Immediately trigger relaunch so zapp-desktop exits and installer replaces files
+        await invoke('relaunch_app').catch((err) => {
+          console.warn('Failed to relaunch after update:', err);
+        });
       },
     };
   } catch (err) {

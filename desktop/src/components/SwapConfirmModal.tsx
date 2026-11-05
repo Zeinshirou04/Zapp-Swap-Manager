@@ -1,6 +1,7 @@
 import React from 'react';
 import { JobType, Library } from '../types/api.ts';
 import { AlertTriangle, HardDrive, Loader2, X } from 'lucide-react';
+import { formatBytes, formatLibraryName } from '../utils/format.ts';
 
 export interface SwapAction {
   type: JobType;
@@ -20,19 +21,10 @@ interface SwapConfirmModalProps {
 }
 
 const ACTION_META: Record<JobType, { verb: string; canFree: boolean }> = {
-  // promote copies to SSD (target SSD fills); evict frees SSD after verified backup;
-  // backup only mirrors changes: no disk impact.
   promote: { verb: 'Move to SSD', canFree: false },
   evict: { verb: 'Evict to HDD', canFree: true },
   backup: { verb: 'Backup to HDD', canFree: false },
 };
-
-function formatBytes(bytes: number): string {
-  const sign = bytes < 0 ? '-' : '';
-  const gb = Math.abs(bytes) / (1024 * 1024 * 1024);
-  if (gb >= 1000) return `${sign}${(gb / 1024).toFixed(2)} TB`;
-  return `${sign}${gb.toFixed(2)} GB`;
-}
 
 const ChecklistItem: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <li style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.85rem' }}>
@@ -89,12 +81,32 @@ export const SwapConfirmModal: React.FC<SwapConfirmModalProps> = ({
   const ssd = libraries.find((l) => l.type === 'ssd_cache');
   const hdd = libraries.find((l) => l.type === 'hdd_master');
 
-  // EVict frees space on the SSD (source); promote fills the SSD (target).
-  const ssdDelta = action.type === 'evict' ? action.sizeBytes
-    : action.type === 'promote' ? -action.sizeBytes
-    : 0;
+  // Space projections based on action type:
+  // Promote: moves HDD -> SSD (SSD fills sizeBytes, HDD frees sizeBytes)
+  // Evict: moves SSD -> HDD (SSD frees sizeBytes, HDD fills sizeBytes)
+  // Backup: copies SSD -> HDD (SSD unchanged, HDD fills sizeBytes)
+  let ssdDelta = 0;
+  let hddDelta = 0;
+
+  if (action.type === 'promote') {
+    ssdDelta = -action.sizeBytes;
+    hddDelta = action.sizeBytes;
+  } else if (action.type === 'evict') {
+    ssdDelta = action.sizeBytes;
+    hddDelta = -action.sizeBytes;
+  } else if (action.type === 'backup') {
+    ssdDelta = 0;
+    hddDelta = -action.sizeBytes;
+  }
+
   const ssdFreeBefore = ssd?.free_bytes ?? 0;
   const ssdFreeAfter = ssdFreeBefore + ssdDelta;
+
+  const hddFreeBefore = hdd?.free_bytes ?? 0;
+  const hddFreeAfter = hddFreeBefore + hddDelta;
+
+  const ssdName = ssd ? formatLibraryName(ssd) : 'SSD Library';
+  const hddName = hdd ? formatLibraryName(hdd) : 'HDD Library';
 
   return (
     <div
@@ -104,7 +116,8 @@ export const SwapConfirmModal: React.FC<SwapConfirmModalProps> = ({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(2, 6, 23, 0.7)',
+        background: 'rgba(15, 23, 42, 0.6)',
+        backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -114,18 +127,18 @@ export const SwapConfirmModal: React.FC<SwapConfirmModalProps> = ({
     >
       <div
         className="card"
-        style={{ maxWidth: '520px', width: '100%', padding: '20px', position: 'relative' }}
+        style={{ maxWidth: '520px', width: '100%', padding: '24px', position: 'relative' }}
       >
         <button
           onClick={onCancel}
           aria-label="Close"
           className="btn-secondary"
-          style={{ position: 'absolute', top: '12px', right: '12px', padding: '4px', border: 'none' }}
+          style={{ position: 'absolute', top: '16px', right: '16px', padding: '4px', border: 'none' }}
         >
           <X size={16} />
         </button>
 
-        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '4px' }}>
+        <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '4px' }}>
           Confirm Transfer — {meta.verb}
         </h2>
         <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
@@ -133,12 +146,12 @@ export const SwapConfirmModal: React.FC<SwapConfirmModalProps> = ({
         </p>
 
         {/* Drive capacity impact */}
-        <h3 style={{ fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '8px' }}>
-          Drive Space Impact
+        <h3 style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '8px', fontWeight: 600 }}>
+          Projected Drive Space
         </h3>
         {ssd && (
           <MeterRow
-            label="SSD Cache"
+            label={ssdName}
             freeBefore={ssdFreeBefore}
             freeAfter={ssdFreeAfter}
             total={ssd.total_bytes}
@@ -147,11 +160,11 @@ export const SwapConfirmModal: React.FC<SwapConfirmModalProps> = ({
         )}
         {hdd && (
           <MeterRow
-            label="HDD Master"
-            freeBefore={hdd.free_bytes}
-            freeAfter={hdd.free_bytes}
+            label={hddName}
+            freeBefore={hddFreeBefore}
+            freeAfter={hddFreeAfter}
             total={hdd.total_bytes}
-            warn={false}
+            warn={hddFreeAfter < 0}
           />
         )}
         {action.type !== 'backup' && ssdFreeAfter < 0 && (
@@ -162,10 +175,10 @@ export const SwapConfirmModal: React.FC<SwapConfirmModalProps> = ({
         )}
 
         {/* Safety guarantees */}
-        <h3 style={{ fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '8px' }}>
+        <h3 style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '8px', fontWeight: 600 }}>
           Safety Guarantees
         </h3>
-        <ul style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px', paddingLeft: 0, listStyle: 'none' }}>
+        <ul style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '20px', paddingLeft: 0, listStyle: 'none' }}>
           <ChecklistItem>
             Files are first mirrored with Robocopy and bit-for-bit verified before anything is deleted.
           </ChecklistItem>
@@ -178,23 +191,36 @@ export const SwapConfirmModal: React.FC<SwapConfirmModalProps> = ({
         </ul>
 
         {error && (
-          <div style={{ marginBottom: '12px', padding: '10px', background: 'rgba(239, 68, 68, 0.15)', borderRadius: 'var(--radius)', color: 'var(--danger)', fontSize: '0.85rem' }}>
+          <div
+            style={{
+              padding: '10px 14px',
+              backgroundColor: 'rgba(239, 68, 68, 0.12)',
+              color: 'var(--danger)',
+              borderRadius: 'var(--radius)',
+              fontSize: '0.85rem',
+              marginBottom: '16px',
+            }}
+          >
             {error}
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
           <button onClick={onCancel} className="btn-secondary" disabled={loading}>
             Cancel
           </button>
           <button
             onClick={onConfirm}
             className="btn-primary"
-            disabled={loading || (action.type !== 'backup' && ssdFreeAfter < 0)}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            disabled={loading || (action.type === 'promote' && ssdFreeAfter < 0)}
           >
-            {loading && <Loader2 size={14} className="spin" />}
-            Confirm Transfer
+            {loading ? (
+              <>
+                <Loader2 size={16} className="spin" /> Queuing...
+              </>
+            ) : (
+              'Confirm Transfer'
+            )}
           </button>
         </div>
       </div>

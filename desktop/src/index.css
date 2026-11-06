@@ -391,6 +391,17 @@ dialog {
   40%, 80% { transform: translateX(8px); }
 }
 
+@keyframes slideUpPopup {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .shake-danger {
   animation: shake 0.45s ease-in-out;
   border-color: var(--danger) !important;

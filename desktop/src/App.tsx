@@ -26,15 +26,40 @@ import { AlertTriangle, Gamepad2, Loader2, X, Wand2 } from 'lucide-react';
 
 type ConnectionStatus = 'connecting' | 'disconnected' | 'authenticated';
 
+const CACHE_KEY_GAMES = 'zapp_cache_games';
+const CACHE_KEY_LIBRARIES = 'zapp_cache_libraries';
+
+function getInitialCached<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed as T;
+      }
+    }
+  } catch {
+    // fallback
+  }
+  return fallback;
+}
+
 export const App: React.FC = () => {
   const [conn, setConn] = useState<ConnectionStatus>('connecting');
   const [showManualConnect, setShowManualConnect] = useState(false);
   const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [libraries, setLibraries] = useState<Library[]>([]);
-  const [games, setGames] = useState<Game[]>([]);
+  const [libraries, setLibraries] = useState<Library[]>(() => getInitialCached(CACHE_KEY_LIBRARIES, []));
+  const [games, setGames] = useState<Game[]>(() => getInitialCached(CACHE_KEY_GAMES, []));
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(false);
-  const [initialLoadDone, setInitialLoadDone] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(() => {
+    try {
+      const g = localStorage.getItem(CACHE_KEY_GAMES);
+      return !!(g && JSON.parse(g).length > 0);
+    } catch {
+      return false;
+    }
+  });
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -196,7 +221,9 @@ export const App: React.FC = () => {
 
   const loadData = useCallback(async () => {
     try {
-      setLoading(true);
+      // If we don't have any cached data yet, show initial loading state.
+      // Otherwise, keep existing cached data visible while revalidating silently in background.
+      setLoading((prev) => (games.length === 0 && libraries.length === 0 ? true : prev));
       const [h, libs, g, j] = await Promise.all([
         api.getHealth().catch(() => null),
         api.listLibraries().catch(() => []),
@@ -204,14 +231,28 @@ export const App: React.FC = () => {
         api.listJobs().catch(() => []),
       ]);
       setHealth(h);
-      setLibraries(libs);
-      setGames(g);
+      if (libs) {
+        setLibraries(libs);
+        try {
+          localStorage.setItem(CACHE_KEY_LIBRARIES, JSON.stringify(libs));
+        } catch {
+          // ignore storage quota issues
+        }
+      }
+      if (g) {
+        setGames(g);
+        try {
+          localStorage.setItem(CACHE_KEY_GAMES, JSON.stringify(g));
+        } catch {
+          // ignore storage quota issues
+        }
+      }
       setJobs(j);
     } finally {
       setLoading(false);
       setInitialLoadDone(true);
     }
-  }, []);
+  }, [games.length, libraries.length]);
 
   useEffect(() => {
     if (conn !== 'authenticated') return;
@@ -485,15 +526,6 @@ export const App: React.FC = () => {
         />
 
         <main className="content-pane" role="main">
-          {/* Active Transfer Progress Banner */}
-          <ActiveTransferBanner
-            runningJob={jobs.find((j) => j.status === 'running')}
-            games={games}
-            onCancel={handleCancelJob}
-            onNavigateQueue={() => navigate('queue')}
-            cancelling={actionLoading}
-          />
-
           {errorMsg && (
             <div
               style={{
@@ -686,6 +718,15 @@ export const App: React.FC = () => {
             />
           )}
         </main>
+
+        {/* Floating Bottom-Right Transfer Progress Widget */}
+        <ActiveTransferBanner
+          runningJob={jobs.find((j) => j.status === 'running')}
+          games={games}
+          onCancel={handleCancelJob}
+          onNavigateQueue={() => navigate('queue')}
+          cancelling={actionLoading}
+        />
       </div>
 
       {/* Global Modals & Dialogs */}

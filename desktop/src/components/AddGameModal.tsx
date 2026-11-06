@@ -248,7 +248,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
               />
             </div>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-              Paste full folder path (e.g. Windows Explorer &quot;Copy as Path&quot;) or type a relative folder name.
+              Full path (e.g. &quot;Copy as Path&quot;) or relative folder name.
             </span>
 
             {pathWarning && (
@@ -307,7 +307,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
                 setName(e.target.value);
                 setAutoDetectedTitle('');
               }}
-              placeholder="e.g. Arknights: Endfield, Wuthering Waves"
+              placeholder="e.g. Arknights: Endfield"
               style={{
                 width: '100%',
                 padding: '10px 12px',
@@ -352,28 +352,38 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
               <div
                 style={{
                   marginTop: '8px',
-                  padding: '8px 12px',
+                  padding: '10px 12px',
                   backgroundColor: 'var(--primary-subtle)',
                   border: '1px solid var(--primary-border)',
                   borderRadius: 'var(--radius)',
                   fontSize: '0.8rem',
                   display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
+                  flexDirection: 'column',
+                  gap: '6px',
                 }}
               >
-                <Folder size={14} style={{ color: 'var(--primary)', flexShrink: 0 }} />
-                <div style={{ wordBreak: 'break-all' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Base Parent Folder: </span>
-                  <code style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-                    {normalizePath((targetLib as any).path || '') || targetLib.name}
-                  </code>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Folder size={14} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                  <div style={{ wordBreak: 'break-all' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Base Parent Folder: </span>
+                    <code style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+                      {normalizePath(targetLib.path || '') || targetLib.name}
+                    </code>
+                  </div>
                 </div>
+                {installDir.trim() && preview.targetDisplay && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '4px', borderTop: '1px dashed var(--primary-border)' }}>
+                    <HardDrive size={14} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                    <div style={{ wordBreak: 'break-all' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Full Target Path: </span>
+                      <code style={{ fontWeight: 700, color: 'var(--primary)' }}>
+                        {preview.targetDisplay}
+                      </code>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-              The parent game storage directory. Auto-selected if pasting an absolute path above.
-            </span>
           </div>
 
           {/* Live Path Preview Card */}
@@ -381,7 +391,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
             <div
               style={{
                 padding: '10px 12px',
-                backgroundColor: 'rgba(0, 0, 0, 0.03)',
+                backgroundColor: 'var(--bg-main)',
                 borderRadius: 'var(--radius)',
                 border: '1px solid var(--border-color)',
                 fontSize: '0.8rem',
@@ -396,7 +406,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <div style={{ wordBreak: 'break-all' }}>
-                  <span style={{ fontWeight: 600, color: 'var(--primary)' }}>Target (SSD): </span>
+                  <span style={{ fontWeight: 600, color: 'var(--primary)' }}>Target ({targetLib?.type === 'ssd_cache' ? 'SSD' : 'HDD'}): </span>
                   <code>{preview.targetDisplay}</code>
                 </div>
                 {preview.backupDisplay && (

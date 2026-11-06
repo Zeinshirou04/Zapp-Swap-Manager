@@ -20,6 +20,7 @@ interface SettingsViewProps {
   onSaved?: () => void;
   appVersion?: string;
   steamRunning?: boolean;
+  onThemeChange?: (theme: 'system' | 'light' | 'dark') => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -28,6 +29,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onSaved,
   appVersion = 'v0.3.1-beta.4',
   steamRunning = false,
+  onThemeChange,
 }) => {
   const [baseUrl, setBaseUrl] = useState('http://127.0.0.1:8765');
   const [bearerToken, setBearerToken] = useState('');
@@ -54,12 +56,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         setCloseSteamOnTransfer(!!prefs.close_steam_on_transfer);
         setRelaunchSteamAfterTransfer(!!prefs.relaunch_steam_after_transfer);
         setRunOnStartup(!!prefs.run_on_startup);
-        if (prefs.theme) setTheme(prefs.theme);
+        if (prefs.theme) {
+          setTheme(prefs.theme);
+          onThemeChange?.(prefs.theme);
+        }
       })
       .catch(() => {
         // Core might be offline or using defaults
       });
-  }, []);
+  }, [onThemeChange]);
+
+  const handleThemeChange = (t: 'system' | 'light' | 'dark') => {
+    setTheme(t);
+    onThemeChange?.(t);
+  };
 
   const handleSave = async () => {
     setSaveSuccess(false);
@@ -75,6 +85,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       await api.updatePreferences(updatedPrefs).catch((err) => {
         console.warn('Failed to persist preferences to core:', err);
       });
+      localStorage.setItem('zapp_theme', theme);
       setSaveSuccess(true);
       if (onSaved) onSaved();
       setTimeout(() => setSaveSuccess(false), 3500);
@@ -127,12 +138,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '860px' }}>
       {/* Page Header */}
       <div>
-        <h2 style={{ fontSize: '1.4rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-main)' }}>
+        <h2 style={{ fontSize: '1.4rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-main)', margin: 0 }}>
           Settings & Preferences
         </h2>
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-          Configure core daemon connection, Steam transfer lifecycle, startup behavior, and application updates.
-        </p>
       </div>
 
       {saveSuccess && (
@@ -208,7 +216,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </span>
             </div>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Automate Steam client state during game migrations to prevent file lock contention and manifest sync conflicts.
+              Steam process automation during game migrations.
             </p>
           </div>
         </div>
@@ -286,7 +294,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div>
             <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>Core Service & Security</h3>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Connection parameters for the background daemon service managing SQLite and disk operations.
+              Background daemon connection parameters.
             </p>
           </div>
         </div>
@@ -426,7 +434,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div>
             <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>System & Appearance</h3>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Configure operating system startup behavior and visual preferences.
+              Startup behavior and interface theme.
             </p>
           </div>
         </div>
@@ -474,7 +482,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <button
                   key={t}
                   type="button"
-                  onClick={() => setTheme(t)}
+                  onClick={() => handleThemeChange(t)}
                   style={{
                     padding: '8px 16px',
                     fontSize: '0.85rem',
@@ -514,7 +522,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div>
             <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>App Updates</h3>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Check for official releases published via GitHub Releases.
+              Official releases via GitHub Releases.
             </p>
           </div>
         </div>

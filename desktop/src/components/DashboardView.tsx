@@ -50,35 +50,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Overview Banner */}
-      <div
-        className="card"
-        style={{
-          backgroundColor: 'var(--bg-card)',
-          border: '1px solid var(--border-color)',
-          padding: '24px 28px',
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        <div
+      {/* Top Headline */}
+      <div>
+        <h1
           style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: '3px',
-            background: 'linear-gradient(90deg, var(--primary) 0%, rgba(59, 130, 246, 0.4) 100%)',
+            fontSize: '2.1rem',
+            fontWeight: 800,
+            letterSpacing: '-0.03em',
+            color: 'var(--text-main)',
+            margin: 0,
+            lineHeight: 1.2,
           }}
-        />
-        <div>
-          <h2 style={{ fontSize: '1.35rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-main)' }}>
-            Storage Overview & Game Manager
-          </h2>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '640px' }}>
-            Seamlessly migrate, swap, and backup games between your high-speed SSD and large-capacity HDD storage without losing saves or reinstalling.
-          </p>
-        </div>
+        >
+          Storage Overview
+        </h1>
       </div>
 
       {/* Top 4 Quick Metric Cards */}
@@ -193,7 +178,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div>
             <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>Active Games on SSD</h3>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Installed and playable from your fast SSD ({ssdGames.length} {ssdGames.length === 1 ? 'game' : 'games'})
+              {ssdGames.length} {ssdGames.length === 1 ? 'game' : 'games'}
             </span>
           </div>
           <button

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { api, resolveCoverUrl } from '../api/client.ts';
 import { Game, Job, JobType, Library } from '../types/api.ts';
-import { formatBytes, formatLastPlayed, formatLibraryName, normalizePath } from '../utils/format.ts';
+import { formatBytes, formatLastPlayed, formatLibraryName, formatLibraryOptionLabel, normalizePath } from '../utils/format.ts';
 import {
   ArrowLeft,
   Settings,
@@ -45,6 +45,8 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
   // Settings form states
   const [name, setName] = useState(game.name);
   const [coverUrl, setCoverUrl] = useState(game.cover_url || '');
+  const [installDir, setInstallDir] = useState(game.install_dir);
+  const [selectedLibId, setSelectedLibId] = useState(game.current_library_id);
   const [swapEnabled, setSwapEnabled] = useState(game.swap_enabled ?? true);
   const [isNativeHdd, setIsNativeHdd] = useState(game.is_native_hdd ?? false);
   const [tagsInput, setTagsInput] = useState((game.tags || []).join(', '));
@@ -94,6 +96,8 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
   const openSettingsModal = () => {
     setName(game.name);
     setCoverUrl(game.cover_url || '');
+    setInstallDir(game.install_dir);
+    setSelectedLibId(game.current_library_id);
     setSwapEnabled(game.swap_enabled ?? true);
     setIsNativeHdd(game.is_native_hdd ?? false);
     setTagsInput((game.tags || []).join(', '));
@@ -117,6 +121,8 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
       const updated = await api.updateCustomGame(game.app_id, {
         name: name.trim() || game.name,
         cover_url: coverUrl.trim() || undefined,
+        install_dir: installDir.trim() || undefined,
+        library_id: selectedLibId || undefined,
         swap_enabled: swapEnabled,
         is_native_hdd: isNativeHdd,
         tags,
@@ -516,8 +522,8 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
           <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
             No Captures Synced Yet
           </h4>
-          <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', maxWidth: '520px' }}>
-            Screenshots and gameplay clips captured for <strong>{game.name}</strong> via ShareX or NVIDIA ShadowPlay will appear in this gallery. You will also be able to back them up to your remote cloud server.
+          <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            Screenshots and gameplay recordings for <strong>{game.name}</strong> will appear here for browsing and cloud backup.
           </p>
         </div>
       </div>
@@ -656,6 +662,76 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
                   }}
                 />
               </div>
+
+              {game.is_custom && (
+                <>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>
+                      Storage Drive / Library
+                    </label>
+                    <select
+                      value={selectedLibId}
+                      onChange={(e) => setSelectedLibId(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        backgroundColor: 'var(--bg-main)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius)',
+                        color: 'var(--text-main)',
+                        fontSize: '0.875rem',
+                      }}
+                    >
+                      {libraries.map((lib) => (
+                        <option key={lib.id} value={lib.id}>
+                          {formatLibraryOptionLabel(lib)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>
+                      Game Subfolder Name
+                    </label>
+                    <input
+                      type="text"
+                      value={installDir}
+                      onChange={(e) => setInstallDir(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        backgroundColor: 'var(--bg-main)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius)',
+                        color: 'var(--text-main)',
+                        fontSize: '0.875rem',
+                      }}
+                    />
+                    {(() => {
+                      const selLib = libraries.find((l) => l.id === selectedLibId);
+                      const baseP = normalizePath((selLib as { path?: string })?.path || '');
+                      const fullP = baseP ? `${baseP}\\${installDir.trim()}` : installDir.trim();
+                      return fullP ? (
+                        <div
+                          style={{
+                            marginTop: '6px',
+                            padding: '6px 10px',
+                            backgroundColor: 'var(--primary-subtle)',
+                            borderRadius: 'var(--radius)',
+                            border: '1px solid var(--primary-border)',
+                            fontSize: '0.78rem',
+                            wordBreak: 'break-all',
+                          }}
+                        >
+                          <span style={{ color: 'var(--text-muted)' }}>Target Directory: </span>
+                          <code style={{ fontWeight: 600, color: 'var(--primary)' }}>{fullP}</code>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                </>
+              )}
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>

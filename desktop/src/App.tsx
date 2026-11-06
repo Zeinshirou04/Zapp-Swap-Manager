@@ -63,6 +63,24 @@ export const App: React.FC = () => {
   const [history, setHistory] = useState<NavRoute[]>(['dashboard']);
   const [historyIndex, setHistoryIndex] = useState(0);
 
+  const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(() => {
+    return (localStorage.getItem('zapp_theme') as any) || 'light';
+  });
+
+  const handleThemeChange = useCallback((newTheme: 'system' | 'light' | 'dark') => {
+    setTheme(newTheme);
+    if (newTheme === 'system') {
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.setAttribute('data-theme', newTheme);
+    }
+    localStorage.setItem('zapp_theme', newTheme);
+  }, []);
+
+  useEffect(() => {
+    handleThemeChange(theme);
+  }, [handleThemeChange, theme]);
+
   const navigate = useCallback((route: NavRoute) => {
     setActiveRoute(route);
     setHistory((prev) => {
@@ -306,6 +324,7 @@ export const App: React.FC = () => {
       sizeBytes: game.size_bytes,
       targetLibraryId: target.id,
       sourceLibraryId: game.current_library_id,
+      hasHddBackup: game.has_hdd_backup,
     });
   };
 
@@ -554,12 +573,9 @@ export const App: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <h2 style={{ fontSize: '1.4rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
-                    Drives & Steam Libraries
+                  <h2 style={{ fontSize: '1.4rem', fontWeight: 700, letterSpacing: '-0.02em', margin: 0 }}>
+                    Drives & Storage
                   </h2>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                    Configured SSD cache and HDD master storage paths with real-time disk metrics.
-                  </p>
                 </div>
                 <button
                   onClick={() => setIsWizardOpen(true)}
@@ -600,6 +616,9 @@ export const App: React.FC = () => {
                           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                             ({lib.type === 'ssd_cache' ? 'Fast SSD' : 'Storage HDD'})
                           </span>
+                          {lib.path && (
+                            <code style={{ fontSize: '0.75rem' }}>{lib.path}</code>
+                          )}
                         </div>
                         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                           ID: {lib.id}
@@ -616,12 +635,9 @@ export const App: React.FC = () => {
           {activeRoute === 'queue' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div>
-                <h2 style={{ fontSize: '1.4rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
-                  Transfer Job Queue
+                <h2 style={{ fontSize: '1.4rem', fontWeight: 700, letterSpacing: '-0.02em', margin: 0 }}>
+                  Transfer Queue
                 </h2>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                  Monitor queued and active game migrations between SSD cache and HDD master storage.
-                </p>
               </div>
 
               <QueueMonitor
@@ -643,6 +659,7 @@ export const App: React.FC = () => {
               onCheckUpdates={() => handleCheckUpdates(true)}
               checkingUpdates={checkingUpdates}
               onSaved={loadData}
+              onThemeChange={handleThemeChange}
             />
           )}
         </main>

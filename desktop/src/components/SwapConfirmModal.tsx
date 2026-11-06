@@ -10,6 +10,7 @@ export interface SwapAction {
   sizeBytes: number;
   targetLibraryId: string;
   sourceLibraryId?: string;
+  hasHddBackup?: boolean;
 }
 
 interface SwapConfirmModalProps {
@@ -103,13 +104,13 @@ export const SwapConfirmModal: React.FC<SwapConfirmModalProps> = ({
 
   if (action.type === 'promote') {
     ssdDelta = -action.sizeBytes;
-    hddDelta = action.sizeBytes;
+    hddDelta = 0;
   } else if (action.type === 'evict') {
     ssdDelta = action.sizeBytes;
-    hddDelta = -action.sizeBytes;
+    hddDelta = action.hasHddBackup ? 0 : -action.sizeBytes;
   } else if (action.type === 'backup') {
     ssdDelta = 0;
-    hddDelta = -action.sizeBytes;
+    hddDelta = action.hasHddBackup ? 0 : -action.sizeBytes;
   }
 
   const ssdFreeBefore = ssd?.free_bytes ?? 0;

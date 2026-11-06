@@ -172,4 +172,18 @@ describe('computePreviewPaths', () => {
     expect(preview.targetDisplay).toBe('Games Library (E: Drive) \\ GRYPHLINK\\games\\EndField Game');
     expect(preview.backupDisplay).toBe('Games Library (O: Drive) \\ GRYPHLINK\\games\\EndField Game');
   });
+
+  it('uses lib.path directly if available without needing knownRoots', () => {
+    const targetWithDir = { ...mockLibraries[1], path: 'E:\\Games' };
+    const backupWithDir = { ...mockLibraries[2], path: 'O:\\Games' };
+    const preview = computePreviewPaths(
+      'Arknights',
+      targetWithDir,
+      [mockLibraries[0], targetWithDir, backupWithDir, mockLibraries[3]],
+      []
+    );
+
+    expect(preview.targetDisplay).toBe('E:\\Games\\Arknights');
+    expect(preview.backupDisplay).toBe('O:\\Games\\Arknights');
+  });
 });

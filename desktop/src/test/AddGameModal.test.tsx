@@ -91,7 +91,7 @@ describe('AddGameModal Component', () => {
 
     // Live preview shows resolved paths
     expect(screen.getByText(/RESOLVED GAME LOCATIONS/i)).toBeInTheDocument();
-    expect(screen.getByText('E:\\Game\\GRYPHLINK\\games\\EndField Game')).toBeInTheDocument();
+    expect(screen.getAllByText('E:\\Game\\GRYPHLINK\\games\\EndField Game').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('O:\\Game\\GRYPHLINK\\games\\EndField Game')).toBeInTheDocument();
   });
 

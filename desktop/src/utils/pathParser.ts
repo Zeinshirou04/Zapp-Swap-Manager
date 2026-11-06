@@ -165,7 +165,7 @@ export function computePreviewPaths(
     return { targetDisplay: '', backupDisplay: '' };
   }
 
-  const winDir = installDir.replace(/\//g, '\\');
+  const winDir = installDir.replace(/\//g, '\\').replace(/^[/\\]+/, '');
   const targetLabel = formatLibraryName(targetLib);
 
   const backupLib =
@@ -175,6 +175,7 @@ export function computePreviewPaths(
 
   const findRoot = (lib: Library | undefined) => {
     if (!lib) return undefined;
+    if (lib.path) return lib.path;
     const m = (lib.name || '').match(/\b([a-zA-Z]:)/i);
     if (!m) return undefined;
     const letter = m[1].toUpperCase();

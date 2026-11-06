@@ -61,12 +61,12 @@ func (h handlers) libs() []steam.Library {
 	return h.cfg.Libraries
 }
 
-// libraryJSON mirrors the Library schema in api/openapi.yaml without exposing
-// the raw filesystem path.
+// libraryJSON mirrors the Library schema in api/openapi.yaml.
 type libraryJSON struct {
 	ID         string `json:"id"`
 	Name       string `json:"name"`
 	Type       string `json:"type"`
+	Path       string `json:"path"`
 	FreeBytes  int64  `json:"free_bytes"`
 	TotalBytes int64  `json:"total_bytes"`
 }
@@ -76,6 +76,7 @@ func toLibraryJSON(l steam.Library) libraryJSON {
 		ID:         l.ID,
 		Name:       l.Name,
 		Type:       l.Type,
+		Path:       l.Path,
 		FreeBytes:  l.FreeBytes,
 		TotalBytes: l.TotalBytes,
 	}
@@ -514,6 +515,8 @@ func (h handlers) createCustomGame(w http.ResponseWriter, r *http.Request) {
 type updateCustomGameInput struct {
 	Name        string   `json:"name"`
 	CoverURL    string   `json:"cover_url"`
+	InstallDir  string   `json:"install_dir,omitempty"`
+	LibraryID   string   `json:"library_id,omitempty"`
 	SwapEnabled *bool    `json:"swap_enabled,omitempty"`
 	IsNativeHDD *bool    `json:"is_native_hdd,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
@@ -566,18 +569,50 @@ func (h handlers) updateCustomGame(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if gameDir == "" {
-		writeError(w, http.StatusNotFound, "not_found", "game folder not found on disk")
+	targetLibID := foundGame.LibraryID
+	if in.LibraryID != "" {
+		targetLibID = in.LibraryID
+	}
+	targetInstallDir := foundGame.Manifest.InstallDir
+	if in.InstallDir != "" {
+		targetInstallDir = strings.TrimPrefix(filepath.ToSlash(in.InstallDir), "/")
+	}
+
+	var targetLib *steam.Library
+	for i := range libs {
+		if libs[i].ID == targetLibID {
+			targetLib = &libs[i]
+			break
+		}
+	}
+	if targetLib == nil {
+		writeError(w, http.StatusBadRequest, "invalid_library", "target library ID not found")
 		return
+	}
+
+	targetDir := filepath.Join(targetLib.Path, filepath.FromSlash(targetInstallDir))
+	commonTarget := filepath.Join(targetLib.Path, "steamapps", "common", filepath.FromSlash(targetInstallDir))
+	if _, err := os.Stat(commonTarget); err == nil {
+		targetDir = commonTarget
+	}
+
+	if gameDir == "" {
+		gameDir = targetDir
+	}
+
+	// If directory changed, clean old zappmanifest.json from previous path
+	if gameDir != "" && !strings.EqualFold(filepath.Clean(gameDir), filepath.Clean(targetDir)) {
+		_ = os.Remove(filepath.Join(gameDir, steam.ZappManifestFilename))
 	}
 
 	zm, _ := steam.ReadZappManifest(gameDir)
 	if zm == nil {
 		zm = &steam.ZappManifest{
 			ID:         foundGame.Manifest.AppID,
-			InstallDir: foundGame.Manifest.InstallDir,
+			InstallDir: targetInstallDir,
 		}
 	}
+	zm.InstallDir = targetInstallDir
 	if in.Name != "" {
 		zm.Name = in.Name
 	}
@@ -594,15 +629,18 @@ func (h handlers) updateCustomGame(w http.ResponseWriter, r *http.Request) {
 		zm.Tags = in.Tags
 	}
 
-	if err := steam.WriteZappManifest(gameDir, *zm); err != nil {
+	if err := steam.WriteZappManifest(targetDir, *zm); err != nil {
 		writeError(w, http.StatusInternalServerError, "write_manifest_failed", err.Error())
 		return
 	}
 
 	foundGame.Manifest.Name = zm.Name
+	foundGame.Manifest.InstallDir = targetInstallDir
+	foundGame.LibraryID = targetLibID
 	foundGame.CoverURL = zm.CoverURL
 	foundGame.SwapEnabled = zm.SwapEnabled
 	foundGame.IsNativeHDD = zm.IsNativeHDD
+	foundGame.Tags = zm.Tags
 	foundGame.Tags = zm.Tags
 
 	writeJSON(w, http.StatusOK, toGameJSON(*foundGame))

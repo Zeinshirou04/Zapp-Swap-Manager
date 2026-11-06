@@ -22,6 +22,7 @@ export interface Library {
   id: string;
   name: string;
   type: LibraryType;
+  path?: string;
   total_bytes: number;
   free_bytes: number;
 }
@@ -71,6 +72,8 @@ export interface CreateCustomGameRequest {
 export interface UpdateCustomGameRequest {
   name?: string;
   cover_url?: string;
+  install_dir?: string;
+  library_id?: string;
   swap_enabled?: boolean;
   is_native_hdd?: boolean;
   tags?: string[];

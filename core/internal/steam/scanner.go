@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/vdf"
@@ -99,14 +100,31 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 				state = StateActiveSSD
 			}
 
-			// Measure true disk size if game directory on disk is larger than manifest
-			// (handles live-patcher games like Wuthering Waves, Genshin, Warframe)
 			actualDir := filepath.Join(lib.Path, "steamapps", "common", m.InstallDir)
-			if dirExists(actualDir) {
-				realSize := dirSize(actualDir)
-				if realSize > m.SizeOnDisk {
-					m.SizeOnDisk = realSize
+
+			var coverURL string
+			swapEnabled := true
+			isNativeHDD := false
+			var tags []string
+			if zm, err := ReadZappManifest(actualDir); err == nil && zm != nil {
+				if zm.Name != "" {
+					m.Name = zm.Name
 				}
+				if zm.CoverURL != "" {
+					coverURL = zm.CoverURL
+				}
+				swapEnabled = zm.SwapEnabled
+				isNativeHDD = zm.IsNativeHDD
+				tags = zm.Tags
+				// Live-patcher games with custom zappmanifest get true folder size
+				if dirExists(actualDir) {
+					realSize := dirSize(actualDir)
+					if realSize > m.SizeOnDisk {
+						m.SizeOnDisk = realSize
+					}
+				}
+			} else if m.SizeOnDisk == 0 && dirExists(actualDir) {
+				m.SizeOnDisk = dirSize(actualDir)
 			}
 
 			// Check if SSD game has an existing backup in an HDD master library
@@ -126,22 +144,6 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 				}
 			} else {
 				hasHDDBackup = true
-			}
-
-			var coverURL string
-			swapEnabled := true
-			isNativeHDD := false
-			var tags []string
-			if zm, err := ReadZappManifest(actualDir); err == nil && zm != nil {
-				if zm.Name != "" {
-					m.Name = zm.Name
-				}
-				if zm.CoverURL != "" {
-					coverURL = zm.CoverURL
-				}
-				swapEnabled = zm.SwapEnabled
-				isNativeHDD = zm.IsNativeHDD
-				tags = zm.Tags
 			}
 
 			var lastPlayed *time.Time
@@ -332,7 +334,24 @@ func CustomAppID(folderName string) string {
 	return strconv.FormatInt(val, 10)
 }
 
+type sizeCacheEntry struct {
+	size    int64
+	expires time.Time
+}
+
+var (
+	sizeCacheMu sync.RWMutex
+	sizeCache   = make(map[string]sizeCacheEntry)
+)
+
 func dirSize(path string) int64 {
+	sizeCacheMu.RLock()
+	if entry, ok := sizeCache[path]; ok && time.Now().Before(entry.expires) {
+		sizeCacheMu.RUnlock()
+		return entry.size
+	}
+	sizeCacheMu.RUnlock()
+
 	var total int64
 	_ = filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
 		if err == nil && info != nil && !info.IsDir() {
@@ -340,6 +359,14 @@ func dirSize(path string) int64 {
 		}
 		return nil
 	})
+
+	sizeCacheMu.Lock()
+	sizeCache[path] = sizeCacheEntry{
+		size:    total,
+		expires: time.Now().Add(5 * time.Minute),
+	}
+	sizeCacheMu.Unlock()
+
 	return total
 }
 

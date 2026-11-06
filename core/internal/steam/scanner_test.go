@@ -284,18 +284,36 @@ func TestScanGenericGamesDirectory(t *testing.T) {
 		{ID: "generic_ssd", Path: ssdGamesDir, Type: TypeSSDCache},
 	}
 
+	// Under Plan 040, non-Steam generic libraries omit unmanifested directories
 	games, err := ScanLibraries(libs)
 	if err != nil {
 		t.Fatalf("ScanLibraries: %v", err)
 	}
+	if len(games) != 0 {
+		t.Fatalf("unmanifested generic directory must not be auto-detected, got %d games", len(games))
+	}
 
+	// Once registered with zappmanifest.json, the game is discovered
+	zm := ZappManifest{
+		Name:        "Genshin Impact",
+		InstallDir:  "GenshinImpact",
+		SwapEnabled: true,
+	}
+	if err := WriteZappManifest(gameDir, zm); err != nil {
+		t.Fatal(err)
+	}
+
+	games, err = ScanLibraries(libs)
+	if err != nil {
+		t.Fatalf("ScanLibraries: %v", err)
+	}
 	if len(games) != 1 {
-		t.Fatalf("games count = %d, want 1", len(games))
+		t.Fatalf("games count after manifest = %d, want 1", len(games))
 	}
 
 	g := games[0]
-	if g.Manifest.Name != "GenshinImpact" || !g.IsCustom {
-		t.Errorf("game = %+v, want GenshinImpact custom", g)
+	if g.Manifest.Name != "Genshin Impact" || !g.IsCustom {
+		t.Errorf("game = %+v, want Genshin Impact custom", g)
 	}
 	if g.State != StateActiveSSD {
 		t.Errorf("state = %s, want %s", g.State, StateActiveSSD)
@@ -343,17 +361,40 @@ func TestScanNestedGenericGamesDirectory(t *testing.T) {
 		{ID: "games_ssd", Path: ssdGamesDir, Type: TypeSSDCache},
 	}
 
+	// Generic non-Steam library: unmanifested Valorant is NOT auto-detected
 	games, err := ScanLibraries(libs)
 	if err != nil {
 		t.Fatalf("ScanLibraries: %v", err)
 	}
 
-	if len(games) != 2 {
-		t.Fatalf("games count = %d, want 2; got: %+v", len(games), games)
+	if len(games) != 1 {
+		t.Fatalf("games count = %d, want 1 (only manifested Endfield); got: %+v", len(games), games)
+	}
+	if games[0].Manifest.Name != "Arknights: Endfield" {
+		t.Errorf("got %q, want Arknights: Endfield", games[0].Manifest.Name)
+	}
+
+	// Now register Valorant by adding zappmanifest.json
+	zmVal := ZappManifest{
+		ID:          "riot-games/valorant",
+		Name:        "VALORANT",
+		InstallDir:  "Riot Games/VALORANT",
+		SwapEnabled: true,
+	}
+	if err := WriteZappManifest(valorantDir, zmVal); err != nil {
+		t.Fatal(err)
+	}
+
+	games2, err := ScanLibraries(libs)
+	if err != nil {
+		t.Fatalf("ScanLibraries after manifest: %v", err)
+	}
+	if len(games2) != 2 {
+		t.Fatalf("games count after manifest = %d, want 2; got: %+v", len(games2), games2)
 	}
 
 	var foundEndfield, foundValorant bool
-	for _, g := range games {
+	for _, g := range games2 {
 		if g.Manifest.Name == "Arknights: Endfield" {
 			foundEndfield = true
 			if g.Manifest.InstallDir != "GRYPHLINK/games/EndField Game" {

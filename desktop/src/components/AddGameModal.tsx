@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../api/client.ts';
 import { Game, Library } from '../types/api.ts';
-import { X, Plus, Folder, Image, Tag, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Plus, Folder, Image, Tag, AlertCircle, Loader2, HardDrive, CheckCircle2 } from 'lucide-react';
+import { parseGamePath, computePreviewPaths } from '../utils/pathParser.ts';
+import { formatLibraryName } from '../utils/format.ts';
 
 interface AddGameModalProps {
   open: boolean;
@@ -17,16 +19,91 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
   libraries,
 }) => {
   const [name, setName] = useState('');
-  const [libraryId, setLibraryId] = useState(libraries[0]?.id || '');
+  const [pathInput, setPathInput] = useState('');
   const [installDir, setInstallDir] = useState('');
+  const [libraryId, setLibraryId] = useState(libraries[0]?.id || '');
   const [coverUrl, setCoverUrl] = useState('');
   const [swapEnabled, setSwapEnabled] = useState(true);
   const [isNativeHdd, setIsNativeHdd] = useState(false);
   const [tagsInput, setTagsInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pathWarning, setPathWarning] = useState<string | null>(null);
+  const [knownRoots, setKnownRoots] = useState<string[]>([]);
+  const [autoDetectedTitle, setAutoDetectedTitle] = useState('');
+
+  // Load known library roots on open to facilitate exact prefix matching
+  useEffect(() => {
+    if (!open) return;
+    const roots: string[] = [];
+    try {
+      const all = localStorage.getItem('zapp_all_library_paths');
+      if (all) roots.push(...JSON.parse(all));
+      const custom = localStorage.getItem('zapp_custom_library_paths');
+      if (custom) roots.push(...JSON.parse(custom));
+    } catch {
+      // ignore
+    }
+
+    api
+      .detectLibraries()
+      .then((detected) => {
+        const detectedPaths = detected.map((d) => d.path);
+        const combined = Array.from(new Set([...roots, ...detectedPaths]));
+        setKnownRoots(combined);
+      })
+      .catch(() => {
+        setKnownRoots(Array.from(new Set(roots)));
+      });
+  }, [open]);
+
+  // Reset state when opening
+  useEffect(() => {
+    if (open) {
+      setName('');
+      setPathInput('');
+      setInstallDir('');
+      setLibraryId(libraries[0]?.id || '');
+      setCoverUrl('');
+      setSwapEnabled(true);
+      setIsNativeHdd(false);
+      setTagsInput('');
+      setError(null);
+      setPathWarning(null);
+      setAutoDetectedTitle('');
+    }
+  }, [open, libraries]);
 
   if (!open) return null;
+
+  const handlePathChange = (val: string) => {
+    setPathInput(val);
+    const parsed = parseGamePath({
+      rawPath: val,
+      libraries,
+      currentLibraryId: libraryId,
+      knownRoots,
+    });
+
+    setInstallDir(parsed.installDir);
+
+    if (parsed.matchedLibraryId && parsed.isAbsolute) {
+      setLibraryId(parsed.matchedLibraryId);
+    }
+
+    if (parsed.detectedTitle && (!name.trim() || name === autoDetectedTitle)) {
+      setName(parsed.detectedTitle);
+      setAutoDetectedTitle(parsed.detectedTitle);
+    }
+
+    if (parsed.unregisteredDrive) {
+      setPathWarning(
+        `Drive ${parsed.driveLetter} is not registered in Zapp. Go to Settings > Configure Libraries to register it.`
+      );
+    } else {
+      setPathWarning(null);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +117,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
     }
     const finalDir = installDir.trim() || name.trim();
     if (!finalDir) {
-      setError('Please provide a folder name for the game.');
+      setError('Please provide a folder name or path for the game.');
       return;
     }
 
@@ -72,6 +149,9 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
     }
   };
 
+  const targetLib = libraries.find((l) => l.id === libraryId);
+  const preview = computePreviewPaths(installDir, targetLib, libraries, knownRoots);
+
   return (
     <div
       style={{
@@ -91,7 +171,9 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
         className="card"
         style={{
           width: '100%',
-          maxWidth: '520px',
+          maxWidth: '540px',
+          maxHeight: '90vh',
+          overflowY: 'auto',
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
         }}
         onClick={(e) => e.stopPropagation()}
@@ -114,7 +196,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
         </div>
 
         <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', marginBottom: '16px', lineHeight: '1.4' }}>
-          Register a game or application folder with a native Zapp manifest. Custom games can be swapped between SSD cache and HDD master just like Steam titles.
+          Register a game folder with a native Zapp manifest. Custom games can be swapped between SSD cache and HDD master just like Steam titles.
         </p>
 
         {error && (
@@ -138,6 +220,77 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
         )}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* Game Folder Path Input */}
+          <div>
+            <label
+              htmlFor="add-game-folder"
+              style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}
+            >
+              Game Folder or Path *
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Folder size={16} style={{ color: 'var(--text-muted)' }} />
+              <input
+                id="add-game-folder"
+                type="text"
+                required
+                value={pathInput}
+                onChange={(e) => handlePathChange(e.target.value)}
+                placeholder='e.g. E:\Game\GRYPHLINK\games\EndField Game or relative folder'
+                style={{
+                  flex: 1,
+                  padding: '10px 12px',
+                  background: 'var(--bg-main)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius)',
+                  color: 'var(--text-main)',
+                  fontSize: '0.875rem',
+                }}
+              />
+            </div>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+              Paste full folder path (e.g. Windows Explorer &quot;Copy as Path&quot;) or type a relative folder name.
+            </span>
+
+            {pathWarning && (
+              <div
+                style={{
+                  marginTop: '6px',
+                  padding: '6px 10px',
+                  borderRadius: 'var(--radius)',
+                  fontSize: '0.75rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'rgba(245, 158, 11, 0.1)',
+                  color: '#d97706',
+                  border: '1px solid rgba(245, 158, 11, 0.25)',
+                }}
+              >
+                <AlertCircle size={14} />
+                <span>{pathWarning}</span>
+              </div>
+            )}
+
+            {installDir && installDir !== pathInput && !pathWarning && (
+              <div
+                style={{
+                  marginTop: '6px',
+                  fontSize: '0.75rem',
+                  color: 'var(--text-muted)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <CheckCircle2 size={13} style={{ color: 'var(--primary)' }} />
+                <span>
+                  Detected subfolder: <code>{installDir}</code>
+                </span>
+              </div>
+            )}
+          </div>
+
           {/* Game Title */}
           <div>
             <label
@@ -153,11 +306,9 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
               value={name}
               onChange={(e) => {
                 setName(e.target.value);
-                if (!installDir) {
-                  setInstallDir(e.target.value);
-                }
+                setAutoDetectedTitle('');
               }}
-              placeholder="e.g. Wuthering Waves, Genshin Impact"
+              placeholder="e.g. Arknights: Endfield, Wuthering Waves"
               style={{
                 width: '100%',
                 padding: '10px 12px',
@@ -170,7 +321,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
             />
           </div>
 
-          {/* Target Library */}
+          {/* Target Drive / Library */}
           <div>
             <label
               htmlFor="add-game-library"
@@ -194,46 +345,47 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
             >
               {libraries.map((lib) => (
                 <option key={lib.id} value={lib.id}>
-                  {lib.name} ({lib.type === 'ssd_cache' ? 'Fast SSD' : 'Storage HDD'})
+                  {formatLibraryName(lib)} ({lib.type === 'ssd_cache' ? 'Fast SSD' : 'Storage HDD'})
                 </option>
               ))}
             </select>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-              Select the registered library drive (e.g. your SSD Cache or HDD Master).
+              The storage drive holding the game. Auto-selected if pasting an absolute path above.
             </span>
           </div>
 
-          {/* Folder Name */}
-          <div>
-            <label
-              htmlFor="add-game-folder"
-              style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}
+          {/* Live Path Preview Card */}
+          {installDir && preview.targetDisplay && (
+            <div
+              style={{
+                padding: '10px 12px',
+                backgroundColor: 'rgba(0, 0, 0, 0.03)',
+                borderRadius: 'var(--radius)',
+                border: '1px solid var(--border-color)',
+                fontSize: '0.8rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+              }}
             >
-              Folder Path (relative to drive library root)
-            </label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Folder size={16} style={{ color: 'var(--text-muted)' }} />
-              <input
-                id="add-game-folder"
-                type="text"
-                value={installDir}
-                onChange={(e) => setInstallDir(e.target.value)}
-                placeholder="e.g. GRYPHLINK/games/EndField Game, Riot Games/VALORANT, or WutheringWaves"
-                style={{
-                  flex: 1,
-                  padding: '10px 12px',
-                  background: 'var(--bg-main)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius)',
-                  color: 'var(--text-main)',
-                  fontSize: '0.875rem',
-                }}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                <HardDrive size={14} />
+                <span>RESOLVED GAME LOCATIONS</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ wordBreak: 'break-all' }}>
+                  <span style={{ fontWeight: 600, color: 'var(--primary)' }}>Target (SSD): </span>
+                  <code>{preview.targetDisplay}</code>
+                </div>
+                {preview.backupDisplay && (
+                  <div style={{ wordBreak: 'break-all' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Backup (HDD): </span>
+                    <code>{preview.backupDisplay}</code>
+                  </div>
+                )}
+              </div>
             </div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-              Subfolder path inside the selected library (supports nested publisher directories like <code>GRYPHLINK/games/EndField Game</code>). Creates a dedicated <code>zappmanifest.json</code> inside this directory.
-            </span>
-          </div>
+          )}
 
           {/* Cover Art URL */}
           <div>

@@ -139,6 +139,8 @@ export const LibraryWizardModal: React.FC<LibraryWizardModalProps> = ({ open, on
       setSaveError(null);
       await api.registerLibraries(selected.map((e) => ({ type: e.role as LibraryType, path: e.path })));
       try {
+        const allPaths = selected.map((e) => e.path);
+        localStorage.setItem('zapp_all_library_paths', JSON.stringify(allPaths));
         const custom = selected.filter((e) => !e.id).map((e) => e.path);
         if (custom.length > 0) {
           localStorage.setItem('zapp_custom_library_paths', JSON.stringify(custom));

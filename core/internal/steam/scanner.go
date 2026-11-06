@@ -161,10 +161,11 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 	for i := range libs {
 		lib := &libs[i]
 		commonDir := filepath.Join(lib.Path, "steamapps", "common")
-		if !dirExists(commonDir) {
+		isSteam := dirExists(commonDir)
+		if !isSteam {
 			commonDir = lib.Path
 		}
-		dirInfos := findCustomGameDirsInLib(commonDir, claimedDirs)
+		dirInfos := findCustomGameDirsInLib(commonDir, claimedDirs, isSteam)
 		for _, info := range dirInfos {
 			name := filepath.ToSlash(info.relPath)
 			nameLower := strings.ToLower(name)
@@ -362,7 +363,7 @@ type customGameDirInfo struct {
 	zm         *ZappManifest
 }
 
-func findCustomGameDirsInLib(baseDir string, claimedDirs map[string]bool) []customGameDirInfo {
+func findCustomGameDirsInLib(baseDir string, claimedDirs map[string]bool, isSteam bool) []customGameDirInfo {
 	var results []customGameDirInfo
 	if !dirExists(baseDir) {
 		return results
@@ -471,6 +472,13 @@ func findCustomGameDirsInLib(baseDir string, claimedDirs map[string]bool) []cust
 		}
 		return nil
 	})
+
+	if !isSteam {
+		// Generic non-Steam libraries: only include games with an explicit
+		// zappmanifest.json (Pass 1) or directory junctions (Pass 2).
+		// Never auto-detect arbitrary unmanifested folders as games.
+		return results
+	}
 
 	// Pass 3: Unmanifested directories
 	// Check entries at level 1: if not an ancestor of claimed paths, check if it's a container or game

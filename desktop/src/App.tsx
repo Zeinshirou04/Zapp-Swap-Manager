@@ -441,7 +441,7 @@ export const App: React.FC = () => {
           drivesCount={libraries.length}
           queueCount={jobs.filter((j) => j.status === 'running' || j.status === 'queued').length}
           steamRunning={health?.steam_running ?? false}
-          appVersion="0.3.1-beta.3"
+          appVersion="0.3.1-beta.4"
           onOpenWizard={() => setIsWizardOpen(true)}
         />
 
@@ -638,7 +638,7 @@ export const App: React.FC = () => {
           {/* View 6: Settings */}
           {activeRoute === 'settings' && (
             <SettingsView
-              appVersion={health?.version ? `v${health.version}` : 'v0.3.1-beta.3'}
+              appVersion={health?.version ? `v${health.version}` : 'v0.3.1-beta.4'}
               steamRunning={!!health?.steam_running}
               onCheckUpdates={() => handleCheckUpdates(true)}
               checkingUpdates={checkingUpdates}

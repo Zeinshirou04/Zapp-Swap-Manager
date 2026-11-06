@@ -12,8 +12,8 @@ android {
         applicationId = "com.zapp.swapmanager"
         minSdk = 26
         targetSdk = 34
-        versionCode = 7
-        versionName = "0.3.1-beta.4"
+        versionCode = 8
+        versionName = "0.3.1-beta.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

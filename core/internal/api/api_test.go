@@ -380,6 +380,21 @@ func TestBearerAuth(t *testing.T) {
 	if code, _ := doJSON(t, ts, "GET", "/health", nil, true); code != http.StatusOK {
 		t.Errorf("good token = %d", code)
 	}
+
+	// Test query parameter token auth
+	reqQueryGood, _ := http.NewRequest("GET", ts.URL+"/health?token="+testToken, nil)
+	if res, err := ts.Client().Do(reqQueryGood); err != nil || res.StatusCode != http.StatusOK {
+		t.Errorf("good query token = %v/%d, want 200", err, res.StatusCode)
+	} else {
+		res.Body.Close()
+	}
+
+	reqQueryBad, _ := http.NewRequest("GET", ts.URL+"/health?token=wrong", nil)
+	if res, err := ts.Client().Do(reqQueryBad); err != nil || res.StatusCode != http.StatusForbidden {
+		t.Errorf("bad query token = %v/%d, want 403", err, res.StatusCode)
+	} else {
+		res.Body.Close()
+	}
 }
 
 func TestNewRejectsUnconfiguredAuth(t *testing.T) {

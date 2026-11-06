@@ -90,4 +90,44 @@ describe('GameDetailView Component', () => {
     expect(screen.queryByText('Evict to HDD')).not.toBeInTheDocument();
     expect(screen.getByText('Pinned to HDD (Native)')).toBeInTheDocument();
   });
+
+  it('hot-refreshes display when game prop updates', () => {
+    const { rerender } = render(
+      <GameDetailView
+        game={mockGame}
+        libraries={mockLibraries}
+        jobs={[]}
+        onBack={vi.fn()}
+        onAction={vi.fn()}
+        actionLoading={false}
+        onGameUpdated={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Arknights: Endfield', level: 1 })).toBeInTheDocument();
+
+    const updatedGame: Game = {
+      ...mockGame,
+      name: 'Wuthering Waves',
+      cover_url: 'https://example.com/wuwa-new.jpg',
+      state: 'storage_hdd',
+      current_library_id: 'lib-hdd',
+    };
+
+    rerender(
+      <GameDetailView
+        game={updatedGame}
+        libraries={mockLibraries}
+        jobs={[]}
+        onBack={vi.fn()}
+        onAction={vi.fn()}
+        actionLoading={false}
+        onGameUpdated={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Wuthering Waves', level: 1 })).toBeInTheDocument();
+    expect(screen.getByText('Promote to SSD')).toBeInTheDocument();
+    expect(screen.getByText('Storage HDD Master')).toBeInTheDocument();
+  });
 });

@@ -72,6 +72,7 @@ export const App: React.FC = () => {
   const [updateStatusMsg, setUpdateStatusMsg] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const prevJobsRef = useRef<Record<string, string>>({});
+  const initialJobsTrackedRef = useRef(false);
   const wizardShownRef = useRef(false);
   const updateCheckDoneRef = useRef(false);
 
@@ -221,9 +222,6 @@ export const App: React.FC = () => {
 
   const loadData = useCallback(async () => {
     try {
-      // If we don't have any cached data yet, show initial loading state.
-      // Otherwise, keep existing cached data visible while revalidating silently in background.
-      setLoading((prev) => (games.length === 0 && libraries.length === 0 ? true : prev));
       const [h, libs, g, j] = await Promise.all([
         api.getHealth().catch(() => null),
         api.listLibraries().catch(() => []),
@@ -241,26 +239,49 @@ export const App: React.FC = () => {
       }
       if (g) {
         setGames(g);
+        setSelectedGame((currentSelected) => {
+          if (!currentSelected) return null;
+          const matched = g.find((game) => String(game.app_id) === String(currentSelected.app_id));
+          return matched || currentSelected;
+        });
         try {
           localStorage.setItem(CACHE_KEY_GAMES, JSON.stringify(g));
         } catch {
           // ignore storage quota issues
         }
       }
-      setJobs(j);
+      if (j) {
+        setJobs(j);
+      }
     } finally {
       setLoading(false);
       setInitialLoadDone(true);
     }
-  }, [games.length, libraries.length]);
+  }, []);
 
   useEffect(() => {
     if (conn !== 'authenticated') return;
     loadData();
-    // Auto-refresh jobs and health every 3 seconds
+    // Auto-refresh jobs and health every 3 seconds, plus periodic background revalidation
+    let ticks = 0;
     const interval = setInterval(() => {
+      ticks++;
       api.getHealth().then(setHealth).catch(() => setHealth(null));
       api.listJobs().then(setJobs).catch(() => {});
+      // Every 30 seconds (10 ticks * 3s), revalidate games & libraries quietly in background
+      if (ticks % 10 === 0) {
+        api.listLibraries().then(setLibraries).catch(() => {});
+        api.listGames().then((g) => {
+          if (g) {
+            setGames(g);
+            setSelectedGame((currentSelected) => {
+              if (!currentSelected) return null;
+              const matched = g.find((game) => String(game.app_id) === String(currentSelected.app_id));
+              return matched || currentSelected;
+            });
+          }
+        }).catch(() => {});
+      }
     }, 3000);
     return () => clearInterval(interval);
   }, [conn, loadData]);
@@ -272,9 +293,19 @@ export const App: React.FC = () => {
     }
   }, []);
 
-  // Monitor job state transitions for completion and failure toasts
+  // Monitor job state transitions for completion/failure toasts + hot data reload
   useEffect(() => {
     if (!jobs || jobs.length === 0) return;
+
+    if (!initialJobsTrackedRef.current) {
+      initialJobsTrackedRef.current = true;
+      jobs.forEach((job) => {
+        prevJobsRef.current[job.id] = job.status;
+      });
+      return;
+    }
+
+    let shouldReloadData = false;
 
     jobs.forEach((job) => {
       const prev = prevJobsRef.current[job.id];
@@ -282,28 +313,32 @@ export const App: React.FC = () => {
         const game = games.find((g) => String(g.app_id) === String(job.app_id));
         const gameName = game ? game.name : `App ID ${job.app_id}`;
 
-        if (job.status === 'succeeded' && prev === 'running') {
-          const actionText =
-            job.type === 'promote'
-              ? 'moved to fast SSD'
-              : job.type === 'evict'
-              ? 'evicted to HDD master'
-              : 'backed up to HDD master';
-          const msg = `${gameName} was successfully ${actionText}.`;
-          addToast({
-            id: `success-${job.id}-${Date.now()}`,
-            type: 'success',
-            title: 'Transfer Completed',
-            message: msg,
-          });
-          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-            try {
-              new Notification('Transfer Complete', { body: msg });
-            } catch (err) {
-              console.debug('Notification dispatch failed', err);
+        if (job.status === 'succeeded') {
+          shouldReloadData = true;
+          if (prev === 'running') {
+            const actionText =
+              job.type === 'promote'
+                ? 'moved to fast SSD'
+                : job.type === 'evict'
+                ? 'evicted to HDD master'
+                : 'backed up to HDD master';
+            const msg = `${gameName} was successfully ${actionText}.`;
+            addToast({
+              id: `success-${job.id}-${Date.now()}`,
+              type: 'success',
+              title: 'Transfer Completed',
+              message: msg,
+            });
+            if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+              try {
+                new Notification('Transfer Complete', { body: msg });
+              } catch (err) {
+                console.debug('Notification dispatch failed', err);
+              }
             }
           }
         } else if (job.status === 'failed') {
+          shouldReloadData = true;
           const errMsg = job.error || 'Transfer encountered an error.';
           addToast({
             id: `error-${job.id}-${Date.now()}`,
@@ -320,11 +355,19 @@ export const App: React.FC = () => {
               console.debug('Notification dispatch failed', err);
             }
           }
+        } else if (job.status === 'cancelled') {
+          shouldReloadData = true;
         }
+      } else if (!prev && (job.status === 'succeeded' || job.status === 'failed' || job.status === 'cancelled')) {
+        shouldReloadData = true;
       }
       prevJobsRef.current[job.id] = job.status;
     });
-  }, [jobs, games, addToast, navigate]);
+
+    if (shouldReloadData) {
+      loadData();
+    }
+  }, [jobs, games, addToast, navigate, loadData]);
 
   // Guided wizard auto-opens once ONLY when initial load completes and core has no libraries.
   useEffect(() => {
@@ -401,6 +444,12 @@ export const App: React.FC = () => {
       setActionLoading(false);
     }
   };
+
+  const handleGameUpdated = useCallback((updated: Game) => {
+    setSelectedGame(updated);
+    setGames((prev) => prev.map((g) => (String(g.app_id) === String(updated.app_id) ? updated : g)));
+    loadData();
+  }, [loadData]);
 
   const handleCancelJob = async (jobId: string) => {
     try {
@@ -590,6 +639,7 @@ export const App: React.FC = () => {
                 onAction={requestSwap}
                 actionLoading={actionLoading}
                 onRefresh={loadData}
+                onGameUpdated={handleGameUpdated}
                 onSelectGame={(g) => {
                   setSelectedGame(g);
                   navigate('game-detail');
@@ -601,7 +651,7 @@ export const App: React.FC = () => {
           {/* View 2b: Dedicated Game Detail Page */}
           {activeRoute === 'game-detail' && selectedGame && (
             <GameDetailView
-              game={games.find((g) => g.app_id === selectedGame.app_id) || selectedGame}
+              game={games.find((g) => String(g.app_id) === String(selectedGame.app_id)) || selectedGame}
               libraries={libraries}
               jobs={jobs}
               onBack={() => {
@@ -613,10 +663,7 @@ export const App: React.FC = () => {
               }}
               onAction={requestSwap}
               actionLoading={actionLoading}
-              onGameUpdated={(updated) => {
-                setSelectedGame(updated);
-                loadData();
-              }}
+              onGameUpdated={handleGameUpdated}
             />
           )}
 

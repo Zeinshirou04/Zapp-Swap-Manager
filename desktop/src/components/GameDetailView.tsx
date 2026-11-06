@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api, resolveCoverUrl } from '../api/client.ts';
 import { Game, Job, JobType, Library } from '../types/api.ts';
 import { formatBytes, formatLastPlayed, formatLibraryName, formatLibraryOptionLabel, normalizePath } from '../utils/format.ts';
@@ -41,6 +41,7 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
   const [imgFailed, setImgFailed] = useState(false);
   const [steamFallbackIdx, setSteamFallbackIdx] = useState<number | null>(() => (game.cover_url ? null : 0));
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [coverRevision, setCoverRevision] = useState(0);
 
   // Settings form states
   const [name, setName] = useState(game.name);
@@ -53,6 +54,19 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Sync state whenever the selected game or its metadata updates
+  useEffect(() => {
+    setImgFailed(false);
+    setSteamFallbackIdx(game.cover_url ? null : 0);
+    setName(game.name);
+    setCoverUrl(game.cover_url || '');
+    setInstallDir(game.install_dir);
+    setSelectedLibId(game.current_library_id);
+    setSwapEnabled(game.swap_enabled ?? true);
+    setIsNativeHdd(game.is_native_hdd ?? false);
+    setTagsInput((game.tags || []).join(', '));
+  }, [game]);
 
   const isOnSSD = game.state === 'active_ssd';
   const currentLib = libraries.find((l) => l.id === game.current_library_id);
@@ -73,7 +87,8 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
   let displayUrl: string | null = null;
   if (!imgFailed) {
     if (steamFallbackIdx === null && game.cover_url) {
-      displayUrl = resolveCoverUrl(game);
+      const bust = coverRevision > 0 ? `${game.cover_url}-${coverRevision}` : game.cover_url;
+      displayUrl = resolveCoverUrl(game, bust);
     } else if (!game.is_custom && steamFallbackIdx !== null && steamFallbackIdx < steamCapsuleUrls.length) {
       displayUrl = steamCapsuleUrls[steamFallbackIdx];
     }
@@ -128,6 +143,7 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
         tags,
       });
 
+      setCoverRevision((prev) => prev + 1);
       onGameUpdated(updated);
       setSaveSuccess(true);
       setTimeout(() => {

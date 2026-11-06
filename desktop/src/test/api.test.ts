@@ -122,5 +122,10 @@ describe('ApiClient', () => {
       is_custom: false,
     };
     expect(resolveCoverUrl(steamGameWithoutCover)).toBe('https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/3513350/header.jpg');
+
+    // Cache-busting support
+    expect(getGameCoverUrl(3513350, 'rev1')).toBe('http://127.0.0.1:8765/games/3513350/cover?token=auth-tok&v=rev1');
+    expect(resolveCoverUrl(localCoverGame, 'v2')).toBe('http://127.0.0.1:8765/games/3513350/cover?token=auth-tok&v=v2');
+    expect(resolveCoverUrl(remoteCoverGame, 'v2')).toBe('https://example.com/cover.jpg?v=v2');
   });
 });

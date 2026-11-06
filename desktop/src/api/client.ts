@@ -40,20 +40,26 @@ export function setApiConfig(config: ApiConfig): void {
   localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
-export function getGameCoverUrl(appId: number | string): string {
+export function getGameCoverUrl(appId: number | string, cacheBust?: string | number): string {
   const config = getApiConfig();
+  const sep = config.bearerToken ? '&' : '?';
+  const bustParam = cacheBust !== undefined && cacheBust !== '' ? `${sep}v=${encodeURIComponent(cacheBust)}` : '';
   if (config.bearerToken) {
-    return `${config.baseUrl}/games/${appId}/cover?token=${encodeURIComponent(config.bearerToken)}`;
+    return `${config.baseUrl}/games/${appId}/cover?token=${encodeURIComponent(config.bearerToken)}${bustParam}`;
   }
-  return `${config.baseUrl}/games/${appId}/cover`;
+  return `${config.baseUrl}/games/${appId}/cover${bustParam}`;
 }
 
-export function resolveCoverUrl(game: Game): string | null {
+export function resolveCoverUrl(game: Game, cacheBust?: string | number): string | null {
   if (game.cover_url) {
     if (game.cover_url.startsWith('http://') || game.cover_url.startsWith('https://')) {
+      if (cacheBust !== undefined && cacheBust !== '' && cacheBust !== game.cover_url) {
+        const sep = game.cover_url.includes('?') ? '&' : '?';
+        return `${game.cover_url}${sep}v=${encodeURIComponent(cacheBust)}`;
+      }
       return game.cover_url;
     }
-    return getGameCoverUrl(game.app_id);
+    return getGameCoverUrl(game.app_id, cacheBust);
   }
   if (!game.is_custom) {
     return `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${game.app_id}/header.jpg`;

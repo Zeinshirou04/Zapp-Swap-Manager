@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Game, Job, JobType } from '../types/api.ts';
 import { Database, RefreshCw, Zap, Loader2, Gamepad2, Folder } from 'lucide-react';
 import { formatBytes } from '../utils/format.ts';
@@ -23,6 +23,12 @@ export const GameCard: React.FC<GameCardProps> = ({
   const [steamFallbackIdx, setSteamFallbackIdx] = useState<number | null>(() => (game.cover_url ? null : 0));
   const isOnSSD = game.state === 'active_ssd';
 
+  // Hot-refresh cover when metadata or image changes
+  useEffect(() => {
+    setImgFailed(false);
+    setSteamFallbackIdx(game.cover_url ? null : 0);
+  }, [game.cover_url, game.app_id]);
+
   // Try custom cover URL first, then Steam CDN primary URL, then fallback CDN URL
   const steamCapsuleUrls = [
     `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${game.app_id}/header.jpg`,
@@ -33,7 +39,7 @@ export const GameCard: React.FC<GameCardProps> = ({
   let displayUrl: string | null = null;
   if (!imgFailed) {
     if (steamFallbackIdx === null && game.cover_url) {
-      displayUrl = resolveCoverUrl(game);
+      displayUrl = resolveCoverUrl(game, game.cover_url);
     } else if (!game.is_custom && steamFallbackIdx !== null && steamFallbackIdx < steamCapsuleUrls.length) {
       displayUrl = steamCapsuleUrls[steamFallbackIdx];
     }

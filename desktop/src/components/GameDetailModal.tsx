@@ -41,6 +41,8 @@ export const GameDetailModal: React.FC<GameDetailModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [coverRevision, setCoverRevision] = useState(0);
+  const [imgFailed, setImgFailed] = useState(false);
 
   useEffect(() => {
     if (game) {
@@ -51,6 +53,7 @@ export const GameDetailModal: React.FC<GameDetailModalProps> = ({
       setTagsInput((game.tags || []).join(', '));
       setIsEditing(false);
       setError(null);
+      setImgFailed(false);
     }
   }, [game]);
 
@@ -59,7 +62,8 @@ export const GameDetailModal: React.FC<GameDetailModalProps> = ({
   const isOnSSD = game.state === 'active_ssd';
   const currentLib = libraries.find((l) => l.id === game.current_library_id);
 
-  const finalCoverSrc = resolveCoverUrl(game);
+  const bust = coverRevision > 0 ? `${game.cover_url || ''}-${coverRevision}` : (game.cover_url || undefined);
+  const finalCoverSrc = resolveCoverUrl(game, bust);
 
   const handleSaveMetadata = async () => {
     setSaving(true);
@@ -80,6 +84,8 @@ export const GameDetailModal: React.FC<GameDetailModalProps> = ({
         tags,
       });
 
+      setCoverRevision((prev) => prev + 1);
+      setImgFailed(false);
       onGameUpdated(updated);
       setIsEditing(false);
       setSaveSuccess(true);
@@ -128,10 +134,11 @@ export const GameDetailModal: React.FC<GameDetailModalProps> = ({
             overflow: 'hidden',
           }}
         >
-          {finalCoverSrc ? (
+          {finalCoverSrc && !imgFailed ? (
             <img
               src={finalCoverSrc}
               alt={game.name}
+              onError={() => setImgFailed(true)}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
           ) : (

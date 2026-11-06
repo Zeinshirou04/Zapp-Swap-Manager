@@ -23,6 +23,7 @@ interface GameListProps {
   jobs?: Job[];
   onRefresh?: () => void;
   onSelectGame?: (game: Game) => void;
+  onGameUpdated?: (updated: Game) => void;
 }
 
 export const GameList: React.FC<GameListProps> = ({
@@ -33,6 +34,7 @@ export const GameList: React.FC<GameListProps> = ({
   jobs,
   onRefresh,
   onSelectGame,
+  onGameUpdated,
 }) => {
   const [search, setSearch] = useState('');
   const [filterState, setFilterState] = useState<'all' | 'active_ssd' | 'storage_hdd' | 'custom' | 'unbacked'>('all');
@@ -446,6 +448,7 @@ export const GameList: React.FC<GameListProps> = ({
         )}
         onGameUpdated={(updated) => {
           setSelectedGame(updated);
+          if (onGameUpdated) onGameUpdated(updated);
           if (onRefresh) onRefresh();
         }}
       />

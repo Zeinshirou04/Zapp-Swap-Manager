@@ -558,6 +558,9 @@ components:
           description: Human-readable label, e.g. "SSD Cache".
         type:
           $ref: '#/components/schemas/LibraryType'
+        path:
+          type: string
+          description: Whitelisted root filesystem directory path of this library.
         total_bytes:
           type: integer
           format: int64

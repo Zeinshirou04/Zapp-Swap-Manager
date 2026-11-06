@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getApiConfig, setApiConfig, api } from '../api/client.ts';
 import { Preferences } from '../types/api.ts';
 import { restartCoreDaemon } from '../api/native.ts';
@@ -21,6 +21,8 @@ interface SettingsViewProps {
   appVersion?: string;
   steamRunning?: boolean;
   onThemeChange?: (theme: 'system' | 'light' | 'dark') => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  shakeTrigger?: number;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -30,6 +32,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   appVersion = 'v0.3.1-beta.5',
   steamRunning = false,
   onThemeChange,
+  onDirtyChange,
+  shakeTrigger = 0,
 }) => {
   const [baseUrl, setBaseUrl] = useState('http://127.0.0.1:8765');
   const [bearerToken, setBearerToken] = useState('');
@@ -45,6 +49,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [runOnStartup, setRunOnStartup] = useState(false);
   const [theme, setTheme] = useState<'system' | 'light' | 'dark'>('light');
 
+  const [initialValues, setInitialValues] = useState<{
+    baseUrl: string;
+    bearerToken: string;
+    closeSteamOnTransfer: boolean;
+    relaunchSteamAfterTransfer: boolean;
+    runOnStartup: boolean;
+    theme: 'system' | 'light' | 'dark';
+  } | null>(null);
+
+  const [shaking, setShaking] = useState(false);
+
+  useEffect(() => {
+    if (shakeTrigger && shakeTrigger > 0) {
+      setShaking(true);
+      const t = setTimeout(() => setShaking(false), 500);
+      return () => clearTimeout(t);
+    }
+  }, [shakeTrigger]);
+
   useEffect(() => {
     const cfg = getApiConfig();
     setBaseUrl(cfg.baseUrl);
@@ -53,18 +76,64 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     api
       .getPreferences()
       .then((prefs) => {
-        setCloseSteamOnTransfer(!!prefs.close_steam_on_transfer);
-        setRelaunchSteamAfterTransfer(!!prefs.relaunch_steam_after_transfer);
-        setRunOnStartup(!!prefs.run_on_startup);
-        if (prefs.theme) {
-          setTheme(prefs.theme);
-          onThemeChange?.(prefs.theme);
-        }
+        const loadedTheme = prefs.theme || 'light';
+        const closeSteam = !!prefs.close_steam_on_transfer;
+        const relaunchSteam = !!prefs.relaunch_steam_after_transfer;
+        const startup = !!prefs.run_on_startup;
+
+        setCloseSteamOnTransfer(closeSteam);
+        setRelaunchSteamAfterTransfer(relaunchSteam);
+        setRunOnStartup(startup);
+        setTheme(loadedTheme);
+        onThemeChange?.(loadedTheme);
+
+        setInitialValues({
+          baseUrl: cfg.baseUrl,
+          bearerToken: cfg.bearerToken,
+          closeSteamOnTransfer: closeSteam,
+          relaunchSteamAfterTransfer: relaunchSteam,
+          runOnStartup: startup,
+          theme: loadedTheme,
+        });
       })
       .catch(() => {
-        // Core might be offline or using defaults
+        setInitialValues({
+          baseUrl: cfg.baseUrl,
+          bearerToken: cfg.bearerToken,
+          closeSteamOnTransfer: false,
+          relaunchSteamAfterTransfer: false,
+          runOnStartup: false,
+          theme: 'light',
+        });
       });
   }, [onThemeChange]);
+
+  const isDirty = useMemo(() => {
+    if (!initialValues) return false;
+    return (
+      baseUrl !== initialValues.baseUrl ||
+      bearerToken !== initialValues.bearerToken ||
+      closeSteamOnTransfer !== initialValues.closeSteamOnTransfer ||
+      relaunchSteamAfterTransfer !== initialValues.relaunchSteamAfterTransfer ||
+      runOnStartup !== initialValues.runOnStartup ||
+      theme !== initialValues.theme
+    );
+  }, [initialValues, baseUrl, bearerToken, closeSteamOnTransfer, relaunchSteamAfterTransfer, runOnStartup, theme]);
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  const handleDiscard = () => {
+    if (!initialValues) return;
+    setBaseUrl(initialValues.baseUrl);
+    setBearerToken(initialValues.bearerToken);
+    setCloseSteamOnTransfer(initialValues.closeSteamOnTransfer);
+    setRelaunchSteamAfterTransfer(initialValues.relaunchSteamAfterTransfer);
+    setRunOnStartup(initialValues.runOnStartup);
+    setTheme(initialValues.theme);
+    onThemeChange?.(initialValues.theme);
+  };
 
   const handleThemeChange = (t: 'system' | 'light' | 'dark') => {
     setTheme(t);
@@ -86,6 +155,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         console.warn('Failed to persist preferences to core:', err);
       });
       localStorage.setItem('zapp_theme', theme);
+      setInitialValues({
+        baseUrl,
+        bearerToken,
+        closeSteamOnTransfer,
+        relaunchSteamAfterTransfer,
+        runOnStartup,
+        theme,
+      });
       setSaveSuccess(true);
       if (onSaved) onSaved();
       setTimeout(() => setSaveSuccess(false), 3500);
@@ -142,6 +219,51 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           Settings & Preferences
         </h2>
       </div>
+
+      {isDirty && (
+        <div
+          className={`danger-banner ${shaking ? 'shake-danger' : ''}`}
+          style={{ transition: 'all 0.2s ease' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <AlertCircle size={20} style={{ flexShrink: 0 }} />
+            <div>
+              <div style={{ fontWeight: 600 }}>Unsaved Changes</div>
+              <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
+                You have unsaved changes. Please save or discard them before leaving this page.
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={handleDiscard}
+              className="btn-secondary"
+              style={{
+                padding: '6px 12px',
+                fontSize: '0.8rem',
+                borderColor: 'var(--danger)',
+                color: 'var(--danger)',
+              }}
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="btn-primary"
+              style={{
+                padding: '6px 14px',
+                fontSize: '0.8rem',
+                backgroundColor: 'var(--danger)',
+                borderColor: 'var(--danger)',
+              }}
+            >
+              Save Changes
+            </button>
+          </div>
+        </div>
+      )}
 
       {saveSuccess && (
         <div
@@ -562,12 +684,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* Global Save Button */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '8px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', paddingTop: '8px' }}>
+        {isDirty && (
+          <button
+            type="button"
+            onClick={handleDiscard}
+            className="btn-secondary"
+            style={{ padding: '10px 18px', fontSize: '0.9rem' }}
+          >
+            Discard Changes
+          </button>
+        )}
         <button
           type="button"
           onClick={handleSave}
           className="btn-primary"
-          style={{ padding: '10px 24px', fontSize: '0.9rem', fontWeight: 600 }}
+          style={{
+            padding: '10px 24px',
+            fontSize: '0.9rem',
+            fontWeight: 600,
+            ...(isDirty ? { boxShadow: '0 0 0 2px var(--primary-border)' } : {}),
+          }}
         >
           Save All Changes
         </button>

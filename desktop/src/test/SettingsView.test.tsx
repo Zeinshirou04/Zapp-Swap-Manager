@@ -74,4 +74,31 @@ describe('SettingsView Component', () => {
       expect(onSavedMock).toHaveBeenCalled();
     });
   });
+
+  it('triggers onDirtyChange and shows danger banner when preferences are modified', async () => {
+    const onDirtyChangeMock = vi.fn();
+    render(<SettingsView onDirtyChange={onDirtyChangeMock} />);
+
+    await waitFor(() => {
+      expect(api.getPreferences).toHaveBeenCalled();
+    });
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    fireEvent.click(checkboxes[0]); // Toggle first checkbox
+
+    await waitFor(() => {
+      expect(onDirtyChangeMock).toHaveBeenCalledWith(true);
+      expect(screen.getByText('Unsaved Changes')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^discard$/i })).toBeInTheDocument();
+    });
+
+    // Clicking discard reverts dirty state
+    const discardBtn = screen.getByRole('button', { name: /^discard$/i });
+    fireEvent.click(discardBtn);
+
+    await waitFor(() => {
+      expect(onDirtyChangeMock).toHaveBeenCalledWith(false);
+      expect(screen.queryByText('Unsaved Changes')).not.toBeInTheDocument();
+    });
+  });
 });

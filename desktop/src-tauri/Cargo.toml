@@ -1,6 +1,6 @@
 [package]
 name = "zapp-desktop"
-version = "0.3.1-beta.5"
+version = "0.3.1-beta.6"
 description = "Zapp Swap Manager Desktop Dashboard"
 authors = ["Zeinshirou04"]
 edition = "2021"

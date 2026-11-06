@@ -248,13 +248,14 @@ async fn install_update_now(
     // 4. Download and install with live progress streaming
     let app_clone = app.clone();
     let mut downloaded_bytes: usize = 0;
+    let _ = app.emit("update-progress", UpdateProgressPayload { percent: 1 });
     update
         .download_and_install(
             move |chunk_length, content_length| {
                 downloaded_bytes += chunk_length;
                 if let Some(total) = content_length {
                     if total > 0 {
-                        let pct = ((downloaded_bytes as f64 / total as f64) * 100.0).min(100.0) as u8;
+                        let pct = ((downloaded_bytes as f64 / total as f64) * 100.0).clamp(1.0, 99.0) as u8;
                         let _ = app_clone.emit("update-progress", UpdateProgressPayload { percent: pct });
                     }
                 }

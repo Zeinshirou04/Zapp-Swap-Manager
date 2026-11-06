@@ -186,7 +186,9 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
               <Loader2 size={12} className="spin" />
               {progress >= 100
                 ? 'Installing update & restarting...'
-                : 'Downloading update package...'}
+                : progress > 0
+                ? 'Downloading update package...'
+                : 'Connecting to update server...'}
             </span>
             <span style={{ fontWeight: 600 }}>{progress}%</span>
           </div>
@@ -194,7 +196,7 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
             <div
               className="progress-bar-fill"
               style={{
-                width: `${progress}%`,
+                width: `${Math.max(progress, progress === 0 ? 3 : progress)}%`,
                 backgroundColor: 'var(--primary)',
               }}
             />
@@ -224,7 +226,16 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
       )}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '14px' }}>
-        {!downloading && !readyToRelaunch && (
+        {error && !downloading && (
+          <button
+            onClick={handleUpdate}
+            className="btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', padding: '6px 14px' }}
+          >
+            <Download size={14} /> Retry Update
+          </button>
+        )}
+        {!downloading && !readyToRelaunch && !error && (
           <button
             onClick={handleUpdate}
             className="btn-primary"

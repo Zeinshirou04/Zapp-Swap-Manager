@@ -34,7 +34,7 @@ jobs:
             }
             $tagVersion = $tagVersion.TrimStart("v")
             if ($tagVersion -eq "" -or $tagVersion -eq "main") {
-              $tagVersion = "0.3.1-beta.4"
+              $tagVersion = "0.3.1-beta.5"
             }
             go build -v -ldflags="-s -w -X main.Version=$tagVersion" -o ../dist/zapp-core.exe ./cmd/zapp-core
             cd ..
@@ -105,16 +105,19 @@ jobs:
               }
               # Promote installers, latest.json, and signature files to dist-desktop root for release publishing
               Get-ChildItem -Path "src-tauri/target/release/bundle" -Include "*.msi","*-setup.exe" -Recurse | ForEach-Object {
-                Copy-Item -Path $_.FullName -Destination "../dist-desktop/" -Force
+                $targetName = $_.Name.Replace(" ", ".")
+                Copy-Item -Path $_.FullName -Destination "../dist-desktop/$targetName" -Force
               }
               Get-ChildItem -Path "src-tauri/target/release/bundle" -Filter "latest.json" -Recurse | ForEach-Object {
                 Copy-Item -Path $_.FullName -Destination "../dist-desktop/latest.json" -Force
               }
               Get-ChildItem -Path "src-tauri/target/release/bundle" -Filter "*.sig" -Recurse | ForEach-Object {
-                Copy-Item -Path $_.FullName -Destination "../dist-desktop/" -Force
+                $targetName = $_.Name.Replace(" ", ".")
+                Copy-Item -Path $_.FullName -Destination "../dist-desktop/$targetName" -Force
               }
               Get-ChildItem -Path "src-tauri/target/release/bundle" -Filter "*.zip" -Recurse | ForEach-Object {
-                Copy-Item -Path $_.FullName -Destination "../dist-desktop/" -Force
+                $targetName = $_.Name.Replace(" ", ".")
+                Copy-Item -Path $_.FullName -Destination "../dist-desktop/$targetName" -Force
               }
 
               # Generate latest.json manifest for Tauri cloud auto-updater
@@ -130,14 +133,14 @@ jobs:
                 }
                 $relTag = $relTag.TrimStart("v")
                 if ($relTag -eq "" -or $relTag -eq "main") {
-                  $relTag = "0.3.1-beta.4"
+                  $relTag = "0.3.1-beta.5"
                 }
 
                 $setupFile = Get-ChildItem -Path "src-tauri/target/release/bundle/nsis" -Filter "*-setup.exe" -Recurse | Select-Object -First 1
                 if (-not $setupFile) {
                   $setupFile = Get-ChildItem -Path "src-tauri/target/release/bundle" -Filter "*-setup.exe" -Recurse | Select-Object -First 1
                 }
-                $installerName = if ($setupFile) { $setupFile.Name } else { "Zapp.Swap.Manager_${relTag}_x64-setup.exe" }
+                $installerName = if ($setupFile) { $setupFile.Name.Replace(" ", ".") } else { "Zapp.Swap.Manager_${relTag}_x64-setup.exe" }
 
                 $latestObj = [ordered]@{
                   version = $relTag

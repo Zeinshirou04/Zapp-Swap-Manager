@@ -62,6 +62,8 @@ export const App: React.FC = () => {
   const [activeRoute, setActiveRoute] = useState<NavRoute>('dashboard');
   const [history, setHistory] = useState<NavRoute[]>(['dashboard']);
   const [historyIndex, setHistoryIndex] = useState(0);
+  const [settingsDirty, setSettingsDirty] = useState(false);
+  const [shakeSettingsTrigger, setShakeSettingsTrigger] = useState(0);
 
   const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(() => {
     return (localStorage.getItem('zapp_theme') as any) || 'light';
@@ -82,6 +84,10 @@ export const App: React.FC = () => {
   }, [handleThemeChange, theme]);
 
   const navigate = useCallback((route: NavRoute) => {
+    if (activeRoute === 'settings' && route !== 'settings' && settingsDirty) {
+      setShakeSettingsTrigger((prev) => prev + 1);
+      return;
+    }
     setActiveRoute(route);
     setHistory((prev) => {
       const next = prev.slice(0, historyIndex + 1);
@@ -91,23 +97,31 @@ export const App: React.FC = () => {
       return next;
     });
     setHistoryIndex((prev) => prev + 1);
-  }, [historyIndex]);
+  }, [activeRoute, historyIndex, settingsDirty]);
 
   const goBack = useCallback(() => {
+    if (activeRoute === 'settings' && settingsDirty) {
+      setShakeSettingsTrigger((prev) => prev + 1);
+      return;
+    }
     if (historyIndex > 0) {
       const newIndex = historyIndex - 1;
       setHistoryIndex(newIndex);
       setActiveRoute(history[newIndex]);
     }
-  }, [historyIndex, history]);
+  }, [activeRoute, historyIndex, history, settingsDirty]);
 
   const goForward = useCallback(() => {
+    if (activeRoute === 'settings' && settingsDirty) {
+      setShakeSettingsTrigger((prev) => prev + 1);
+      return;
+    }
     if (historyIndex < history.length - 1) {
       const newIndex = historyIndex + 1;
       setHistoryIndex(newIndex);
       setActiveRoute(history[newIndex]);
     }
-  }, [historyIndex, history]);
+  }, [activeRoute, historyIndex, history, settingsDirty]);
 
   // Check for updates (background on startup, or manual via button)
   const handleCheckUpdates = useCallback(async (manual = false) => {
@@ -461,7 +475,13 @@ export const App: React.FC = () => {
           queueCount={jobs.filter((j) => j.status === 'running' || j.status === 'queued').length}
           steamRunning={health?.steam_running ?? false}
           appVersion="0.3.1-beta.5"
-          onOpenWizard={() => setIsWizardOpen(true)}
+          onOpenWizard={() => {
+            if (activeRoute === 'settings' && settingsDirty) {
+              setShakeSettingsTrigger((prev) => prev + 1);
+              return;
+            }
+            setIsWizardOpen(true);
+          }}
         />
 
         <main className="content-pane" role="main">
@@ -642,6 +662,7 @@ export const App: React.FC = () => {
 
               <QueueMonitor
                 jobs={jobs}
+                games={games}
                 onCancelJob={handleCancelJob}
                 cancelling={actionLoading}
               />
@@ -660,6 +681,8 @@ export const App: React.FC = () => {
               checkingUpdates={checkingUpdates}
               onSaved={loadData}
               onThemeChange={handleThemeChange}
+              onDirtyChange={setSettingsDirty}
+              shakeTrigger={shakeSettingsTrigger}
             />
           )}
         </main>

@@ -385,4 +385,32 @@ dialog {
   color: #ffffff;
 }
 
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+
+.shake-danger {
+  animation: shake 0.45s ease-in-out;
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.35) !important;
+}
+
+.danger-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background-color: rgba(220, 38, 38, 0.12);
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  border-left: 4px solid var(--danger);
+  border-radius: var(--radius);
+  color: var(--danger);
+  font-size: 0.875rem;
+  font-weight: 500;
+  gap: 12px;
+}
+
+
 

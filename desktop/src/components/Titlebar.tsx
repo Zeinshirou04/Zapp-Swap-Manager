@@ -12,7 +12,6 @@ import {
   RotateCw,
   Power,
   Sparkles,
-  Lock,
   Minus,
   Square,
   X,
@@ -39,7 +38,7 @@ export interface TitlebarProps {
 }
 
 export const Titlebar: React.FC<TitlebarProps> = ({
-  currentRoute,
+  currentRoute: _currentRoute,
   canGoBack,
   canGoForward,
   onGoBack,
@@ -231,25 +230,6 @@ export const Titlebar: React.FC<TitlebarProps> = ({
           >
             <RefreshCw size={14} className={loading ? 'spin' : ''} />
           </button>
-        </div>
-
-        {/* Browser-style Omnibox / Route Pill */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '4px 12px',
-            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            borderRadius: '9999px',
-            color: 'var(--text-muted)',
-            fontSize: '0.75rem',
-            marginLeft: '6px',
-          }}
-        >
-          <Lock size={12} style={{ color: 'var(--primary)' }} />
-          <span>zapp://{currentRoute}</span>
         </div>
       </div>
 

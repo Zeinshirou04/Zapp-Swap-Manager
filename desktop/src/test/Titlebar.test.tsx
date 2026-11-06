@@ -23,10 +23,9 @@ describe('Titlebar Component', () => {
     onClose: vi.fn(),
   };
 
-  it('renders omnibox route, back button, and home button', () => {
+  it('renders titlebar, back button, and home button', () => {
     render(<Titlebar {...defaultProps} />);
 
-    expect(screen.getByText('zapp://dashboard')).toBeInTheDocument();
     expect(screen.getByText('Zapp')).toBeInTheDocument();
     expect(screen.getByText('Core v0.2.6')).toBeInTheDocument();
 

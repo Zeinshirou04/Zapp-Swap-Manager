@@ -8,7 +8,6 @@ import {
   HardDrive,
   Layers,
   ArrowRight,
-  FolderOpen,
   FolderKanban,
 } from 'lucide-react';
 import { formatBytes, formatLibraryName } from '../utils/format.ts';
@@ -21,6 +20,7 @@ export interface DashboardViewProps {
   onAction: (game: Game, type: JobType) => void;
   actionLoading: boolean;
   onOpenWizard: () => void;
+  onSelectGame?: (game: Game) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -30,7 +30,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigate,
   onAction,
   actionLoading,
-  onOpenWizard,
+  onOpenWizard: _onOpenWizard,
+  onSelectGame,
 }) => {
   const ssdLib = libraries.find((l) => l.type === 'ssd_cache');
   const hddLib = libraries.find((l) => l.type === 'hdd_master');
@@ -55,28 +56,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         style={{
           backgroundColor: 'var(--bg-card)',
           border: '1px solid var(--border-color)',
-          padding: '24px',
+          padding: '24px 28px',
           position: 'relative',
+          overflow: 'hidden',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-main)' }}>
-              Storage Overview & Game Manager
-            </h2>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '600px' }}>
-              Seamlessly swap and backup games between your SSD and HDD storage without reinstalling.
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button onClick={() => onNavigate('games')} className="btn-primary" style={{ display: 'flex', gap: '6px' }}>
-              <Gamepad2 size={16} /> Browse Games
-            </button>
-            <button onClick={onOpenWizard} className="btn-secondary" style={{ display: 'flex', gap: '6px' }}>
-              <FolderOpen size={16} /> Configure Drives
-            </button>
-          </div>
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '3px',
+            background: 'linear-gradient(90deg, var(--primary) 0%, rgba(59, 130, 246, 0.4) 100%)',
+          }}
+        />
+        <div>
+          <h2 style={{ fontSize: '1.35rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-main)' }}>
+            Storage Overview & Game Manager
+          </h2>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '640px' }}>
+            Seamlessly migrate, swap, and backup games between your high-speed SSD and large-capacity HDD storage without losing saves or reinstalling.
+          </p>
         </div>
       </div>
 
@@ -230,6 +231,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 game={game}
                 onAction={onAction}
                 actionLoading={actionLoading}
+                onClick={() => onSelectGame?.(game)}
                 activeJob={jobs.find(
                   (j) =>
                     (j.status === 'running' || j.status === 'queued') &&

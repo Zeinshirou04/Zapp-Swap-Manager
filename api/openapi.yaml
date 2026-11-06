@@ -599,6 +599,11 @@ components:
           type: string
           format: date-time
           nullable: true
+        last_played:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last time the game was launched or played.
         backup_clean:
           type: boolean
           description: True only if build_id is unchanged and the last incremental backup found nothing to copy.

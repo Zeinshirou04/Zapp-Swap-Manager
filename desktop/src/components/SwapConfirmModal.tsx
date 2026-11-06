@@ -9,6 +9,7 @@ export interface SwapAction {
   title: string;
   sizeBytes: number;
   targetLibraryId: string;
+  sourceLibraryId?: string;
 }
 
 interface SwapConfirmModalProps {
@@ -78,8 +79,20 @@ export const SwapConfirmModal: React.FC<SwapConfirmModalProps> = ({
   if (!action) return null;
 
   const meta = ACTION_META[action.type];
-  const ssd = libraries.find((l) => l.type === 'ssd_cache');
-  const hdd = libraries.find((l) => l.type === 'hdd_master');
+  const targetLib =
+    libraries.find((l) => l.id === action.targetLibraryId) ||
+    (action.type === 'promote'
+      ? libraries.find((l) => l.type === 'ssd_cache')
+      : libraries.find((l) => l.type === 'hdd_master'));
+
+  const sourceLib =
+    libraries.find((l) => l.id === action.sourceLibraryId) ||
+    (action.type === 'promote'
+      ? libraries.find((l) => l.type === 'hdd_master')
+      : libraries.find((l) => l.type === 'ssd_cache'));
+
+  const ssd = action.type === 'promote' ? targetLib : sourceLib;
+  const hdd = action.type === 'promote' ? sourceLib : targetLib;
 
   // Space projections based on action type:
   // Promote: moves HDD -> SSD (SSD fills sizeBytes, HDD frees sizeBytes)

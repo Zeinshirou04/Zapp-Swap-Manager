@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api/client.ts';
 import { DetectedLibrary, DriveType, LibraryType } from '../types/api.ts';
-import { Database, FolderOpen, Loader2, Plus, Search, X, Zap } from 'lucide-react';
+import { Database, FolderOpen, HardDrive, Loader2, Plus, Search, X, Zap } from 'lucide-react';
+import { formatBytes, normalizePath } from '../utils/format.ts';
 
 interface LibraryWizardModalProps {
   open: boolean;
@@ -16,13 +17,6 @@ interface WizardEntry extends DetectedLibrary {
 }
 
 const STEPS = ['Detect Libraries', 'Assign Drive Roles', 'Save & Scan'];
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '—';
-  const gb = bytes / (1024 * 1024 * 1024);
-  if (gb >= 1000) return `${(gb / 1024).toFixed(2)} TB`;
-  return `${gb.toFixed(1)} GB`;
-}
 
 export const LibraryWizardModal: React.FC<LibraryWizardModalProps> = ({ open, onClose, onSaved }) => {
   const [step, setStep] = useState(1);
@@ -65,12 +59,14 @@ export const LibraryWizardModal: React.FC<LibraryWizardModalProps> = ({ open, on
 
         // 1. Detected Steam libraries (pre-select role if already registered)
         for (const lib of detected) {
-          const norm = lib.path.toLowerCase();
+          const normPath = normalizePath(lib.path);
+          const norm = normPath.toLowerCase();
           if (!seen.has(norm)) {
             seen.add(norm);
             const matched = existingById.get(lib.id);
             merged.push({
               ...lib,
+              path: normPath,
               selected: true,
               role: matched ? matched.type : null,
             });
@@ -79,12 +75,13 @@ export const LibraryWizardModal: React.FC<LibraryWizardModalProps> = ({ open, on
 
         // 2. Previously entered custom paths from localStorage
         for (const p of customPaths) {
-          const norm = p.toLowerCase();
+          const normPath = normalizePath(p);
+          const norm = normPath.toLowerCase();
           if (!seen.has(norm)) {
             seen.add(norm);
             merged.push({
               id: '',
-              path: p,
+              path: normPath,
               drive_type: 'unknown' as DriveType,
               free_bytes: 0,
               total_bytes: 0,
@@ -105,7 +102,7 @@ export const LibraryWizardModal: React.FC<LibraryWizardModalProps> = ({ open, on
   const selected = entries.filter((e) => e.selected);
 
   const addManualPath = () => {
-    const p = manualPath.trim();
+    const p = normalizePath(manualPath.trim());
     if (!p || entries.some((e) => e.path.toLowerCase() === p.toLowerCase())) return;
     setEntries((prev) => [
       ...prev,
@@ -175,23 +172,63 @@ export const LibraryWizardModal: React.FC<LibraryWizardModalProps> = ({ open, on
         padding: '20px',
       }}
     >
-      <div className="card" style={{ maxWidth: '640px', width: '100%', padding: '20px', position: 'relative' }}>
+      <div
+        className="card"
+        style={{
+          maxWidth: '640px',
+          width: '100%',
+          padding: '28px',
+          position: 'relative',
+          borderRadius: '16px',
+          boxShadow: '0 20px 30px -10px rgba(0, 0, 0, 0.3)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '4px',
+            background: 'linear-gradient(90deg, #1e3a8a 0%, #2563eb 100%)',
+          }}
+        />
+
         <button
           onClick={onClose}
           aria-label="Close"
           className="btn-secondary"
-          style={{ position: 'absolute', top: '12px', right: '12px', padding: '4px', border: 'none' }}
+          style={{ position: 'absolute', top: '16px', right: '16px', padding: '6px', border: 'none' }}
         >
           <X size={16} />
         </button>
 
-        <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Configure Steam Libraries</h2>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
-          Step {step} of 3: {STEPS[step - 1]}
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+          <div
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '8px',
+              backgroundColor: 'var(--primary-subtle)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--primary)',
+            }}
+          >
+            <HardDrive size={20} />
+          </div>
+          <div>
+            <h2 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>Configure Storage Drives</h2>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
+              Step {step} of 3: {STEPS[step - 1]}
+            </p>
+          </div>
+        </div>
 
         {/* Step indicator */}
-        <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', marginTop: '12px' }}>
           {STEPS.map((s, i) => (
             <div
               key={s}

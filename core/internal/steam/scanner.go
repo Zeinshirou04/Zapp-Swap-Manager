@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/vdf"
 )
@@ -33,6 +34,7 @@ type Game struct {
 	HasHDDBackup bool
 	IsNativeHDD  bool
 	Tags         []string
+	LastPlayed   *time.Time
 }
 
 type customCandidate struct {
@@ -142,6 +144,12 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 				tags = zm.Tags
 			}
 
+			var lastPlayed *time.Time
+			if m.LastPlayed > 0 {
+				t := time.Unix(m.LastPlayed, 0).UTC()
+				lastPlayed = &t
+			}
+
 			games = append(games, Game{
 				Manifest:     m,
 				State:        state,
@@ -152,6 +160,7 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 				HasHDDBackup: hasHDDBackup,
 				IsNativeHDD:  isNativeHDD,
 				Tags:         tags,
+				LastPlayed:   lastPlayed,
 			})
 		}
 	}
@@ -205,6 +214,11 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 				tags = zm.Tags
 			}
 
+			var lastPlayed *time.Time
+			if zm != nil && zm.LastPlayed != nil {
+				lastPlayed = zm.LastPlayed
+			}
+
 			cand := customCandidate{
 				game: Game{
 					Manifest: Manifest{
@@ -222,6 +236,7 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 					SwapEnabled:  swapEnabled,
 					IsNativeHDD:  isNativeHDD,
 					Tags:         tags,
+					LastPlayed:   lastPlayed,
 				},
 				isJunction: isJunc,
 				libType:    lib.Type,

@@ -5,17 +5,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // ZappManifest represents custom metadata for non-Steam games and library entries.
 type ZappManifest struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	InstallDir  string   `json:"install_dir"`
-	CoverURL    string   `json:"cover_url,omitempty"`
-	SwapEnabled bool     `json:"swap_enabled"`
-	IsNativeHDD bool     `json:"is_native_hdd"`
-	Tags        []string `json:"tags,omitempty"`
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	InstallDir  string     `json:"install_dir"`
+	CoverURL    string     `json:"cover_url,omitempty"`
+	SwapEnabled bool       `json:"swap_enabled"`
+	IsNativeHDD bool       `json:"is_native_hdd"`
+	Tags        []string   `json:"tags,omitempty"`
+	LastPlayed  *time.Time `json:"last_played,omitempty"`
 }
 
 const ZappManifestFilename = "zappmanifest.json"

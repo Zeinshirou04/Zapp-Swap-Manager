@@ -37,6 +37,7 @@ export interface Game {
   current_library_id: string;
   build_id: string;
   last_backup_time: string | null;
+  last_played?: string | null;
   backup_clean: boolean;
   is_custom?: boolean;
   cover_url?: string | null;

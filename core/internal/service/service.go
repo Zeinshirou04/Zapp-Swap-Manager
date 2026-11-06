@@ -82,11 +82,13 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 	}
 
 	libs := &libRegistry{list: cfg.Libraries}
+	var q *queue.Queue
 	if executor == nil {
-		executor = defaultExecutor(libs.Get, getPrefs)
+		executor = defaultExecutor(libs.Get, getPrefs, func() *queue.Queue { return q })
 	}
 
-	q, err := queue.New(cfg.DBPath, executor)
+	var err error
+	q, err = queue.New(cfg.DBPath, executor)
 	if err != nil {
 		return nil, fmt.Errorf("initializing queue at %q: %w", cfg.DBPath, err)
 	}
@@ -152,7 +154,7 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 	}, nil
 }
 
-func defaultExecutor(whitelist func() []steam.Library, prefFn func() config.Preferences) queue.Executor {
+func defaultExecutor(whitelist func() []steam.Library, prefFn func() config.Preferences, qFn func() *queue.Queue) queue.Executor {
 	return func(ctx context.Context, job queue.Job, step queue.StepFunc) error {
 		prefs := config.Preferences{}
 		if prefFn != nil {
@@ -208,7 +210,15 @@ func defaultExecutor(whitelist func() []steam.Library, prefFn func() config.Pref
 		}
 
 		manifestName := fmt.Sprintf("appmanifest_%s.acf", job.AppID)
-		opts := transfer.Options{}
+		opts := transfer.Options{
+			ProgressFn: func(bytesTransferred, totalBytes int64, percent float64) {
+				if qFn != nil {
+					if qInst := qFn(); qInst != nil {
+						_ = qInst.UpdateProgress(job.ID, percent, bytesTransferred, totalBytes)
+					}
+				}
+			},
+		}
 
 		switch job.Type {
 		case queue.TypePromote:

@@ -216,6 +216,15 @@ func (q *Queue) CancelJob(id string) error {
 	}
 }
 
+// UpdateProgress records in-flight progress metrics for a running job.
+func (q *Queue) UpdateProgress(id string, progressPercent float64, bytesTransferred, totalBytes int64) error {
+	_, err := q.db.Exec(`UPDATE jobs
+		SET progress_percent = ?, bytes_transferred = ?, total_bytes = ?
+		WHERE id = ? AND status = ?`,
+		progressPercent, bytesTransferred, totalBytes, id, StatusRunning)
+	return err
+}
+
 // jobColumns is the projection shared by queries.
 const jobColumns = `id, type, app_id, target_library_id, status, progress_percent,
 	bytes_transferred, total_bytes, error, created_at, started_at, completed_at`

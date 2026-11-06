@@ -244,15 +244,19 @@ func (q *Queue) execute(executor Executor, job Job) {
 	completed := now()
 	writeStatus := func() {
 		_, wErr := q.db.Exec(`UPDATE jobs
-			SET status = ?, progress_percent = ?, error = ?, completed_at = ?
+			SET status = ?, progress_percent = ?,
+			    bytes_transferred = CASE WHEN ? = 100.0 AND total_bytes > 0 THEN total_bytes ELSE bytes_transferred END,
+			    error = ?, completed_at = ?
 			WHERE id = ?`,
-			result, progress, msg, nullTime(&completed), job.ID)
+			result, progress, progress, msg, nullTime(&completed), job.ID)
 		if wErr != nil {
 			time.Sleep(25 * time.Millisecond)
 			q.db.Exec(`UPDATE jobs
-				SET status = ?, progress_percent = ?, error = ?, completed_at = ?
+				SET status = ?, progress_percent = ?,
+				    bytes_transferred = CASE WHEN ? = 100.0 AND total_bytes > 0 THEN total_bytes ELSE bytes_transferred END,
+				    error = ?, completed_at = ?
 				WHERE id = ?`,
-				result, progress, msg, nullTime(&completed), job.ID) // last-ditch retry; journal keeps the history
+				result, progress, progress, msg, nullTime(&completed), job.ID) // last-ditch retry; journal keeps the history
 		}
 	}
 	writeStatus()

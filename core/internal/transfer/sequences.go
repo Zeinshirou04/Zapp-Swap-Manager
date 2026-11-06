@@ -4,20 +4,116 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
+// ProgressFunc is called periodically with in-flight transfer metrics.
+type ProgressFunc func(bytesTransferred, totalBytes int64, percent float64)
+
 // Options carries the optional context a caller (the Plan 005 queue) may
-// provide: metrics from the last recorded backup, and whether the user
-// explicitly confirmed a >30% drop.
+// provide: metrics from the last recorded backup, whether the user
+// explicitly confirmed a >30% drop, and progress reporting.
 //
 // shortcut: LastBackup / DropConfirmed are wiring points for the SQLite
 // journal (Plan 005); until then the queue passes LastBackup=nil.
 type Options struct {
 	LastBackup    *TreeStats
 	DropConfirmed bool
+	ProgressFn    ProgressFunc
+}
+
+// monitorTransfer tracks destination size relative to source size during
+// file copy/mirror operations and periodically reports progress and logs.
+func monitorTransfer(ctx context.Context, src, dst string, fn ProgressFunc) func(success bool) {
+	srcStats, err := MeasureTree(src)
+	totalBytes := int64(0)
+	if err == nil && srcStats.Bytes > 0 {
+		totalBytes = srcStats.Bytes
+	}
+
+	initialDst, _ := MeasureTree(dst)
+	initBytes := initialDst.Bytes
+	if totalBytes > 0 {
+		initPct := float64(initBytes) / float64(totalBytes) * 100
+		if initPct > 99.9 {
+			initPct = 99.9
+		}
+		if fn != nil {
+			fn(initBytes, totalBytes, initPct)
+		}
+		slog.Info("transfer starting", "src", filepath.Base(src), "initial_bytes", initBytes, "total_bytes", totalBytes)
+	}
+
+	done := make(chan struct{})
+	var once sync.Once
+	stop := func(success bool) {
+		once.Do(func() {
+			close(done)
+			if success && totalBytes > 0 {
+				if fn != nil {
+					fn(totalBytes, totalBytes, 100.0)
+				}
+				slog.Info("transfer completed", "src", filepath.Base(src), "total_bytes", totalBytes)
+			}
+		})
+	}
+
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		lastLog := time.Now()
+
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if totalBytes <= 0 {
+					if s, err := MeasureTree(src); err == nil && s.Bytes > 0 {
+						totalBytes = s.Bytes
+					} else {
+						continue
+					}
+				}
+
+				dstStats, err := MeasureTree(dst)
+				if err != nil {
+					continue
+				}
+
+				curBytes := dstStats.Bytes
+				pct := float64(curBytes) / float64(totalBytes) * 100
+				if pct < 0 {
+					pct = 0
+				}
+				if pct > 99.9 {
+					pct = 99.9
+				}
+
+				if fn != nil {
+					fn(curBytes, totalBytes, pct)
+				}
+
+				if time.Since(lastLog) >= 5*time.Second {
+					slog.Info("transfer in progress",
+						"game", filepath.Base(src),
+						"percent", fmt.Sprintf("%.1f%%", pct),
+						"transferred", fmt.Sprintf("%.2f GB", float64(curBytes)/(1024*1024*1024)),
+						"total", fmt.Sprintf("%.2f GB", float64(totalBytes)/(1024*1024*1024)),
+					)
+					lastLog = time.Now()
+				}
+			}
+		}
+	}()
+
+	return stop
 }
 
 // Backup mirrors an SSD cache copy onto the HDD master.
@@ -47,8 +143,11 @@ func runMirror(ctx context.Context, opts Options, hddLibRoot, installDir, src, d
 	if err := driverFn().Mirror(ctx, src, dst, true); err != nil {
 		return fmt.Errorf("backup/mirror: dry run: %w", err)
 	}
-	if err := driverFn().Mirror(ctx, src, dst, false); err != nil {
-		return fmt.Errorf("backup/mirror: %w", err)
+	stop := monitorTransfer(ctx, src, dst, opts.ProgressFn)
+	mirrorErr := driverFn().Mirror(ctx, src, dst, false)
+	stop(mirrorErr == nil)
+	if mirrorErr != nil {
+		return fmt.Errorf("backup/mirror: %w", mirrorErr)
 	}
 	return nil
 }
@@ -119,8 +218,11 @@ func Promote(ctx context.Context, opts Options, hddLibRoot, ssdLibRoot, manifest
 		if err := CheckDestination(dst, ssdLibRoot, installDir); err != nil {
 			return err
 		}
-		if err := driverFn().Copy(ctx, src, dst); err != nil {
-			return err
+		stop := monitorTransfer(ctx, src, dst, opts.ProgressFn)
+		copyErr := driverFn().Copy(ctx, src, dst)
+		stop(copyErr == nil)
+		if copyErr != nil {
+			return copyErr
 		}
 		return nil
 	}()); err != nil {
@@ -208,8 +310,11 @@ func PromoteCustom(ctx context.Context, opts Options, hddLibRoot, ssdLibRoot, in
 		if err := CheckDestination(dst, ssdLibRoot, installDir); err != nil {
 			return err
 		}
-		if err := driverFn().Copy(ctx, src, dst); err != nil {
-			return err
+		stop := monitorTransfer(ctx, src, dst, opts.ProgressFn)
+		copyErr := driverFn().Copy(ctx, src, dst)
+		stop(copyErr == nil)
+		if copyErr != nil {
+			return copyErr
 		}
 		return nil
 	}()); err != nil {

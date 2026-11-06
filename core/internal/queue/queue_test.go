@@ -260,3 +260,64 @@ func TestCrashRecovery(t *testing.T) {
 		t.Errorf("recovery journal entries = %d, want 1", n)
 	}
 }
+
+func TestUpdateProgress(t *testing.T) {
+	dir := t.TempDir()
+	inProgress := make(chan struct{})
+	gate := make(chan struct{})
+
+	exec := func(ctx context.Context, job Job, step StepFunc) error {
+		close(inProgress)
+		<-gate
+		return step(1, "run", func() error { return nil })
+	}
+
+	q, err := New(filepath.Join(dir, "jobs.db"), exec)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { q.Close() })
+
+	job, err := q.Enqueue(CreateJobRequest{Type: TypePromote, AppID: "105600", TargetLibraryID: "ssd0"})
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+
+	<-inProgress
+
+	if err := q.UpdateProgress(job.ID, 42.5, 4250, 10000); err != nil {
+		t.Fatalf("UpdateProgress: %v", err)
+	}
+
+	got, err := q.GetJob(job.ID)
+	if err != nil {
+		t.Fatalf("GetJob: %v", err)
+	}
+	if got.ProgressPercent != 42.5 {
+		t.Errorf("ProgressPercent = %v, want 42.5", got.ProgressPercent)
+	}
+	if got.BytesTransferred != 4250 {
+		t.Errorf("BytesTransferred = %v, want 4250", got.BytesTransferred)
+	}
+	if got.TotalBytes != 10000 {
+		t.Errorf("TotalBytes = %v, want 10000", got.TotalBytes)
+	}
+
+	close(gate)
+
+	waitFor(t, "job succeeds", func() bool {
+		j, err := q.GetJob(job.ID)
+		return err == nil && j.Status == StatusSucceeded
+	})
+
+	finalJob, err := q.GetJob(job.ID)
+	if err != nil {
+		t.Fatalf("GetJob final: %v", err)
+	}
+	if finalJob.ProgressPercent != 100.0 {
+		t.Errorf("final ProgressPercent = %v, want 100.0", finalJob.ProgressPercent)
+	}
+	if finalJob.BytesTransferred != 10000 {
+		t.Errorf("final BytesTransferred = %v, want 10000", finalJob.BytesTransferred)
+	}
+}

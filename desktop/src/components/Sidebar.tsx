@@ -9,7 +9,7 @@ import {
   Wand2,
 } from 'lucide-react';
 
-export type NavRoute = 'dashboard' | 'games' | 'drives' | 'queue' | 'logs' | 'settings';
+export type NavRoute = 'dashboard' | 'games' | 'drives' | 'queue' | 'logs' | 'settings' | 'game-detail';
 
 export interface SidebarProps {
   activeRoute: NavRoute;
@@ -104,7 +104,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {navItems.map((item) => {
-          const isActive = activeRoute === item.id;
+          const isActive = activeRoute === item.id || (item.id === 'games' && activeRoute === 'game-detail');
           return (
             <button
               key={item.id}

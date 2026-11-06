@@ -22,6 +22,7 @@ interface GameListProps {
   actionLoading: boolean;
   jobs?: Job[];
   onRefresh?: () => void;
+  onSelectGame?: (game: Game) => void;
 }
 
 export const GameList: React.FC<GameListProps> = ({
@@ -31,6 +32,7 @@ export const GameList: React.FC<GameListProps> = ({
   actionLoading,
   jobs,
   onRefresh,
+  onSelectGame,
 }) => {
   const [search, setSearch] = useState('');
   const [filterState, setFilterState] = useState<'all' | 'active_ssd' | 'storage_hdd' | 'custom' | 'unbacked'>('all');
@@ -271,7 +273,7 @@ export const GameList: React.FC<GameListProps> = ({
                 game={game}
                 onAction={onAction}
                 actionLoading={actionLoading}
-                onClick={(g) => setSelectedGame(g)}
+                onClick={(g) => (onSelectGame ? onSelectGame(g) : setSelectedGame(g))}
                 activeJob={jobs?.find(
                   (j) =>
                     (j.status === 'running' || j.status === 'queued') &&
@@ -343,7 +345,7 @@ export const GameList: React.FC<GameListProps> = ({
                       transition: 'background-color 0.15s ease',
                       cursor: 'pointer',
                     }}
-                    onClick={() => setSelectedGame(game)}
+                    onClick={() => (onSelectGame ? onSelectGame(game) : setSelectedGame(game))}
                     onMouseEnter={(e) =>
                       (e.currentTarget.style.backgroundColor = 'var(--bg-main)')
                     }

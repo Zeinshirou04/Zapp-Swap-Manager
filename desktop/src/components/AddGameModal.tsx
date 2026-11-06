@@ -3,7 +3,7 @@ import { api } from '../api/client.ts';
 import { Game, Library } from '../types/api.ts';
 import { X, Plus, Folder, Image, Tag, AlertCircle, Loader2, HardDrive, CheckCircle2 } from 'lucide-react';
 import { parseGamePath, computePreviewPaths } from '../utils/pathParser.ts';
-import { formatLibraryName } from '../utils/format.ts';
+import { formatLibraryOptionLabel, normalizePath } from '../utils/format.ts';
 
 interface AddGameModalProps {
   open: boolean;
@@ -165,7 +165,6 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
         zIndex: 50,
         padding: '16px',
       }}
-      onClick={onClose}
     >
       <div
         className="card"
@@ -345,12 +344,35 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
             >
               {libraries.map((lib) => (
                 <option key={lib.id} value={lib.id}>
-                  {formatLibraryName(lib)} ({lib.type === 'ssd_cache' ? 'Fast SSD' : 'Storage HDD'})
+                  {formatLibraryOptionLabel(lib)}
                 </option>
               ))}
             </select>
+            {targetLib && (
+              <div
+                style={{
+                  marginTop: '8px',
+                  padding: '8px 12px',
+                  backgroundColor: 'var(--primary-subtle)',
+                  border: '1px solid var(--primary-border)',
+                  borderRadius: 'var(--radius)',
+                  fontSize: '0.8rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <Folder size={14} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                <div style={{ wordBreak: 'break-all' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Base Parent Folder: </span>
+                  <code style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+                    {normalizePath((targetLib as any).path || '') || targetLib.name}
+                  </code>
+                </div>
+              </div>
+            )}
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-              The storage drive holding the game. Auto-selected if pasting an absolute path above.
+              The parent game storage directory. Auto-selected if pasting an absolute path above.
             </span>
           </div>
 

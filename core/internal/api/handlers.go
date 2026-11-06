@@ -186,6 +186,7 @@ type gameJSON struct {
 	CurrentLibraryID string     `json:"current_library_id"`
 	BuildID          string     `json:"build_id"`
 	LastBackupTime   *time.Time `json:"last_backup_time"`
+	LastPlayed       *time.Time `json:"last_played,omitempty"`
 	BackupClean      bool       `json:"backup_clean"`
 	IsCustom         bool       `json:"is_custom"`
 	CoverURL         string     `json:"cover_url,omitempty"`
@@ -205,6 +206,7 @@ func toGameJSON(g steam.Game) gameJSON {
 		State:            g.State,
 		CurrentLibraryID: g.LibraryID,
 		BuildID:          g.Manifest.BuildID,
+		LastPlayed:       g.LastPlayed,
 		BackupClean:      false, // honest default until backup metrics are journaled
 		IsCustom:         g.IsCustom,
 		CoverURL:         g.CoverURL,

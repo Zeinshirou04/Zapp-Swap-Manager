@@ -9,6 +9,7 @@ import { Sidebar, NavRoute } from './components/Sidebar.tsx';
 import { DashboardView } from './components/DashboardView.tsx';
 import { DrivesOverview } from './components/DrivesOverview.tsx';
 import { GameList } from './components/GameList.tsx';
+import { GameDetailView } from './components/GameDetailView.tsx';
 import { QueueMonitor } from './components/QueueMonitor.tsx';
 import { SettingsView } from './components/SettingsView.tsx';
 import { SettingsModal } from './components/SettingsModal.tsx';
@@ -20,6 +21,7 @@ import { LogsView } from './components/LogsView.tsx';
 import { ToastContainer } from './components/Toast.tsx';
 import { ToastMessage } from './types/toast.ts';
 import { checkUpdate, UpdateDetails } from './api/updater.ts';
+import { matchTargetLibrary } from './utils/libraryMatcher.ts';
 import { AlertTriangle, Gamepad2, Loader2, X, Wand2 } from 'lucide-react';
 
 type ConnectionStatus = 'connecting' | 'disconnected' | 'authenticated';
@@ -34,6 +36,7 @@ export const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<SwapAction | null>(null);
@@ -289,9 +292,9 @@ export const App: React.FC = () => {
   // The confirmation modal routes every transfer through one queueing call.
   const requestSwap = (game: Game, type: JobType) => {
     const libType = type === 'promote' ? 'ssd_cache' : 'hdd_master';
-    const target = libraries.find((l) => l.type === libType);
+    const target = matchTargetLibrary(game, libType, libraries);
     if (!target) {
-      setErrorMsg(`No ${libType === 'ssd_cache' ? 'SSD cache' : 'HDD master'} library is configured.`);
+      setErrorMsg(`No matching ${libType === 'ssd_cache' ? 'SSD cache' : 'HDD master'} library is configured.`);
       return;
     }
     setErrorMsg(null);
@@ -302,6 +305,7 @@ export const App: React.FC = () => {
       title: game.name,
       sizeBytes: game.size_bytes,
       targetLibraryId: target.id,
+      sourceLibraryId: game.current_library_id,
     });
   };
 
@@ -488,6 +492,10 @@ export const App: React.FC = () => {
               onAction={requestSwap}
               actionLoading={actionLoading}
               onOpenWizard={() => setIsWizardOpen(true)}
+              onSelectGame={(g) => {
+                setSelectedGame(g);
+                navigate('game-detail');
+              }}
             />
           )}
 
@@ -511,8 +519,34 @@ export const App: React.FC = () => {
                 onAction={requestSwap}
                 actionLoading={actionLoading}
                 onRefresh={loadData}
+                onSelectGame={(g) => {
+                  setSelectedGame(g);
+                  navigate('game-detail');
+                }}
               />
             </div>
+          )}
+
+          {/* View 2b: Dedicated Game Detail Page */}
+          {activeRoute === 'game-detail' && selectedGame && (
+            <GameDetailView
+              game={games.find((g) => g.app_id === selectedGame.app_id) || selectedGame}
+              libraries={libraries}
+              jobs={jobs}
+              onBack={() => {
+                if (historyIndex > 0) {
+                  goBack();
+                } else {
+                  navigate('games');
+                }
+              }}
+              onAction={requestSwap}
+              actionLoading={actionLoading}
+              onGameUpdated={(updated) => {
+                setSelectedGame(updated);
+                loadData();
+              }}
+            />
           )}
 
           {/* View 3: Drives & Storage */}

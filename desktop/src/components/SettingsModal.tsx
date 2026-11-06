@@ -72,7 +72,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         zIndex: 50,
         padding: '16px',
       }}
-      onClick={onClose}
     >
       <div
         className="card"

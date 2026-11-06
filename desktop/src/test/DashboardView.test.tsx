@@ -75,7 +75,7 @@ describe('DashboardView Component', () => {
     expect(screen.getByText('Terraria')).toBeInTheDocument();
 
     // Test navigate click
-    fireEvent.click(screen.getByText('Browse Games'));
+    fireEvent.click(screen.getByText(/View All Games/));
     expect(onNavigate).toHaveBeenCalledWith('games');
   });
 });

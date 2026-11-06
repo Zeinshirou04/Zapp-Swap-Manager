@@ -22,6 +22,7 @@ type Manifest struct {
 	SizeOnDisk int64
 	BuildID    string
 	StateFlags uint32
+	LastPlayed int64
 }
 
 // FullyInstalled reports StateFlags bit 4.
@@ -57,6 +58,11 @@ func ParseManifest(data []byte) (Manifest, error) {
 			return Manifest{}, fmt.Errorf("manifest %s: StateFlags %q: %w", m.AppID, v, err)
 		}
 		m.StateFlags = uint32(flags)
+	}
+	if v := valueOf(state, "LastPlayed"); v != "" {
+		if lp, err := strconv.ParseInt(v, 10, 64); err == nil {
+			m.LastPlayed = lp
+		}
 	}
 	if m.AppID == "" {
 		return m, fmt.Errorf("parse manifest: missing appid")

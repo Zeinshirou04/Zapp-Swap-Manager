@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { api, getApiConfig, setApiConfig } from '../api/client.ts';
+import { api, getApiConfig, setApiConfig, getGameCoverUrl, resolveCoverUrl } from '../api/client.ts';
+import { Game } from '../types/api.ts';
 
 describe('ApiClient', () => {
   beforeEach(() => {
@@ -82,5 +83,44 @@ describe('ApiClient', () => {
         target_library_id: 'hdd1',
       })
     ).rejects.toThrow('Raw filesystem paths are rejected');
+  });
+
+  it('includes bearer token in getGameCoverUrl when token is set', () => {
+    setApiConfig({ baseUrl: 'http://127.0.0.1:8765', bearerToken: 'my-token' });
+    expect(getGameCoverUrl(3513350)).toBe('http://127.0.0.1:8765/games/3513350/cover?token=my-token');
+
+    setApiConfig({ baseUrl: 'http://127.0.0.1:8765', bearerToken: '' });
+    expect(getGameCoverUrl(3513350)).toBe('http://127.0.0.1:8765/games/3513350/cover');
+  });
+
+  it('resolves remote and local cover urls properly', () => {
+    setApiConfig({ baseUrl: 'http://127.0.0.1:8765', bearerToken: 'auth-tok' });
+
+    const localCoverGame: Game = {
+      app_id: 3513350,
+      name: 'Wuthering Waves',
+      install_dir: 'Wuthering Waves',
+      size_bytes: 1000,
+      state: 'storage_hdd',
+      current_library_id: 'hdd1',
+      build_id: '',
+      last_backup_time: null,
+      backup_clean: false,
+      cover_url: 'C:\\Users\\user\\Downloads\\cover.jpg',
+    };
+    expect(resolveCoverUrl(localCoverGame)).toBe('http://127.0.0.1:8765/games/3513350/cover?token=auth-tok');
+
+    const remoteCoverGame: Game = {
+      ...localCoverGame,
+      cover_url: 'https://example.com/cover.jpg',
+    };
+    expect(resolveCoverUrl(remoteCoverGame)).toBe('https://example.com/cover.jpg');
+
+    const steamGameWithoutCover: Game = {
+      ...localCoverGame,
+      cover_url: undefined,
+      is_custom: false,
+    };
+    expect(resolveCoverUrl(steamGameWithoutCover)).toBe('https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/3513350/header.jpg');
   });
 });

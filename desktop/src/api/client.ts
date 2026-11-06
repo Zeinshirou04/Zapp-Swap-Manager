@@ -42,6 +42,9 @@ export function setApiConfig(config: ApiConfig): void {
 
 export function getGameCoverUrl(appId: number | string): string {
   const config = getApiConfig();
+  if (config.bearerToken) {
+    return `${config.baseUrl}/games/${appId}/cover?token=${encodeURIComponent(config.bearerToken)}`;
+  }
   return `${config.baseUrl}/games/${appId}/cover`;
 }
 

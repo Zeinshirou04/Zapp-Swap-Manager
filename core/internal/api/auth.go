@@ -96,6 +96,14 @@ func (a Auth) authenticate(r *http.Request, cache *keyCache) error {
 		}
 		return fmt.Errorf("invalid bearer token")
 	}
+	// Support query parameter token for media/image endpoints (e.g. <img> tags in webviews)
+	if tok := strings.TrimSpace(r.URL.Query().Get("token")); tok != "" {
+		if a.BearerToken != "" &&
+			subtle.ConstantTimeCompare([]byte(tok), []byte(a.BearerToken)) == 1 {
+			return nil
+		}
+		return fmt.Errorf("invalid bearer token")
+	}
 	assert := strings.TrimSpace(r.Header.Get("Cf-Access-Jwt-Assertion"))
 	if assert == "" {
 		return errNoAuth

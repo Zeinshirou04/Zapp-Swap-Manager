@@ -19,8 +19,8 @@ export const GameCard: React.FC<GameCardProps> = ({
   activeJob,
   onClick,
 }) => {
-  const [imgAttempt, setImgAttempt] = useState(0);
   const [imgFailed, setImgFailed] = useState(false);
+  const [steamFallbackIdx, setSteamFallbackIdx] = useState<number | null>(() => (game.cover_url ? null : 0));
   const isOnSSD = game.state === 'active_ssd';
 
   // Try custom cover URL first, then Steam CDN primary URL, then fallback CDN URL
@@ -32,23 +32,23 @@ export const GameCard: React.FC<GameCardProps> = ({
 
   let displayUrl: string | null = null;
   if (!imgFailed) {
-    if (game.cover_url && imgAttempt === 0) {
+    if (steamFallbackIdx === null && game.cover_url) {
       displayUrl = resolveCoverUrl(game);
-    } else if (!game.is_custom && imgAttempt < steamCapsuleUrls.length) {
-      displayUrl = steamCapsuleUrls[imgAttempt];
+    } else if (!game.is_custom && steamFallbackIdx !== null && steamFallbackIdx < steamCapsuleUrls.length) {
+      displayUrl = steamCapsuleUrls[steamFallbackIdx];
     }
   }
 
   const handleImgError = () => {
-    if (game.cover_url && imgAttempt === 0) {
+    if (steamFallbackIdx === null) {
       // If custom cover failed, fall back to steam URLs if not custom
       if (!game.is_custom) {
-        setImgAttempt(0);
+        setSteamFallbackIdx(0);
       } else {
         setImgFailed(true);
       }
-    } else if (imgAttempt < steamCapsuleUrls.length - 1) {
-      setImgAttempt((prev) => prev + 1);
+    } else if (steamFallbackIdx < steamCapsuleUrls.length - 1) {
+      setSteamFallbackIdx((prev) => (prev !== null ? prev + 1 : 0));
     } else {
       setImgFailed(true);
     }

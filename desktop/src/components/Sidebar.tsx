@@ -1,13 +1,6 @@
 import React from 'react';
-import {
-  Home,
-  Gamepad2,
-  HardDrive,
-  ListOrdered,
-  Terminal,
-  Settings,
-  Wand2,
-} from 'lucide-react';
+import { Wand2 } from 'lucide-react';
+import { ZappIcon } from './ZappIcon.tsx';
 
 export type NavRoute = 'dashboard' | 'games' | 'drives' | 'queue' | 'logs' | 'settings' | 'game-detail';
 
@@ -41,35 +34,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'dashboard',
       label: 'Dashboard',
-      icon: <Home size={18} />,
+      icon: <ZappIcon name="home" size={18} />,
     },
     {
       id: 'games',
       label: 'Games Library',
-      icon: <Gamepad2 size={18} />,
+      icon: <ZappIcon name="games" size={18} />,
       badge: gamesCount,
     },
     {
       id: 'drives',
       label: 'Drives & Storage',
-      icon: <HardDrive size={18} />,
+      icon: <ZappIcon name="folder" size={18} />,
       badge: drivesCount,
     },
     {
       id: 'queue',
       label: 'Transfer Queue',
-      icon: <ListOrdered size={18} />,
+      icon: <ZappIcon name="queue" size={18} />,
       badge: queueCount,
     },
     {
       id: 'logs',
       label: 'Service Logs',
-      icon: <Terminal size={18} />,
+      icon: <ZappIcon name="log" size={18} />,
     },
     {
       id: 'settings',
       label: 'Settings',
-      icon: <Settings size={18} />,
+      icon: <ZappIcon name="settings" size={18} />,
     },
   ];
 

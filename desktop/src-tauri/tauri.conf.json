@@ -29,6 +29,11 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "publisher": "Zapp Swap Manager",
+    "copyright": "Copyright © 2026 Zapp Swap Manager Contributors",
+    "category": "Utility",
+    "shortDescription": "Fast game swapping and backup manager between SSD and HDD",
+    "longDescription": "Zapp Swap Manager safely moves, organizes, and verifies Steam and PC game libraries between fast NVMe/SSD gaming drives and spacious storage drives, controlled locally or remotely from Android.",
     "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
@@ -39,7 +44,33 @@
     ],
     "resources": [
       "resources/*"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "headerImage": "icons/Square150x150Logo.png",
+        "sidebarImage": "icons/Square310x310Logo.png",
+        "installMode": "currentUser",
+        "displayLanguageSelector": false,
+        "languages": ["en-US"]
+      }
+    },
+    "linux": {
+      "deb": {
+        "maintainer": "Zapp Swap Manager Contributors <contact@zapp-swap-manager.local>",
+        "section": "games",
+        "synopsis": "Fast game swapping and backup manager between SSD and HDD",
+        "description": "Zapp Swap Manager safely moves, organizes, and verifies Steam and PC game libraries between fast NVMe/SSD gaming drives and spacious storage drives, controlled locally or remotely from Android."
+      },
+      "rpm": {
+        "summary": "Fast game swapping and backup manager between SSD and HDD",
+        "description": "Zapp Swap Manager safely moves, organizes, and verifies Steam and PC game libraries between fast NVMe/SSD gaming drives and spacious storage drives, controlled locally or remotely from Android.",
+        "license": "MIT"
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    }
   },
   "plugins": {
     "updater": {

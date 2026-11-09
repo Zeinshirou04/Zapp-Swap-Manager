@@ -48,11 +48,7 @@
     "windows": {
       "nsis": {
         "installerIcon": "icons/icon.ico",
-        "headerImage": "icons/Square150x150Logo.png",
-        "sidebarImage": "icons/Square310x310Logo.png",
-        "installMode": "currentUser",
-        "displayLanguageSelector": false,
-        "languages": ["en-US"]
+        "installMode": "currentUser"
       }
     },
     "linux": {

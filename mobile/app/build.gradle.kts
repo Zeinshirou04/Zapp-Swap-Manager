@@ -39,12 +39,30 @@ android {
                     ?: System.getenv("KEY_PASSWORD")
                     ?: "zappswapmanager"
             } else {
-                // Fallback to debug keystore when release keystore is not yet present
-                val debugConfig = getByName("debug")
-                storeFile = debugConfig.storeFile
-                storePassword = debugConfig.storePassword
-                keyAlias = debugConfig.keyAlias
-                keyPassword = debugConfig.keyPassword
+                val debugKeystore = rootProject.file("app/build/debug.keystore")
+                val userDebug = file("${System.getProperty("user.home")}/.android/debug.keystore")
+                val fallbackFile = if (userDebug.exists()) userDebug else debugKeystore
+                if (!fallbackFile.exists()) {
+                    fallbackFile.parentFile?.mkdirs()
+                    try {
+                        val keytoolPath = org.gradle.internal.jvm.Jvm.current().javaHome.resolve("bin/keytool").absolutePath
+                        ProcessBuilder(
+                            keytoolPath, "-genkeypair", "-v",
+                            "-keystore", fallbackFile.absolutePath,
+                            "-alias", "androiddebugkey",
+                            "-keyalg", "RSA",
+                            "-keysize", "2048",
+                            "-validity", "10000",
+                            "-storepass", "android",
+                            "-keypass", "android",
+                            "-dname", "CN=Android Debug,O=Android,C=US"
+                        ).start().waitFor()
+                    } catch (_: Exception) {}
+                }
+                storeFile = fallbackFile
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
             }
         }
     }

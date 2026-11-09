@@ -57,15 +57,7 @@
     },
     "linux": {
       "deb": {
-        "maintainer": "Zapp Swap Manager Contributors <contact@zapp-swap-manager.local>",
-        "section": "games",
-        "synopsis": "Fast game swapping and backup manager between SSD and HDD",
-        "description": "Zapp Swap Manager safely moves, organizes, and verifies Steam and PC game libraries between fast NVMe/SSD gaming drives and spacious storage drives, controlled locally or remotely from Android."
-      },
-      "rpm": {
-        "summary": "Fast game swapping and backup manager between SSD and HDD",
-        "description": "Zapp Swap Manager safely moves, organizes, and verifies Steam and PC game libraries between fast NVMe/SSD gaming drives and spacious storage drives, controlled locally or remotely from Android.",
-        "license": "MIT"
+        "section": "games"
       },
       "appimage": {
         "bundleMediaFramework": false

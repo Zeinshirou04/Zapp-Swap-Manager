@@ -18,11 +18,11 @@ check-desktop:
 
 [windows]
 check-mobile:
-    cd mobile && (where java >nul 2>&1 && (gradlew.bat testDebugUnitTest --no-daemon || gradlew.bat testDebugUnitTest --no-daemon || exit /b 1) || echo Java not installed locally; mobile tests verified in CI)
+    cd mobile && (where gradle >nul 2>&1 && gradle testDebugUnitTest --no-daemon || (where java >nul 2>&1 && (gradlew.bat testDebugUnitTest --no-daemon || gradlew.bat testDebugUnitTest --no-daemon || exit /b 1) || echo Java not installed locally; mobile tests verified in CI))
 
 [unix]
 check-mobile:
-    cd mobile && (chmod +x ./gradlew 2>/dev/null || true) && if which java >/dev/null 2>&1; then (./gradlew testDebugUnitTest --no-daemon || ./gradlew testDebugUnitTest --no-daemon); else echo "Java not installed locally; mobile tests verified in CI"; fi
+    cd mobile && (chmod +x ./gradlew 2>/dev/null || true) && if which gradle >/dev/null 2>&1; then gradle testDebugUnitTest --no-daemon; elif which java >/dev/null 2>&1; then (./gradlew testDebugUnitTest --no-daemon || ./gradlew testDebugUnitTest --no-daemon); else echo "Java not installed locally; mobile tests verified in CI"; fi
 
 # Build all components.
 build: build-core build-server build-desktop build-mobile
@@ -52,8 +52,8 @@ build-desktop:
 # Build Mobile Android APK (debug / sideloadable).
 [windows]
 build-mobile:
-    cd mobile && (where java >nul 2>&1 && gradlew.bat assembleDebug --no-daemon || echo Java not installed locally; mobile builds verified in CI)
+    cd mobile && (where gradle >nul 2>&1 && gradle assembleDebug --no-daemon || (where java >nul 2>&1 && gradlew.bat assembleDebug --no-daemon || echo Java not installed locally; mobile builds verified in CI))
 
 [unix]
 build-mobile:
-    cd mobile && (which java >/dev/null 2>&1 && ./gradlew assembleDebug --no-daemon || echo "Java not installed locally; mobile builds verified in CI")
+    cd mobile && if which gradle >/dev/null 2>&1; then gradle assembleDebug --no-daemon; elif which java >/dev/null 2>&1; then ./gradlew assembleDebug --no-daemon; else echo "Java not installed locally; mobile builds verified in CI"; fi

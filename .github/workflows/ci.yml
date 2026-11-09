@@ -35,9 +35,7 @@ jobs:
           fi
 
       - name: Install Just
-        uses: extractions/setup-just@v2
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+        uses: taiki-e/install-action@just
 
       - name: Run checks (defaults to shell set by `just`)
         run: just check

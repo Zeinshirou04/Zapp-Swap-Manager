@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { HealthResponse } from '../types/api.ts';
 import { isTauriEnvironment } from '../api/updater.ts';
+import { ZappBrandLogo } from './ZappIcon.tsx';
 import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
   Settings,
-  Gamepad2,
   Activity,
   ChevronDown,
   RotateCw,
@@ -160,23 +160,14 @@ export const Titlebar: React.FC<TitlebarProps> = ({
             border: 'none',
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
+            gap: '8px',
             color: 'var(--primary)',
             fontWeight: 700,
             fontSize: '0.85rem',
+            cursor: 'pointer',
           }}
         >
-          <div
-            style={{
-              background: 'var(--primary)',
-              color: '#ffffff',
-              padding: '4px',
-              borderRadius: '4px',
-              display: 'flex',
-            }}
-          >
-            <Gamepad2 size={16} />
-          </div>
+          <ZappBrandLogo size={20} />
           <span>Zapp</span>
         </button>
 

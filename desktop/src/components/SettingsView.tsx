@@ -2,16 +2,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { getApiConfig, setApiConfig, api } from '../api/client.ts';
 import { Preferences } from '../types/api.ts';
 import { restartCoreDaemon } from '../api/native.ts';
+import { ZappIcon } from './ZappIcon.tsx';
 import {
-  Server,
   Check,
   AlertCircle,
   Sparkles,
   RefreshCw,
   RotateCcw,
   CheckCircle2,
-  Sliders,
-  Shield,
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -318,7 +316,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               justifyContent: 'center',
             }}
           >
-            <Sliders size={18} />
+            <ZappIcon name="preferences" size={18} />
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -411,7 +409,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               justifyContent: 'center',
             }}
           >
-            <Server size={18} />
+            <ZappIcon name="core-service" size={18} />
           </div>
           <div>
             <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>Core Service & Security</h3>
@@ -551,7 +549,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               justifyContent: 'center',
             }}
           >
-            <Shield size={18} />
+            <ZappIcon name="appearance" size={18} />
           </div>
           <div>
             <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>System & Appearance</h3>
@@ -639,7 +637,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               justifyContent: 'center',
             }}
           >
-            <Sparkles size={18} />
+            <ZappIcon name="app-updates" size={18} />
           </div>
           <div>
             <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>App Updates</h3>

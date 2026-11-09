@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">Zapp Swap Manager</string>
+    <string name="app_description">Remote game swap and backup controller for Zapp Swap Manager</string>
+    <string name="publisher_name">Zapp Swap Manager</string>
+    <string name="developer_name">Zapp Swap Manager Contributors</string>
+    <string name="copyright">Copyright © 2026 Zapp Swap Manager Contributors</string>
 </resources>

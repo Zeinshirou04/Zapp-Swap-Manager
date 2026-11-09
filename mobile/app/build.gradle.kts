@@ -21,10 +21,38 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            val keystorePath = (project.findProperty("KEYSTORE_PATH") as? String)
+                ?: System.getenv("KEYSTORE_PATH")
+                ?: (rootProject.file("zapp-release.keystore").takeIf { it.exists() }?.absolutePath)
+
+            if (keystorePath != null && file(keystorePath).exists()) {
+                storeFile = file(keystorePath)
+                storePassword = (project.findProperty("KEYSTORE_PASSWORD") as? String)
+                    ?: System.getenv("KEYSTORE_PASSWORD")
+                    ?: "zappswapmanager"
+                keyAlias = (project.findProperty("KEY_ALIAS") as? String)
+                    ?: System.getenv("KEY_ALIAS")
+                    ?: "zapp"
+                keyPassword = (project.findProperty("KEY_PASSWORD") as? String)
+                    ?: System.getenv("KEY_PASSWORD")
+                    ?: "zappswapmanager"
+            } else {
+                // Fallback to debug keystore when release keystore is not yet present
+                val debugConfig = getByName("debug")
+                storeFile = debugConfig.storeFile
+                storePassword = debugConfig.storePassword
+                keyAlias = debugConfig.keyAlias
+                keyPassword = debugConfig.keyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

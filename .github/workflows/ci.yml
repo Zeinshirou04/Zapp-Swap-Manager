@@ -24,6 +24,9 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
       - name: Install Desktop dependencies
         shell: bash
         run: |
@@ -33,6 +36,8 @@ jobs:
 
       - name: Install Just
         uses: extractions/setup-just@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run checks (defaults to shell set by `just`)
         run: just check

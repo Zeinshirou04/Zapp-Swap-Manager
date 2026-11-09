@@ -207,6 +207,9 @@ jobs:
           mkdir -p dist-mobile
           if [ -f "mobile/gradlew" ]; then
             cd mobile
+            if [ ! -f "zapp-release.keystore" ]; then
+              keytool -genkeypair -v -keystore zapp-release.keystore -alias zapp -keyalg RSA -keysize 2048 -validity 10000 -storepass zappswapmanager -keypass zappswapmanager -dname "CN=Zapp Swap Manager, O=Zapp, C=US"
+            fi
             chmod +x gradlew
             ./gradlew assembleRelease --no-daemon
             find app/build/outputs/apk/ -name "*.apk" -exec cp {} ../dist-mobile/zapp-mobile.apk \;

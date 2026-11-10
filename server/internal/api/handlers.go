@@ -51,7 +51,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"status":  "ok",
 		"service": "zapp-relay-server",
-		"version": "0.3.1",
+		"version": "0.3.2",
 	})
 }
 

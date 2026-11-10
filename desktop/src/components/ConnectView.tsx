@@ -142,7 +142,7 @@ export const ConnectView: React.FC<ConnectViewProps> = ({ onConnected, onBackToL
           <div
             style={{
               background: 'var(--primary)',
-              color: '#0f172a',
+              color: 'var(--on-primary, #ffffff)',
               padding: '12px',
               borderRadius: 'var(--radius)',
               display: 'inline-flex',

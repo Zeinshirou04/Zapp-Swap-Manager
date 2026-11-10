@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { UpdateDetails, relaunchApp } from '../api/updater.ts';
-import { CheckCircle2, ChevronDown, ChevronUp, Download, Loader2, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Download, Loader2, Sparkles, X } from 'lucide-react';
 
 interface UpdateNotificationProps {
   update: UpdateDetails | null;
   onDismiss: () => void;
   statusMessage?: string | null;
   onClearStatus?: () => void;
+  hasActiveJobs?: boolean;
 }
 
 export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
@@ -14,6 +15,7 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
   onDismiss,
   statusMessage,
   onClearStatus,
+  hasActiveJobs = false,
 }) => {
   const [showNotes, setShowNotes] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -210,6 +212,27 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
         </div>
       )}
 
+      {hasActiveJobs && (
+        <div
+          role="alert"
+          style={{
+            marginTop: '10px',
+            padding: '8px 12px',
+            background: 'var(--warning-subtle, rgba(217, 119, 6, 0.12))',
+            border: '1px solid var(--warning, #d97706)',
+            borderRadius: 'var(--radius)',
+            color: 'var(--warning)',
+            fontSize: '0.8rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+          <span>Active file transfer in progress. Please wait until transfers finish before updating.</span>
+        </div>
+      )}
+
       {error && (
         <div
           style={{
@@ -229,8 +252,18 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
         {error && !downloading && (
           <button
             onClick={handleUpdate}
+            disabled={hasActiveJobs}
+            title={hasActiveJobs ? 'Cannot update while a transfer is in progress' : undefined}
             className="btn-secondary"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', padding: '6px 14px' }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '0.85rem',
+              padding: '6px 14px',
+              opacity: hasActiveJobs ? 0.6 : 1,
+              cursor: hasActiveJobs ? 'not-allowed' : 'pointer',
+            }}
           >
             <Download size={14} /> Retry Update
           </button>
@@ -238,8 +271,18 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
         {!downloading && !readyToRelaunch && !error && (
           <button
             onClick={handleUpdate}
+            disabled={hasActiveJobs}
+            title={hasActiveJobs ? 'Cannot update while a transfer is in progress' : undefined}
             className="btn-primary"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', padding: '6px 14px' }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '0.85rem',
+              padding: '6px 14px',
+              opacity: hasActiveJobs ? 0.6 : 1,
+              cursor: hasActiveJobs ? 'not-allowed' : 'pointer',
+            }}
           >
             <Download size={14} /> Update Now
           </button>

@@ -191,7 +191,7 @@ export const LibraryWizardModal: React.FC<LibraryWizardModalProps> = ({ open, on
             left: 0,
             right: 0,
             height: '4px',
-            background: 'linear-gradient(90deg, #1e3a8a 0%, #2563eb 100%)',
+            background: 'linear-gradient(90deg, #4C29C5 0%, #6246EA 100%)',
           }}
         />
 

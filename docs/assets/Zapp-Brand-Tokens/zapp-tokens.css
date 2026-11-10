@@ -1,0 +1,181 @@
+/* ==========================================================================
+   Zapp design tokens
+   Source of truth: Zapp brand (ink #1C1B20, volt #6246EA).
+   Paste after `@import "tailwindcss";` in globals.css (Tailwind v4).
+   Layers:  1) brand + scale primitives   2) semantic light/dark tokens
+            3) non-color tokens (type, radius, shadow, motion, layout)
+   Rule: components use utilities from these tokens; never hardcode hex.
+   ========================================================================== */
+
+/* 1. Primitives ----------------------------------------------------------- */
+@theme {
+  /* Brand (unchanged names, so existing bg-zapp-ink / bg-volt / text-volt-light keep working) */
+  --color-zapp-ink: #1C1B20;
+  --color-volt: #6246EA;
+  --color-volt-light: #9F9EFE; /* accent text on dark backgrounds */
+
+  /* Volt scale (600 = brand). Generated in OKLCH at constant hue. */
+  --color-volt-50: #F5F6FF;
+  --color-volt-100: #EAEBFE;
+  --color-volt-200: #D9DBFE;
+  --color-volt-300: #BFC1FE;
+  --color-volt-400: #9C9AFF;
+  --color-volt-500: #7C70FE;
+  --color-volt-600: #6246EA;
+  --color-volt-700: #4C29C5;
+  --color-volt-800: #3B1E9C;
+  --color-volt-900: #2A1475;
+  --color-volt-950: #18074D;
+
+  /* Ink scale: neutrals tinted toward the brand (900 = zapp-ink). */
+  --color-ink-50: #FAFAFC;
+  --color-ink-100: #F3F3F6;
+  --color-ink-200: #E8E7EB;
+  --color-ink-300: #D4D3D8;
+  --color-ink-400: #A5A4A9;
+  --color-ink-500: #7A797F;
+  --color-ink-600: #5B5A60;
+  --color-ink-700: #3D3C42;
+  --color-ink-800: #27262B;
+  --color-ink-900: #1C1B20;
+  --color-ink-950: #0C0B10;
+
+  /* Type */
+  --font-display: var(--font-montserrat);
+  --font-sans: var(--font-lato);
+
+  /* Radius: controls (buttons, inputs) and cards */
+  --radius-control: 0.5rem;  /* rounded-control = rounded-lg, never pill */
+  --radius-card: 0.75rem;    /* rounded-card = rounded-xl, max for cards */
+
+  /* Shadow: ink-tinted, flat and subtle */
+  --shadow-card: 0 1px 2px 0 rgb(28 27 32 / 0.06);
+  --shadow-card-hover: 0 6px 16px -4px rgb(28 27 32 / 0.12);
+
+  /* Layout */
+  --container-page: 72rem;   /* max-w-page = max-w-6xl */
+}
+
+/* 2. Semantic tokens: these switch between light and dark ------------------ */
+:root {
+  --background: #FAFAFC;
+  --background-sunken: #F3F3F6;
+  --surface: #FFFFFF;
+  --surface-raised: #FFFFFF;
+  --surface-hover: #F3F3F6;
+  --border: #E8E7EB;
+  --border-strong: #D4D3D8;
+  --foreground: #1C1B20;
+  --foreground-muted: #5B5A60;
+  --foreground-subtle: #7A797F;
+  --accent: #6246EA;
+  --accent-hover: #4C29C5;
+  --accent-text: #6246EA;
+  --accent-subtle: rgb(98 70 234 / 0.1);
+  --on-accent: #FFFFFF;
+  --ring: #7C70FE;
+  --overlay: rgb(28 27 32 / 0.5);
+  --success: #166534;
+  --success-subtle: rgb(22 163 74 / 0.1);
+  --success-solid: #16A34A;
+  --warning: #92400E;
+  --warning-subtle: rgb(217 119 6 / 0.12);
+  --warning-solid: #D97706;
+  --danger: #B91C1C;
+  --danger-subtle: rgb(220 38 38 / 0.1);
+  --danger-solid: #DC2626;
+  --info: #0369A1;
+  --info-subtle: rgb(2 132 199 / 0.1);
+  --info-solid: #0284C7;
+}
+
+/* Dark: toggled by a `.dark` class (or data-theme="dark") on <html>.
+   To follow the OS setting instead, wrap the block in
+   @media (prefers-color-scheme: dark) { :root { ... } } */
+.dark,
+[data-theme="dark"] {
+  --background: #1C1B20;
+  --background-sunken: #0C0B10;
+  --surface: #27262B;
+  --surface-raised: #3D3C42;
+  --surface-hover: rgb(255 255 255 / 0.05);
+  --border: rgb(255 255 255 / 0.1);
+  --border-strong: rgb(255 255 255 / 0.2);
+  --foreground: #FFFFFF;
+  --foreground-muted: rgb(255 255 255 / 0.6);
+  --foreground-subtle: rgb(255 255 255 / 0.4);
+  --accent: #6246EA;
+  --accent-hover: #4C29C5;
+  --accent-text: #9F9EFE;
+  --accent-subtle: rgb(98 70 234 / 0.2);
+  --on-accent: #FFFFFF;
+  --ring: #9F9EFE;
+  --overlay: rgb(0 0 0 / 0.6);
+  --success: #4ADE80;
+  --success-subtle: rgb(74 222 128 / 0.12);
+  --success-solid: #4ADE80;
+  --warning: #FBBF24;
+  --warning-subtle: rgb(251 191 36 / 0.12);
+  --warning-solid: #FBBF24;
+  --danger: #F87171;
+  --danger-subtle: rgb(248 113 113 / 0.12);
+  --danger-solid: #F87171;
+  --info: #38BDF8;
+  --info-subtle: rgb(56 189 248 / 0.12);
+  --info-solid: #38BDF8;
+}
+
+/* Map semantic tokens to Tailwind utilities:
+   bg-background, bg-surface, border-border, text-foreground,
+   text-foreground-muted, bg-accent, text-accent-text, text-success,
+   bg-success-subtle, bg-success-solid ... */
+@theme inline {
+  --color-background: var(--background);
+  --color-background-sunken: var(--background-sunken);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-subtle: var(--foreground-subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-text: var(--accent-text);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-on-accent: var(--on-accent);
+  --color-ring: var(--ring);
+  --color-overlay: var(--overlay);
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-solid: var(--success-solid);
+  --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-solid: var(--warning-solid);
+  --color-danger: var(--danger);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-danger-solid: var(--danger-solid);
+  --color-info: var(--info);
+  --color-info-subtle: var(--info-subtle);
+  --color-info-solid: var(--info-solid);
+}
+
+/* 3. Motion and rhythm (plain CSS variables) ------------------------------ */
+:root {
+  --duration-color: 150ms;   /* color-only hover/focus changes */
+  --duration-ui: 200ms;      /* transitions on interactive elements */
+  --duration-reveal: 500ms;  /* scroll reveal; never above 700ms */
+  --ease-ui: ease-out;
+  --section-y: 5rem;         /* py-20 */
+  --section-y-lg: 7rem;      /* md:py-28 */
+  --section-y-hero: 10rem;   /* md:py-40 */
+}
+
+/* Optional: use the `.dark` class with Tailwind's dark: variant */
+/* @custom-variant dark (&:where(.dark, .dark *)); */
+
+/* Swap Manager job status -> token mapping
+   queued  -> foreground-subtle   running -> accent
+   done    -> success-solid       paused  -> warning-solid
+   failed  -> danger-solid        syncing -> info-solid */

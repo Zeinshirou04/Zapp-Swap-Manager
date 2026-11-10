@@ -580,7 +580,7 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
                 left: 0,
                 right: 0,
                 height: '4px',
-                background: 'linear-gradient(90deg, #2563eb 0%, #38bdf8 100%)',
+                background: 'linear-gradient(90deg, #6246EA 0%, #9F9EFE 100%)',
                 borderTopLeftRadius: '16px',
                 borderTopRightRadius: '16px',
               }}

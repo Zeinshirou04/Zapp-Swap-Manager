@@ -131,7 +131,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
         <div
           style={{
             flex: '1 1 360px',
-            background: 'linear-gradient(145deg, #090d16 0%, #172554 50%, #1e3a8a 100%)',
+            background: 'linear-gradient(145deg, #0C0B10 0%, #1C1B20 40%, #2A1475 75%, #6246EA 100%)',
             color: '#ffffff',
             padding: '48px 40px',
             display: 'flex',
@@ -150,7 +150,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               width: '200px',
               height: '200px',
               borderRadius: '50%',
-              background: 'radial-gradient(circle, rgba(59, 130, 246, 0.35) 0%, transparent 70%)',
+              background: 'radial-gradient(circle, rgba(159, 158, 254, 0.25) 0%, transparent 70%)',
               pointerEvents: 'none',
             }}
           />
@@ -162,7 +162,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               width: '180px',
               height: '180px',
               borderRadius: '50%',
-              background: 'radial-gradient(circle, rgba(37, 99, 235, 0.25) 0%, transparent 70%)',
+              background: 'radial-gradient(circle, rgba(98, 70, 234, 0.3) 0%, transparent 70%)',
               pointerEvents: 'none',
             }}
           />
@@ -183,13 +183,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   boxShadow: '0 8px 16px rgba(0, 0, 0, 0.2)',
                 }}
               >
-                <Zap size={24} style={{ color: '#60a5fa' }} />
+                <Zap size={24} style={{ color: '#9F9EFE' }} />
               </div>
               <div>
                 <h1 style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>
                   Zapp Swap
                 </h1>
-                <p style={{ fontSize: '0.75rem', color: '#93c5fd', margin: 0, fontWeight: 500 }}>
+                <p style={{ fontSize: '0.75rem', color: '#BFC1FE', margin: 0, fontWeight: 500 }}>
                   Gaming PC Storage Manager
                 </p>
               </div>
@@ -199,7 +199,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               style={{
                 fontSize: '0.925rem',
                 lineHeight: 1.6,
-                color: '#cbd5e1',
+                color: '#D4D3D8',
                 marginBottom: '32px',
               }}
             >
@@ -209,20 +209,20 @@ export const LoginView: React.FC<LoginViewProps> = ({
             {/* Feature Highlights */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <CheckCircle2 size={16} style={{ color: '#38bdf8' }} />
-                <span style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>
+                <CheckCircle2 size={16} style={{ color: '#9F9EFE' }} />
+                <span style={{ fontSize: '0.85rem', color: '#F3F3F6' }}>
                   Real-time WebSocket server relay
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <CheckCircle2 size={16} style={{ color: '#38bdf8' }} />
-                <span style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>
+                <CheckCircle2 size={16} style={{ color: '#9F9EFE' }} />
+                <span style={{ fontSize: '0.85rem', color: '#F3F3F6' }}>
                   Steam & Custom non-Steam game manifests
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <CheckCircle2 size={16} style={{ color: '#38bdf8' }} />
-                <span style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>
+                <CheckCircle2 size={16} style={{ color: '#9F9EFE' }} />
+                <span style={{ fontSize: '0.85rem', color: '#F3F3F6' }}>
                   Zero tunnel configuration or port-forwarding
                 </span>
               </div>
@@ -239,7 +239,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               alignItems: 'center',
               justifyContent: 'space-between',
               fontSize: '0.75rem',
-              color: '#94a3b8',
+              color: 'rgba(255, 255, 255, 0.6)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

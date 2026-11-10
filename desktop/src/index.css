@@ -2,78 +2,156 @@
 
 :root,
 [data-theme="light"] {
-  /* Clean Light Mode defaults */
-  --bg-main: #f8fafc;
-  --bg-card: #ffffff;
-  --bg-card-hover: #f1f5f9;
-  --text-main: #0f172a;
-  --text-muted: #64748b;
-  --border-color: #e2e8f0;
+  /* Zapp Brand Primitives */
+  --brand-ink: #1C1B20;
+  --brand-volt: #6246EA;
+  --brand-volt-light: #9F9EFE;
 
-  /* Single focused primary color (Clean Classic Royal Blue) */
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --primary-subtle: #eff6ff;
-  --primary-border: #bfdbfe;
+  /* Semantic Light Mode (Ink Neutrals) */
+  --bg-main: #FAFAFC;
+  --bg-sunken: #F3F3F6;
+  --bg-card: #FFFFFF;
+  --bg-card-raised: #FFFFFF;
+  --bg-card-hover: #F3F3F6;
+  --text-main: #1C1B20;
+  --text-muted: #5B5A60;
+  --text-subtle: #7A797F;
+  --border-color: #E8E7EB;
+  --border-strong: #D4D3D8;
+
+  /* Volt Brand Accents */
+  --primary: #6246EA;
+  --primary-hover: #4C29C5;
+  --primary-text: #6246EA;
+  --primary-subtle: rgba(98, 70, 234, 0.1);
+  --primary-border: rgba(98, 70, 234, 0.25);
+  --on-primary: #FFFFFF;
+  --ring: #7C70FE;
+  --overlay: rgba(28, 27, 32, 0.5);
 
   /* Storage & drive colors */
-  --ssd-color: #2563eb;
-  --hdd-color: #475569;
+  --ssd-color: #6246EA;
+  --hdd-color: #5B5A60;
 
-  /* Standard semantic alerts */
-  --success: #16a34a;
-  --warning: #ca8a04;
-  --danger: #dc2626;
+  /* Semantic Alerts */
+  --success: #166534;
+  --success-subtle: rgba(22, 163, 74, 0.1);
+  --success-solid: #16A34A;
+  --warning: #92400E;
+  --warning-subtle: rgba(217, 119, 6, 0.12);
+  --warning-solid: #D97706;
+  --danger: #B91C1C;
+  --danger-subtle: rgba(220, 38, 38, 0.1);
+  --danger-solid: #DC2626;
+  --info: #0369A1;
+  --info-subtle: rgba(2, 132, 199, 0.1);
+  --info-solid: #0284C7;
 
-  --radius: 6px;
+  /* Component geometry */
+  --radius: 8px;
+  --radius-card: 12px;
   --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   color-scheme: light;
 }
 
 [data-theme="dark"] {
-  --bg-main: #0f172a;
-  --bg-card: #1e293b;
-  --bg-card-hover: #334155;
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --border-color: #334155;
+  /* Zapp Brand Primitives */
+  --brand-ink: #1C1B20;
+  --brand-volt: #6246EA;
+  --brand-volt-light: #9F9EFE;
 
-  --primary: #3b82f6;
-  --primary-hover: #2563eb;
-  --primary-subtle: rgba(59, 130, 246, 0.12);
-  --primary-border: rgba(59, 130, 246, 0.3);
+  /* Semantic Dark Mode (Ink Neutrals) */
+  --bg-main: #1C1B20;
+  --bg-sunken: #0C0B10;
+  --bg-card: #27262B;
+  --bg-card-raised: #3D3C42;
+  --bg-card-hover: rgba(255, 255, 255, 0.05);
+  --text-main: #FFFFFF;
+  --text-muted: rgba(255, 255, 255, 0.6);
+  --text-subtle: rgba(255, 255, 255, 0.4);
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.2);
 
-  --ssd-color: #3b82f6;
-  --hdd-color: #94a3b8;
+  /* Volt Brand Accents */
+  --primary: #6246EA;
+  --primary-hover: #4C29C5;
+  --primary-text: #9F9EFE;
+  --primary-subtle: rgba(98, 70, 234, 0.2);
+  --primary-border: rgba(98, 70, 234, 0.4);
+  --on-primary: #FFFFFF;
+  --ring: #9F9EFE;
+  --overlay: rgba(0, 0, 0, 0.6);
 
-  --success: #16a34a;
-  --warning: #ca8a04;
-  --danger: #dc2626;
+  /* Storage & drive colors */
+  --ssd-color: #9F9EFE;
+  --hdd-color: rgba(255, 255, 255, 0.6);
 
+  /* Semantic Alerts */
+  --success: #4ADE80;
+  --success-subtle: rgba(74, 222, 128, 0.12);
+  --success-solid: #4ADE80;
+  --warning: #FBBF24;
+  --warning-subtle: rgba(251, 191, 36, 0.12);
+  --warning-solid: #FBBF24;
+  --danger: #F87171;
+  --danger-subtle: rgba(248, 113, 113, 0.12);
+  --danger-solid: #F87171;
+  --info: #38BDF8;
+  --info-subtle: rgba(56, 189, 248, 0.12);
+  --info-solid: #38BDF8;
+
+  /* Component geometry */
+  --radius: 8px;
+  --radius-card: 12px;
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   color-scheme: dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-theme="dark"]) {
-    --bg-main: #0f172a;
-    --bg-card: #1e293b;
-    --bg-card-hover: #334155;
-    --text-main: #f8fafc;
-    --text-muted: #94a3b8;
-    --border-color: #334155;
+    --brand-ink: #1C1B20;
+    --brand-volt: #6246EA;
+    --brand-volt-light: #9F9EFE;
 
-    --primary: #3b82f6;
-    --primary-hover: #2563eb;
-    --primary-subtle: rgba(59, 130, 246, 0.12);
-    --primary-border: rgba(59, 130, 246, 0.3);
+    --bg-main: #1C1B20;
+    --bg-sunken: #0C0B10;
+    --bg-card: #27262B;
+    --bg-card-raised: #3D3C42;
+    --bg-card-hover: rgba(255, 255, 255, 0.05);
+    --text-main: #FFFFFF;
+    --text-muted: rgba(255, 255, 255, 0.6);
+    --text-subtle: rgba(255, 255, 255, 0.4);
+    --border-color: rgba(255, 255, 255, 0.1);
+    --border-strong: rgba(255, 255, 255, 0.2);
 
-    --ssd-color: #3b82f6;
-    --hdd-color: #94a3b8;
+    --primary: #6246EA;
+    --primary-hover: #4C29C5;
+    --primary-text: #9F9EFE;
+    --primary-subtle: rgba(98, 70, 234, 0.2);
+    --primary-border: rgba(98, 70, 234, 0.4);
+    --on-primary: #FFFFFF;
+    --ring: #9F9EFE;
+    --overlay: rgba(0, 0, 0, 0.6);
 
-    --success: #16a34a;
-    --warning: #ca8a04;
-    --danger: #dc2626;
+    --ssd-color: #9F9EFE;
+    --hdd-color: rgba(255, 255, 255, 0.6);
 
+    --success: #4ADE80;
+    --success-subtle: rgba(74, 222, 128, 0.12);
+    --success-solid: #4ADE80;
+    --warning: #FBBF24;
+    --warning-subtle: rgba(251, 191, 36, 0.12);
+    --warning-solid: #FBBF24;
+    --danger: #F87171;
+    --danger-subtle: rgba(248, 113, 113, 0.12);
+    --danger-solid: #F87171;
+    --info: #38BDF8;
+    --info-subtle: rgba(56, 189, 248, 0.12);
+    --info-solid: #38BDF8;
+
+    --radius: 8px;
+    --radius-card: 12px;
+    --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     color-scheme: dark;
   }
 }
@@ -94,7 +172,7 @@ body {
 }
 
 a {
-  color: var(--primary);
+  color: var(--primary-text);
   text-decoration: none;
 }
 
@@ -102,7 +180,7 @@ code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.85em;
   background-color: var(--primary-subtle);
-  color: var(--primary);
+  color: var(--primary-text);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -124,13 +202,13 @@ button {
 }
 
 button:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 
 .btn-primary {
   background-color: var(--primary);
-  color: #ffffff;
+  color: var(--on-primary);
 }
 .btn-primary:hover {
   background-color: var(--primary-hover);
@@ -146,21 +224,21 @@ button:focus-visible {
 }
 
 .btn-danger {
-  background-color: rgba(220, 38, 38, 0.1);
+  background-color: var(--danger-subtle);
   color: var(--danger);
-  border: 1px solid rgba(220, 38, 38, 0.25);
+  border: 1px solid var(--danger-subtle);
 }
 .btn-danger:hover {
-  background-color: rgba(220, 38, 38, 0.18);
+  background-color: rgba(220, 38, 38, 0.22);
 }
 
 .btn-success {
-  background-color: rgba(22, 163, 74, 0.1);
+  background-color: var(--success-subtle);
   color: var(--success);
-  border: 1px solid rgba(22, 163, 74, 0.25);
+  border: 1px solid var(--success-subtle);
 }
 .btn-success:hover {
-  background-color: rgba(22, 163, 74, 0.18);
+  background-color: rgba(22, 163, 74, 0.22);
 }
 
 .app-container {
@@ -175,8 +253,9 @@ button:focus-visible {
 .card {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius);
+  border-radius: var(--radius-card);
   padding: 20px;
+  box-shadow: 0 1px 3px 0 rgba(28, 27, 32, 0.06);
 }
 
 .badge {
@@ -204,26 +283,26 @@ button:focus-visible {
 
 .badge-running {
   background-color: var(--primary-subtle);
-  color: var(--primary);
+  color: var(--primary-text);
   border: 1px solid var(--primary-border);
 }
 
 .badge-queued {
-  background-color: rgba(202, 138, 4, 0.1);
+  background-color: var(--warning-subtle);
   color: var(--warning);
-  border: 1px solid rgba(202, 138, 4, 0.25);
+  border: 1px solid var(--warning-subtle);
 }
 
 .badge-success {
-  background-color: rgba(22, 163, 74, 0.1);
+  background-color: var(--success-subtle);
   color: var(--success);
-  border: 1px solid rgba(22, 163, 74, 0.25);
+  border: 1px solid var(--success-subtle);
 }
 
 .badge-error {
-  background-color: rgba(220, 38, 38, 0.1);
+  background-color: var(--danger-subtle);
   color: var(--danger);
-  border: 1px solid rgba(220, 38, 38, 0.25);
+  border: 1px solid var(--danger-subtle);
 }
 
 .progress-bar-bg {
@@ -242,7 +321,7 @@ button:focus-visible {
 
 /* Modal styles using modern backdrop */
 dialog::backdrop {
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--overlay);
   backdrop-filter: blur(4px);
 }
 
@@ -250,14 +329,14 @@ dialog {
   border: 1px solid var(--border-color);
   background: var(--bg-card);
   color: var(--text-main);
-  border-radius: var(--radius);
+  border-radius: var(--radius-card);
   padding: 24px;
   max-width: 500px;
   width: 90%;
   margin: auto;
 }
 
-/* Spin animation used by loading icons (was referenced but never defined) */
+/* Spin animation used by loading icons */
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -273,7 +352,7 @@ dialog {
   overflow: hidden;
 }
 
-/* Dashboard Application Layout (Modern CSS Layout) */
+/* Dashboard Application Layout */
 .dashboard-root {
   display: flex;
   flex-direction: column;
@@ -317,7 +396,7 @@ dialog {
   background: var(--text-muted);
 }
 
-/* Frameless Titlebar & Window Controls (VSCode / Discord / Windows 11 style) */
+/* Frameless Titlebar & Window Controls */
 .titlebar {
   display: flex;
   align-items: center;
@@ -405,7 +484,7 @@ dialog {
 .shake-danger {
   animation: shake 0.45s ease-in-out;
   border-color: var(--danger) !important;
-  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.35) !important;
+  box-shadow: 0 0 0 2px var(--danger-subtle) !important;
 }
 
 .danger-banner {
@@ -413,8 +492,8 @@ dialog {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background-color: rgba(220, 38, 38, 0.12);
-  border: 1px solid rgba(220, 38, 38, 0.35);
+  background-color: var(--danger-subtle);
+  border: 1px solid var(--danger-subtle);
   border-left: 4px solid var(--danger);
   border-radius: var(--radius);
   color: var(--danger);
@@ -422,6 +501,3 @@ dialog {
   font-weight: 500;
   gap: 12px;
 }
-
-
-

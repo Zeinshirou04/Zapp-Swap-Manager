@@ -815,6 +815,7 @@ export const App: React.FC = () => {
         onDismiss={() => setAvailableUpdate(null)}
         statusMessage={updateStatusMsg}
         onClearStatus={() => setUpdateStatusMsg(null)}
+        hasActiveJobs={jobs.some((j) => j.status === 'running')}
       />
 
       {/* Global Toast Notifications */}

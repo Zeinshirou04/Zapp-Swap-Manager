@@ -233,7 +233,7 @@ export const LogsView: React.FC = () => {
           minHeight: '400px',
           maxHeight: 'calc(100vh - 280px)',
           overflowY: 'auto',
-          backgroundColor: '#0a0d14',
+          backgroundColor: 'var(--bg-sunken, #0C0B10)',
           border: '1px solid var(--border-color)',
           borderRadius: 'var(--radius, 8px)',
           padding: '14px',

@@ -87,4 +87,18 @@ describe('UpdateNotification Component', () => {
     fireEvent.click(screen.getByLabelText('Close update notification'));
     expect(onDismissMock).toHaveBeenCalledTimes(1);
   });
+
+  it('disables update button and shows active transfer warning when hasActiveJobs is true', () => {
+    render(
+      <UpdateNotification
+        update={mockUpdate}
+        onDismiss={vi.fn()}
+        hasActiveJobs={true}
+      />
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/Active file transfer in progress/i);
+    const updateBtn = screen.getByText('Update Now').closest('button');
+    expect(updateBtn).toBeDisabled();
+  });
 });

@@ -1,7 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { api, resolveCoverUrl } from '../api/client.ts';
 import { Game, Job, JobType, Library } from '../types/api.ts';
-import { formatBytes, formatLastPlayed, formatLibraryName, formatLibraryOptionLabel, normalizePath } from '../utils/format.ts';
+import {
+  formatBytes,
+  formatExactTimestamp,
+  formatLastPlayed,
+  formatLibraryName,
+  formatLibraryOptionLabel,
+  getSteamGridUrls,
+  getSteamHeroUrls,
+  normalizePath,
+} from '../utils/format.ts';
 import {
   ArrowLeft,
   Settings,
@@ -40,6 +49,8 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
 }) => {
   const [imgFailed, setImgFailed] = useState(false);
   const [steamFallbackIdx, setSteamFallbackIdx] = useState<number | null>(() => (game.cover_url ? null : 0));
+  const [heroImgFailed, setHeroImgFailed] = useState(false);
+  const [heroFallbackIdx, setHeroFallbackIdx] = useState<number>(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [coverRevision, setCoverRevision] = useState(0);
 
@@ -59,6 +70,8 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
   useEffect(() => {
     setImgFailed(false);
     setSteamFallbackIdx(game.cover_url ? null : 0);
+    setHeroImgFailed(false);
+    setHeroFallbackIdx(0);
     setName(game.name);
     setCoverUrl(game.cover_url || '');
     setInstallDir(game.install_dir);
@@ -78,19 +91,16 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
       String(j.app_id) === String(game.app_id)
   );
 
-  const steamCapsuleUrls = [
-    `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${game.app_id}/header.jpg`,
-    `https://cdn.akamai.steamstatic.com/steam/apps/${game.app_id}/header.jpg`,
-    `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.app_id}/capsule_616x353.jpg`,
-  ];
+  // Portrait Grid cover URL resolution (custom cover first, then Steam 600x900 grids)
+  const gridUrls = getSteamGridUrls(game.app_id);
 
   let displayUrl: string | null = null;
   if (!imgFailed) {
     if (steamFallbackIdx === null && game.cover_url) {
       const bust = coverRevision > 0 ? `${game.cover_url}-${coverRevision}` : game.cover_url;
       displayUrl = resolveCoverUrl(game, bust);
-    } else if (!game.is_custom && steamFallbackIdx !== null && steamFallbackIdx < steamCapsuleUrls.length) {
-      displayUrl = steamCapsuleUrls[steamFallbackIdx];
+    } else if (!game.is_custom && steamFallbackIdx !== null && steamFallbackIdx < gridUrls.length) {
+      displayUrl = gridUrls[steamFallbackIdx];
     }
   }
 
@@ -101,10 +111,29 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
       } else {
         setImgFailed(true);
       }
-    } else if (steamFallbackIdx < steamCapsuleUrls.length - 1) {
+    } else if (steamFallbackIdx < gridUrls.length - 1) {
       setSteamFallbackIdx(steamFallbackIdx + 1);
     } else {
       setImgFailed(true);
+    }
+  };
+
+  // Hero Banner resolution (Steam library_hero.jpg first for Steam games, or fallback cover artwork)
+  const heroUrls = getSteamHeroUrls(game.app_id);
+  let heroDisplayUrl: string | null = null;
+  if (!heroImgFailed) {
+    if (!game.is_custom && heroFallbackIdx < heroUrls.length) {
+      heroDisplayUrl = heroUrls[heroFallbackIdx];
+    } else if (displayUrl) {
+      heroDisplayUrl = displayUrl;
+    }
+  }
+
+  const handleHeroImgError = () => {
+    if (!game.is_custom && heroFallbackIdx < heroUrls.length - 1) {
+      setHeroFallbackIdx(heroFallbackIdx + 1);
+    } else {
+      setHeroImgFailed(true);
     }
   };
 
@@ -164,111 +193,273 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
     : game.install_dir;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Top Breadcrumb Navigation */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <button
-          onClick={onBack}
-          className="btn-secondary"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '6px 14px',
-            fontSize: '0.875rem',
-            fontWeight: 500,
-          }}
-        >
-          <ArrowLeft size={16} /> Back to Games
-        </button>
-
-        <button
-          onClick={openSettingsModal}
-          className="btn-secondary"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '6px 14px',
-            fontSize: '0.875rem',
-          }}
-        >
-          <Settings size={16} /> Game Settings
-        </button>
-      </div>
-
-      {/* Hero Showcase Card */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+      {/* Notion-Style Hero Banner with Acrylic Frosted Backdrop & Foreground Portrait Grid */}
       <div
-        className="card"
         style={{
           position: 'relative',
           overflow: 'hidden',
-          padding: '28px',
-          backgroundColor: 'var(--bg-card)',
-          border: '1px solid var(--border-color)',
-          borderRadius: '12px',
+          margin: '-24px -24px 0 -24px',
+          padding: '20px 28px 32px 28px',
+          borderBottom: '1px solid var(--border-color)',
+          backgroundColor: 'var(--bg-sunken)',
         }}
       >
-        {/* Ambient Blurred Background from artwork */}
-        {displayUrl && (
-          <div
+        {/* Background Banner Image */}
+        {heroDisplayUrl && (
+          <img
+            src={heroDisplayUrl}
+            alt=""
+            aria-hidden="true"
+            onError={handleHeroImgError}
             style={{
               position: 'absolute',
               inset: 0,
-              backgroundImage: `url(${displayUrl})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              filter: 'blur(36px) saturate(1.4)',
-              opacity: 0.12,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              objectPosition: 'center',
               pointerEvents: 'none',
             }}
           />
         )}
 
+        {/* Acrylic Frosted Scrim in front of Banner */}
         <div
           style={{
-            position: 'relative',
-            zIndex: 1,
-            display: 'flex',
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            gap: '24px',
-            alignItems: 'center',
+            position: 'absolute',
+            inset: 0,
+            backdropFilter: 'blur(20px) saturate(1.35)',
+            WebkitBackdropFilter: 'blur(20px) saturate(1.35)',
+            background:
+              'linear-gradient(180deg, color-mix(in srgb, var(--bg-main) 62%, transparent) 0%, color-mix(in srgb, var(--bg-main) 82%, transparent) 60%, var(--bg-main) 100%)',
+            pointerEvents: 'none',
           }}
-        >
-          {/* Game Cover Poster */}
-          <div
-            style={{
-              width: '240px',
-              height: '135px',
-              borderRadius: '8px',
-              overflow: 'hidden',
-              backgroundColor: 'var(--bg-main)',
-              border: '1px solid var(--border-color)',
-              flexShrink: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 8px 16px -4px rgba(0, 0, 0, 0.2)',
-            }}
-          >
-            {displayUrl ? (
-              <img
-                src={displayUrl}
-                alt={game.name}
-                onError={handleImgError}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
-                <Folder size={32} />
-                <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>NO ARTWORK</span>
-              </div>
-            )}
+        />
+
+        {/* Foreground Content over Acrylic Banner */}
+        <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Top Breadcrumb Bar */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <button
+              type="button"
+              onClick={onBack}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--primary-text, var(--primary))',
+                padding: 0,
+                fontSize: '0.875rem',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              <ArrowLeft size={16} /> Back to Games
+            </button>
+
+            <button
+              type="button"
+              onClick={openSettingsModal}
+              className="btn-secondary"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 14px',
+                fontSize: '0.85rem',
+              }}
+            >
+              <Settings size={15} /> Game Settings
+            </button>
           </div>
 
-          {/* Details & Metadata Header */}
-          <div style={{ flex: '1 1 320px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {/* Foreground Portrait Grid Poster, Title & Swap Actions */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: '24px',
+              alignItems: 'flex-end',
+            }}
+          >
+            {/* Portrait Grid Cover Poster (2:3) */}
+            <div
+              style={{
+                width: '132px',
+                aspectRatio: '2 / 3',
+                borderRadius: '10px',
+                overflow: 'hidden',
+                backgroundColor: 'var(--bg-card)',
+                border: '1px solid var(--border-strong)',
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 14px 30px -6px rgba(0, 0, 0, 0.35)',
+              }}
+            >
+              {displayUrl ? (
+                <img
+                  src={displayUrl}
+                  alt={game.name}
+                  onError={handleImgError}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', padding: '12px', textAlign: 'center' }}>
+                  <Folder size={28} />
+                  <span style={{ fontSize: '0.7rem', fontWeight: 600 }}>NO ARTWORK</span>
+                </div>
+              )}
+            </div>
+
+            {/* Clean Title & Quick Stats (Status badges live in Game & Backup Status below) */}
+            <div style={{ flex: '1 1 320px', display: 'flex', flexDirection: 'column', gap: '10px', paddingBottom: '4px' }}>
+              <h1 style={{ fontSize: '2rem', fontWeight: 800, letterSpacing: '-0.025em', margin: 0, color: 'var(--text-main)' }}>
+                {game.name}
+              </h1>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '0.875rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+                <span>App ID: <code>{game.app_id}</code></span>
+                <span>•</span>
+                <span>Size: <strong style={{ color: 'var(--text-main)' }}>{formatBytes(game.size_bytes)}</strong></span>
+                <span>•</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                  <Clock size={14} /> Last Played: <strong style={{ color: 'var(--text-main)' }}>{formatLastPlayed(game.last_played)}</strong>
+                </span>
+              </div>
+
+              {game.tags && game.tags.length > 0 && (
+                <div style={{ display: 'flex', gap: '6px', marginTop: '2px', flexWrap: 'wrap' }}>
+                  {game.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      style={{
+                        fontSize: '0.75rem',
+                        padding: '2px 8px',
+                        borderRadius: '9999px',
+                        border: '1px solid var(--border-strong)',
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '180px' }}>
+              {activeJob ? (
+                <div
+                  style={{
+                    padding: '10px 14px',
+                    backgroundColor: 'var(--primary-subtle)',
+                    borderRadius: 'var(--radius)',
+                    border: '1px solid var(--primary-border)',
+                    fontSize: '0.85rem',
+                    color: 'var(--primary-text)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <Loader2 size={16} className="spin" />
+                  <span>Migration in progress...</span>
+                </div>
+              ) : isSwappable ? (
+                isOnSSD ? (
+                  <>
+                    <button
+                      onClick={() => onAction(game, 'backup')}
+                      disabled={actionLoading}
+                      className="btn-secondary"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 16px' }}
+                    >
+                      <Database size={16} /> Backup to HDD
+                    </button>
+                    <button
+                      onClick={() => onAction(game, 'evict')}
+                      disabled={actionLoading}
+                      className="btn-secondary"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 16px', color: 'var(--danger)', borderColor: 'rgba(220, 38, 38, 0.3)' }}
+                    >
+                      <HardDrive size={16} /> Evict to HDD
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => onAction(game, 'promote')}
+                    disabled={actionLoading}
+                    className="btn-primary"
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 16px' }}
+                  >
+                    <Zap size={16} /> Promote to SSD
+                  </button>
+                )
+              ) : (
+                <div
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: 'var(--radius)',
+                    border: '1px solid var(--border-color)',
+                    fontSize: '0.8rem',
+                    color: 'var(--text-muted)',
+                    textAlign: 'center',
+                  }}
+                >
+                  {game.is_native_hdd ? 'Pinned to HDD (Native)' : 'Game Swapping Disabled'}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Details Sections (Flat backgroundless layout directly on page canvas) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '28px' }}>
+        {/* Section 1: Storage Location */}
+        <div style={{ padding: '4px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <Folder size={18} style={{ color: 'var(--primary-text)' }} />
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 600, margin: 0 }}>Current Storage Path</h3>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem' }}>
+            <div>
+              <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.75rem', marginBottom: '2px' }}>Configured Library:</span>
+              <strong style={{ color: 'var(--text-main)' }}>
+                {currentLib ? formatLibraryName(currentLib) : 'Unregistered Drive'}
+              </strong>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.75rem', marginBottom: '2px' }}>Full Directory:</span>
+              <span
+                style={{
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                  fontSize: '0.8rem',
+                  color: 'var(--text-main)',
+                  wordBreak: 'break-all',
+                  userSelect: 'text',
+                }}
+              >
+                {displayFullPath}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 2: Game & Backup Status (Consolidated status indicators) */}
+        <div style={{ padding: '4px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <Database size={18} style={{ color: game.has_hdd_backup ? 'var(--success)' : 'var(--warning)' }} />
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 600, margin: 0 }}>Game & Backup Status</h3>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span
                 style={{
@@ -276,171 +467,31 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
                   fontWeight: 600,
                   padding: '3px 8px',
                   borderRadius: '4px',
-                  backgroundColor: isOnSSD ? 'rgba(37, 99, 235, 0.15)' : 'rgba(71, 85, 105, 0.15)',
-                  color: isOnSSD ? 'var(--primary)' : 'var(--hdd-color)',
+                  backgroundColor: isOnSSD ? 'var(--primary-subtle)' : 'var(--bg-card-hover)',
+                  color: isOnSSD ? 'var(--ssd-color)' : 'var(--hdd-color)',
                   border: `1px solid ${isOnSSD ? 'var(--primary-border)' : 'var(--border-color)'}`,
                 }}
               >
                 {isOnSSD ? 'Fast SSD Cache' : 'Storage HDD Master'}
               </span>
 
-              {game.is_custom ? (
-                <span style={{ fontSize: '0.75rem', padding: '3px 8px', borderRadius: '4px', backgroundColor: 'var(--bg-main)', color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}>
-                  Non-Steam Standalone
-                </span>
-              ) : (
-                <span style={{ fontSize: '0.75rem', padding: '3px 8px', borderRadius: '4px', backgroundColor: 'var(--bg-main)', color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}>
-                  Steam Game
-                </span>
-              )}
+              <span style={{ fontSize: '0.75rem', padding: '3px 8px', borderRadius: '4px', color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}>
+                {game.is_custom ? 'Non-Steam Standalone' : 'Steam Game'}
+              </span>
 
               {game.is_native_hdd && (
-                <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '3px 8px', borderRadius: '4px', backgroundColor: 'rgba(168, 85, 247, 0.15)', color: '#9333ea', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '3px 8px', borderRadius: '4px', color: 'var(--primary-text)', border: '1px solid var(--primary-border)' }}>
                   Native HDD Only
                 </span>
               )}
 
               {game.has_hdd_backup && (
-                <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '3px 8px', borderRadius: '4px', backgroundColor: 'rgba(22, 163, 74, 0.12)', color: 'var(--success)', border: '1px solid rgba(22, 163, 74, 0.3)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '3px 8px', borderRadius: '4px', backgroundColor: 'var(--success-subtle)', color: 'var(--success)', border: '1px solid rgba(22, 163, 74, 0.3)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                   <ShieldCheck size={12} /> Backup Verified
                 </span>
               )}
             </div>
 
-            <h1 style={{ fontSize: '1.75rem', fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>
-              {game.name}
-            </h1>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '0.85rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-              <span>App ID: <code>{game.app_id}</code></span>
-              <span>•</span>
-              <span>Size: <strong>{formatBytes(game.size_bytes)}</strong></span>
-              <span>•</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <Clock size={14} /> Last Played: <strong>{formatLastPlayed(game.last_played)}</strong>
-              </span>
-            </div>
-
-            {game.tags && game.tags.length > 0 && (
-              <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
-                {game.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    style={{
-                      fontSize: '0.75rem',
-                      padding: '2px 8px',
-                      borderRadius: '9999px',
-                      backgroundColor: 'var(--bg-main)',
-                      border: '1px solid var(--border-color)',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Action Buttons: Hide Backup/Evict if not swappable */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '180px' }}>
-            {activeJob ? (
-              <div
-                style={{
-                  padding: '10px 14px',
-                  backgroundColor: 'var(--primary-subtle)',
-                  borderRadius: 'var(--radius)',
-                  border: '1px solid var(--primary-border)',
-                  fontSize: '0.85rem',
-                  color: 'var(--primary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <Loader2 size={16} className="spin" />
-                <span>Migration in progress...</span>
-              </div>
-            ) : isSwappable ? (
-              isOnSSD ? (
-                <>
-                  <button
-                    onClick={() => onAction(game, 'backup')}
-                    disabled={actionLoading}
-                    className="btn-secondary"
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 16px' }}
-                  >
-                    <Database size={16} /> Backup to HDD
-                  </button>
-                  <button
-                    onClick={() => onAction(game, 'evict')}
-                    disabled={actionLoading}
-                    className="btn-secondary"
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 16px', color: 'var(--danger)', borderColor: 'rgba(220, 38, 38, 0.3)' }}
-                  >
-                    <HardDrive size={16} /> Evict to HDD
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => onAction(game, 'promote')}
-                  disabled={actionLoading}
-                  className="btn-primary"
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 16px' }}
-                >
-                  <Zap size={16} /> Promote to SSD
-                </button>
-              )
-            ) : (
-              <div
-                style={{
-                  padding: '10px 14px',
-                  backgroundColor: 'var(--bg-main)',
-                  borderRadius: 'var(--radius)',
-                  border: '1px solid var(--border-color)',
-                  fontSize: '0.8rem',
-                  color: 'var(--text-muted)',
-                  textAlign: 'center',
-                }}
-              >
-                {game.is_native_hdd ? 'Pinned to HDD (Native)' : 'Game Swapping Disabled'}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Information Cards Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-        {/* Card 1: Storage Location */}
-        <div className="card" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <Folder size={18} style={{ color: 'var(--primary)' }} />
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 600, margin: 0 }}>Current Storage Path</h3>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.85rem' }}>
-            <div>
-              <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.75rem' }}>Configured Library:</span>
-              <strong style={{ color: 'var(--text-main)' }}>
-                {currentLib ? formatLibraryName(currentLib) : 'Unregistered Drive'}
-              </strong>
-            </div>
-            <div>
-              <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.75rem' }}>Full Directory:</span>
-              <code style={{ fontSize: '0.8rem', wordBreak: 'break-all', display: 'block', padding: '6px 8px', backgroundColor: 'var(--bg-main)', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
-                {displayFullPath}
-              </code>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 2: Backup Status */}
-        <div className="card" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <Database size={18} style={{ color: game.has_hdd_backup ? 'var(--success)' : 'var(--warning)' }} />
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 600, margin: 0 }}>HDD Backup Status</h3>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.85rem' }}>
             <div>
               <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.75rem' }}>Master Copy:</span>
               <strong style={{ color: game.has_hdd_backup ? 'var(--success)' : 'var(--warning)' }}>
@@ -456,16 +507,16 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
           </div>
         </div>
 
-        {/* Card 3: Game Metadata */}
-        <div className="card" style={{ padding: '20px' }}>
+        {/* Section 3: Activity & Runtime (Exact timestamp) */}
+        <div style={{ padding: '4px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <Clock size={18} style={{ color: 'var(--primary)' }} />
+            <Clock size={18} style={{ color: 'var(--primary-text)' }} />
             <h3 style={{ fontSize: '0.95rem', fontWeight: 600, margin: 0 }}>Activity & Runtime</h3>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.85rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem' }}>
             <div>
               <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.75rem' }}>Latest Played:</span>
-              <strong style={{ color: 'var(--text-main)' }}>{formatLastPlayed(game.last_played)}</strong>
+              <strong style={{ color: 'var(--text-main)' }}>{formatExactTimestamp(game.last_played)}</strong>
             </div>
             <div>
               <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.75rem' }}>Build Identifier:</span>
@@ -475,20 +526,17 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
         </div>
       </div>
 
-      {/* Media & Captures Section (ShareX & NVIDIA ShadowPlay Placeholder) */}
+      {/* Media & Captures Section (Backgroundless, clean divider) */}
       <div
-        className="card"
         style={{
-          padding: '24px',
-          border: '1px dashed var(--border-color)',
-          backgroundColor: 'var(--bg-card)',
-          borderRadius: '12px',
+          paddingTop: '24px',
+          borderTop: '1px solid var(--border-color)',
           position: 'relative',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Camera size={18} style={{ color: 'var(--primary)' }} />
+            <Camera size={18} style={{ color: 'var(--primary-text)' }} />
             <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>
               Media & Captures (ShareX / NVIDIA ShadowPlay)
             </h3>
@@ -497,11 +545,7 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
             style={{
               fontSize: '0.75rem',
               fontWeight: 600,
-              padding: '2px 8px',
-              borderRadius: '9999px',
-              backgroundColor: 'var(--primary-subtle)',
-              color: 'var(--primary)',
-              border: '1px solid var(--primary-border)',
+              color: 'var(--primary-text)',
             }}
           >
             Coming Soon
@@ -510,31 +554,17 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
 
         <div
           style={{
-            padding: '32px 20px',
+            padding: '28px 20px',
             textAlign: 'center',
-            backgroundColor: 'var(--bg-main)',
             borderRadius: '8px',
-            border: '1px solid var(--border-color)',
+            border: '1px dashed var(--border-color)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             gap: '10px',
           }}
         >
-          <div
-            style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: '50%',
-              backgroundColor: 'rgba(37, 99, 235, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--primary)',
-            }}
-          >
-            <Film size={24} />
-          </div>
+          <Film size={24} style={{ color: 'var(--primary-text)', opacity: 0.7 }} />
           <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
             No Captures Synced Yet
           </h4>

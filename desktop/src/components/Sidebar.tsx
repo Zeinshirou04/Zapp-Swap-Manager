@@ -97,7 +97,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {navItems.map((item) => {
-          const isActive = activeRoute === item.id || (item.id === 'games' && activeRoute === 'game-detail');
+          const isActive =
+            activeRoute === item.id ||
+            (item.id === 'games' && activeRoute === 'game-detail') ||
+            (item.id === 'drives' && activeRoute === 'drive-detail');
           return (
             <button
               key={item.id}

@@ -94,3 +94,47 @@ export function formatLastPlayed(dateStr?: string | null): string {
   if (diffDays < 7 && diffDays > 0) return `${diffDays} days ago`;
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
+
+/**
+ * Formats a timestamp into an exact localized date and time string:
+ * e.g. "Nov 11, 2026, 01:25:00 PM"
+ */
+export function formatExactTimestamp(dateStr?: string | null): string {
+  if (!dateStr) return 'Never / Not recorded';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return 'Never / Not recorded';
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+/**
+ * Steam CDN portrait Grid artwork candidates (2:3 aspect ratio) with landscape header fallbacks.
+ */
+export function getSteamGridUrls(appId: number): string[] {
+  return [
+    `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900_2x.jpg`,
+    `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900_2x.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900.jpg`,
+    `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
+    `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
+  ];
+}
+
+/**
+ * Steam CDN wide Hero banner artwork candidates for Notion-style page banners.
+ */
+export function getSteamHeroUrls(appId: number): string[] {
+  return [
+    `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${appId}/library_hero.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_hero.jpg`,
+    `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${appId}/library_hero_blur.jpg`,
+    `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
+  ];
+}

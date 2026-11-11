@@ -1,23 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { Game, Job, JobType } from '../types/api.ts';
-import { Database, RefreshCw, Zap, Loader2, Gamepad2, Folder } from 'lucide-react';
-import { formatBytes } from '../utils/format.ts';
+import { Database, RefreshCw, Zap, Loader2, Gamepad2, Folder, ArrowRight } from 'lucide-react';
+import { formatBytes, getSteamGridUrls } from '../utils/format.ts';
 import { resolveCoverUrl } from '../api/client.ts';
 
 interface GameCardProps {
   game: Game;
-  onAction: (game: Game, type: JobType) => void;
-  actionLoading: boolean;
+  onAction?: (game: Game, type: JobType) => void;
+  actionLoading?: boolean;
   activeJob?: Job;
   onClick?: (game: Game) => void;
+  variant?: 'actions' | 'details';
 }
 
 export const GameCard: React.FC<GameCardProps> = ({
   game,
   onAction,
-  actionLoading,
+  actionLoading = false,
   activeJob,
   onClick,
+  variant = 'actions',
 }) => {
   const [imgFailed, setImgFailed] = useState(false);
   const [steamFallbackIdx, setSteamFallbackIdx] = useState<number | null>(() => (game.cover_url ? null : 0));
@@ -29,19 +31,15 @@ export const GameCard: React.FC<GameCardProps> = ({
     setSteamFallbackIdx(game.cover_url ? null : 0);
   }, [game.cover_url, game.app_id]);
 
-  // Try custom cover URL first, then Steam CDN primary URL, then fallback CDN URL
-  const steamCapsuleUrls = [
-    `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${game.app_id}/header.jpg`,
-    `https://cdn.akamai.steamstatic.com/steam/apps/${game.app_id}/header.jpg`,
-    `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.app_id}/capsule_616x353.jpg`,
-  ];
+  // Try custom cover URL first, then Steam portrait Grid CDN URLs with landscape fallback
+  const gridUrls = getSteamGridUrls(game.app_id);
 
   let displayUrl: string | null = null;
   if (!imgFailed) {
     if (steamFallbackIdx === null && game.cover_url) {
       displayUrl = resolveCoverUrl(game, game.cover_url);
-    } else if (!game.is_custom && steamFallbackIdx !== null && steamFallbackIdx < steamCapsuleUrls.length) {
-      displayUrl = steamCapsuleUrls[steamFallbackIdx];
+    } else if (!game.is_custom && steamFallbackIdx !== null && steamFallbackIdx < gridUrls.length) {
+      displayUrl = gridUrls[steamFallbackIdx];
     }
   }
 
@@ -53,7 +51,7 @@ export const GameCard: React.FC<GameCardProps> = ({
       } else {
         setImgFailed(true);
       }
-    } else if (steamFallbackIdx < steamCapsuleUrls.length - 1) {
+    } else if (steamFallbackIdx < gridUrls.length - 1) {
       setSteamFallbackIdx((prev) => (prev !== null ? prev + 1 : 0));
     } else {
       setImgFailed(true);
@@ -80,8 +78,8 @@ export const GameCard: React.FC<GameCardProps> = ({
         <div
           style={{
             position: 'relative',
-            aspectRatio: '460 / 215',
-            borderRadius: 'var(--radius) var(--radius) 0 0',
+            aspectRatio: '2 / 3',
+            borderRadius: 'var(--radius-card) var(--radius-card) 0 0',
             overflow: 'hidden',
             backgroundColor: 'var(--bg-card-hover)',
             borderBottom: '1px solid var(--border-color)',
@@ -285,6 +283,28 @@ export const GameCard: React.FC<GameCardProps> = ({
               />
             </div>
           </div>
+        ) : variant === 'details' ? (
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              onClick={() => onClick?.(game)}
+              aria-label={`View details for ${game.name}`}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--primary-text, var(--primary))',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                cursor: 'pointer',
+                padding: '4px 6px',
+              }}
+            >
+              Details <ArrowRight size={14} />
+            </button>
+          </div>
         ) : !isOnSSD ? (
           game.is_native_hdd ? (
             <div
@@ -302,7 +322,7 @@ export const GameCard: React.FC<GameCardProps> = ({
             </div>
           ) : (
             <button
-              onClick={() => onAction(game, 'promote')}
+              onClick={() => onAction?.(game, 'promote')}
               disabled={actionLoading || (game.swap_enabled === false)}
               className="btn-primary"
               style={{ width: '100%', justifyContent: 'center' }}
@@ -314,7 +334,7 @@ export const GameCard: React.FC<GameCardProps> = ({
         ) : (
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
-              onClick={() => onAction(game, 'backup')}
+              onClick={() => onAction?.(game, 'backup')}
               disabled={actionLoading}
               className={game.has_hdd_backup ? 'btn-secondary' : 'btn-primary'}
               style={{ flex: 1, justifyContent: 'center' }}
@@ -323,7 +343,7 @@ export const GameCard: React.FC<GameCardProps> = ({
               <RefreshCw size={14} /> Backup to HDD
             </button>
             <button
-              onClick={() => onAction(game, 'evict')}
+              onClick={() => onAction?.(game, 'evict')}
               disabled={actionLoading}
               className="btn-danger"
               title="Safely mirror to HDD and free SSD space"

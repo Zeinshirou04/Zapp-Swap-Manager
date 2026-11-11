@@ -14,6 +14,7 @@ Windows tool that moves and backs up Steam games between an SSD (fast, small) an
 - If you need a change in another component or in the API contract, STOP and say so.
 - Implement only the plan you were given (`docs/plans/NNN-*.md`). Do not expand scope.
 - Before touching code that moves, copies, mirrors or deletes files, or edits Steam manifests, read `docs/safety.md`.
+- Whenever making UI changes (`desktop/` or `mobile/`), follow `.agents/skills/zapp-ui-design/SKILL.md` and update it alongside your changes whenever design guidelines, patterns, or components evolve.
 - Look up current library docs (Context7) instead of guessing APIs from memory.
 - Run `just check` before every commit.
 

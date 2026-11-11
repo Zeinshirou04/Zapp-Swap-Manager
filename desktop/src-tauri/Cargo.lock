@@ -4760,7 +4760,7 @@ dependencies = [
 
 [[package]]
 name = "zapp-desktop"
-version = "0.3.3-beta.1"
+version = "0.3.3-beta.2"
 dependencies = [
  "serde",
  "serde_json",

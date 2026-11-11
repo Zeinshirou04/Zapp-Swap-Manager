@@ -70,7 +70,8 @@ describe('DriveDetailView Component', () => {
     expect(onBack).toHaveBeenCalled();
   });
 
-  it('filters and displays games located on this drive', () => {
+  it('filters and displays games located on this drive using Grid GameCard with Details trigger', () => {
+    const onSelectGame = vi.fn();
     render(
       <DriveDetailView
         library={mockLibrary}
@@ -79,12 +80,24 @@ describe('DriveDetailView Component', () => {
         jobs={mockJobs}
         onBack={vi.fn()}
         onUpdatePath={vi.fn().mockResolvedValue(undefined)}
+        onSelectGame={onSelectGame}
       />
     );
 
     // Terraria is on ssd-0, Wuthering Waves is on hdd-0
     expect(screen.getByText('Terraria')).toBeInTheDocument();
     expect(screen.queryByText('Wuthering Waves')).not.toBeInTheDocument();
+
+    // Renders GameCard with portrait grid cover and Details button (not Backup/Evict buttons)
+    expect(screen.getByTestId('game-card')).toBeInTheDocument();
+    const coverImg = screen.getByAltText('Terraria cover art') as HTMLImageElement;
+    expect(coverImg.src).toContain('library_600x900_2x.jpg');
+    expect(screen.queryByRole('button', { name: /Evict to HDD/i })).not.toBeInTheDocument();
+
+    const detailsBtn = screen.getByRole('button', { name: /View details for Terraria/i });
+    expect(detailsBtn).toHaveTextContent('Details');
+    fireEvent.click(detailsBtn);
+    expect(onSelectGame).toHaveBeenCalledWith(mockGames[0]);
 
     // Search filter
     const searchInput = screen.getByPlaceholderText(/Filter drive games/i);

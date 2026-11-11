@@ -81,6 +81,31 @@ func TestRunBuildsCommonFlags(t *testing.T) {
 	}
 }
 
+func TestTailFlagsWithRobocopyConfig(t *testing.T) {
+	cfg := &RobocopyConfig{
+		Threads:     32,
+		Retries:     5,
+		WaitSeconds: 10,
+		Unbuffered:  true,
+	}
+	got := buildArgsWithTail(`C:\s`, `C:\d`, tailFlags(cfg), CopyFlag)
+	want := []string{`C:\s`, `C:\d`, "/E", "/NP", "/NFL", "/NDL", "/R:5", "/W:10", "/MT:32", "/J"}
+	if len(got) != len(want) {
+		t.Fatalf("args = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("args[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+
+	// Verify context round-trip
+	ctx := withRobocopyConfig(context.Background(), cfg)
+	if gotCtx := robocopyConfigFromContext(ctx); gotCtx == nil || gotCtx.Threads != 32 || !gotCtx.Unbuffered {
+		t.Fatalf("unexpected context robocopy config: %+v", gotCtx)
+	}
+}
+
 // stubRunner forces the runner outcome for failure-path tests and pins the
 // driver to robocopy so these tests behave identically on Linux CI.
 func stubRunner(t *testing.T, code int, err error) func() {

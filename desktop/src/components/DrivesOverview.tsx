@@ -76,7 +76,7 @@ export const DrivesOverview: React.FC<DrivesOverviewProps> = ({ libraries, games
                       padding: '4px 6px',
                     }}
                   >
-                    Drive Details <ArrowRight size={14} />
+                    Details <ArrowRight size={14} />
                   </button>
                 )}
               </div>

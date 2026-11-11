@@ -30,6 +30,46 @@ type Preferences struct {
 	RelayServerURL             string `json:"relay_server_url"`
 	RelayDeviceID              string `json:"relay_device_id"`
 	RelayDeviceSecret          string `json:"relay_device_secret"`
+	RobocopyThreads            int    `json:"robocopy_threads"`
+	RobocopyRetries            *int   `json:"robocopy_retries,omitempty"`
+	RobocopyWaitSeconds        *int   `json:"robocopy_wait_seconds,omitempty"`
+	RobocopyUnbuffered         bool   `json:"robocopy_unbuffered"`
+}
+
+func intPtr(v int) *int { return &v }
+
+// Normalized returns a copy of Preferences with Robocopy defaults and safe bounds applied.
+func (p Preferences) Normalized() Preferences {
+	if p.RobocopyThreads <= 0 {
+		p.RobocopyThreads = 8
+	} else if p.RobocopyThreads > 128 {
+		p.RobocopyThreads = 128
+	}
+
+	if p.RobocopyRetries == nil {
+		p.RobocopyRetries = intPtr(2)
+	} else {
+		r := *p.RobocopyRetries
+		if r < 0 {
+			r = 0
+		} else if r > 20 {
+			r = 20
+		}
+		p.RobocopyRetries = intPtr(r)
+	}
+
+	if p.RobocopyWaitSeconds == nil {
+		p.RobocopyWaitSeconds = intPtr(2)
+	} else {
+		w := *p.RobocopyWaitSeconds
+		if w < 0 {
+			w = 0
+		} else if w > 60 {
+			w = 60
+		}
+		p.RobocopyWaitSeconds = intPtr(w)
+	}
+	return p
 }
 
 // Config represents runtime settings for the Zapp Swap Manager core daemon.
@@ -51,9 +91,10 @@ type Config struct {
 // Default returns a Config initialized with sensible and safe defaults.
 func Default() *Config {
 	return &Config{
-		BindAddr: fmt.Sprintf("%s:%d", DefaultHost, DefaultPort),
-		DBPath:   DefaultDBPath(),
-		Headless: false,
+		BindAddr:    fmt.Sprintf("%s:%d", DefaultHost, DefaultPort),
+		DBPath:      DefaultDBPath(),
+		Headless:    false,
+		Preferences: (Preferences{}).Normalized(),
 	}
 }
 
@@ -110,6 +151,7 @@ func Load(configPath string) (*Config, error) {
 	} else if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("unmarshaling config json: %w", err)
 	} else {
+		cfg.Preferences = cfg.Preferences.Normalized()
 		if healMissingLibraryPaths(cfg.Libraries) {
 			_ = cfg.Save()
 		}

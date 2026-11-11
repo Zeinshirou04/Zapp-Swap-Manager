@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { DrivesOverview } from '../components/DrivesOverview.tsx';
 import { Library } from '../types/api.ts';
 
@@ -28,6 +28,19 @@ describe('DrivesOverview Component', () => {
     expect(screen.getByText('Games Library (D: Drive)')).toBeInTheDocument();
     expect(screen.getAllByText('Library Games Storage')).toHaveLength(2);
     expect(screen.getAllByText('75%')).toHaveLength(2);
+  });
+
+  it('renders concise Details link when onSelectDrive is provided', () => {
+    const onSelectDrive = vi.fn();
+    render(<DrivesOverview libraries={mockLibraries} onSelectDrive={onSelectDrive} />);
+
+    const detailButtons = screen.getAllByRole('button', { name: /View details for/i });
+    expect(detailButtons).toHaveLength(2);
+    expect(detailButtons[0]).toHaveTextContent('Details');
+    expect(screen.queryByText('Drive Details')).not.toBeInTheDocument();
+
+    fireEvent.click(detailButtons[0]);
+    expect(onSelectDrive).toHaveBeenCalledWith(mockLibraries[0]);
   });
 
   it('renders empty placeholder when no libraries exist', () => {

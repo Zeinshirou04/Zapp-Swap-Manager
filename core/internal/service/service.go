@@ -156,9 +156,9 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 
 func defaultExecutor(whitelist func() []steam.Library, prefFn func() config.Preferences, qFn func() *queue.Queue) queue.Executor {
 	return func(ctx context.Context, job queue.Job, step queue.StepFunc) error {
-		prefs := config.Preferences{}
+		prefs := (config.Preferences{}).Normalized()
 		if prefFn != nil {
-			prefs = prefFn()
+			prefs = prefFn().Normalized()
 		}
 
 		wasSteamRunning := false
@@ -220,8 +220,23 @@ func defaultExecutor(whitelist func() []steam.Library, prefFn func() config.Pref
 		)
 
 		manifestName := fmt.Sprintf("appmanifest_%s.acf", job.AppID)
+		retries := 2
+		if prefs.RobocopyRetries != nil {
+			retries = *prefs.RobocopyRetries
+		}
+		waitSecs := 2
+		if prefs.RobocopyWaitSeconds != nil {
+			waitSecs = *prefs.RobocopyWaitSeconds
+		}
+		robocopCfg := &transfer.RobocopyConfig{
+			Threads:     prefs.RobocopyThreads,
+			Retries:     retries,
+			WaitSeconds: waitSecs,
+			Unbuffered:  prefs.RobocopyUnbuffered,
+		}
 		lastLoggedPct := -1
 		opts := transfer.Options{
+			Robocopy: robocopCfg,
 			ProgressFn: func(bytesTransferred, totalBytes int64, percent float64) {
 				if qFn != nil {
 					if qInst := qFn(); qInst != nil {

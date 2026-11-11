@@ -11,6 +11,7 @@ import {
   Folder,
 } from 'lucide-react';
 import { formatBytes, formatLibraryName } from '../utils/format.ts';
+import { GameCard } from './GameCard.tsx';
 
 interface DriveDetailViewProps {
   library: Library;
@@ -30,8 +31,8 @@ export const DriveDetailView: React.FC<DriveDetailViewProps> = ({
   allLibraries: _allLibraries,
   jobs,
   onBack,
-  onAction,
-  actionLoading = false,
+  onAction: _onAction,
+  actionLoading: _actionLoading = false,
   onUpdatePath,
   onSelectGame,
 }) => {
@@ -135,15 +136,17 @@ export const DriveDetailView: React.FC<DriveDetailViewProps> = ({
         </div>
       </div>
 
-      {/* Hardware & Storage Capacity Overview */}
+      {/* Hardware & Storage Capacity Overview (Flat without heavy card backgrounds) */}
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: '16px',
+          gap: '24px',
+          padding: '8px 0 16px 0',
+          borderBottom: '1px solid var(--border-color)',
         }}
       >
-        <div className="card">
+        <div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
             Hardware Capacity
           </div>
@@ -172,7 +175,7 @@ export const DriveDetailView: React.FC<DriveDetailViewProps> = ({
           </div>
         </div>
 
-        <div className="card">
+        <div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
             Library Games Allocation
           </div>
@@ -331,8 +334,8 @@ export const DriveDetailView: React.FC<DriveDetailViewProps> = ({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-              gap: '12px',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+              gap: '16px',
             }}
           >
             {filteredGames.map((game) => {
@@ -343,90 +346,13 @@ export const DriveDetailView: React.FC<DriveDetailViewProps> = ({
               );
 
               return (
-                <div
+                <GameCard
                   key={game.app_id}
-                  className="card"
-                  style={{
-                    padding: '14px 16px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    gap: '12px',
-                    cursor: onSelectGame ? 'pointer' : 'default',
-                  }}
-                  onClick={() => onSelectGame?.(game)}
-                >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
-                    <div style={{ minWidth: 0 }}>
-                      <h3
-                        style={{
-                          fontSize: '0.95rem',
-                          fontWeight: 600,
-                          margin: 0,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          color: 'var(--text-main)',
-                        }}
-                      >
-                        {game.name}
-                      </h3>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        App ID: {game.app_id} • {formatBytes(game.size_bytes)}
-                      </div>
-                    </div>
-
-                    <span
-                      style={{
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        color: isSSD ? 'var(--ssd-color)' : 'var(--hdd-color)',
-                      }}
-                    >
-                      {isSSD ? 'SSD' : 'HDD'}
-                    </span>
-                  </div>
-
-                  {onAction && !activeJob && (
-                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                      {isSSD ? (
-                        <button
-                          type="button"
-                          disabled={actionLoading}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onAction(game, 'evict');
-                          }}
-                          className="btn-secondary"
-                          style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-                        >
-                          Evict to HDD
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={actionLoading}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onAction(game, 'promote');
-                          }}
-                          className="btn-primary"
-                          style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-                        >
-                          Move to SSD
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {activeJob && (
-                    <div style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>
-                      {activeJob.status === 'running'
-                        ? `Transferring... ${Math.round(activeJob.progress_percent)}%`
-                        : 'Queued in transfer list'}
-                    </div>
-                  )}
-                </div>
+                  game={game}
+                  variant="details"
+                  activeJob={activeJob}
+                  onClick={onSelectGame}
+                />
               );
             })}
           </div>

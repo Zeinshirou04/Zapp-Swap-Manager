@@ -24,6 +24,7 @@ type Options struct {
 	LastBackup    *TreeStats
 	DropConfirmed bool
 	ProgressFn    ProgressFunc
+	Robocopy      *RobocopyConfig
 }
 
 // monitorTransfer tracks destination size relative to source size during
@@ -140,11 +141,12 @@ func runMirror(ctx context.Context, opts Options, hddLibRoot, installDir, src, d
 	// Dry-run inspection: read the planned actions before mirroring, then
 	// run the real mirror. Same flow for robocopy (/L then /MIR) and
 	// rsync (-n then --delete).
-	if err := driverFn().Mirror(ctx, src, dst, true); err != nil {
+	driverCtx := withRobocopyConfig(ctx, opts.Robocopy)
+	if err := driverFn().Mirror(driverCtx, src, dst, true); err != nil {
 		return fmt.Errorf("backup/mirror: dry run: %w", err)
 	}
 	stop := monitorTransfer(ctx, src, dst, opts.ProgressFn)
-	mirrorErr := driverFn().Mirror(ctx, src, dst, false)
+	mirrorErr := driverFn().Mirror(driverCtx, src, dst, false)
 	stop(mirrorErr == nil)
 	if mirrorErr != nil {
 		return fmt.Errorf("backup/mirror: %w", mirrorErr)
@@ -190,6 +192,19 @@ func Evict(ctx context.Context, opts Options, ssdLibRoot, hddLibRoot, manifestNa
 	return nil
 }
 
+func runCopy(ctx context.Context, opts Options, dstLibRoot, installDir, src, dst string) error {
+	if err := CheckSource(src); err != nil {
+		return err
+	}
+	if err := CheckDestination(dst, dstLibRoot, installDir); err != nil {
+		return err
+	}
+	stop := monitorTransfer(ctx, src, dst, opts.ProgressFn)
+	copyErr := driverFn().Copy(withRobocopyConfig(ctx, opts.Robocopy), src, dst)
+	stop(copyErr == nil)
+	return copyErr
+}
+
 // Promote copies a game from the HDD master onto the SSD and relocates the
 // manifest (docs/safety.md "Promote"):
 //  1. copy HDD -> SSD with /E (never a mirror: the HDD master must not lose data),
@@ -211,21 +226,7 @@ func Promote(ctx context.Context, opts Options, hddLibRoot, ssdLibRoot, manifest
 	}
 	// Step 1: copy (guards: source must exist non-empty; destination is
 	// built from whitelisted roots and checked against its expected form).
-	if err := registerStep(1, func() error {
-		if err := CheckSource(src); err != nil {
-			return err
-		}
-		if err := CheckDestination(dst, ssdLibRoot, installDir); err != nil {
-			return err
-		}
-		stop := monitorTransfer(ctx, src, dst, opts.ProgressFn)
-		copyErr := driverFn().Copy(ctx, src, dst)
-		stop(copyErr == nil)
-		if copyErr != nil {
-			return copyErr
-		}
-		return nil
-	}()); err != nil {
+	if err := registerStep(1, runCopy(ctx, opts, ssdLibRoot, installDir, src, dst)); err != nil {
 		return err
 	}
 	// Step 2: verify the SSD copy matches the HDD master.
@@ -303,21 +304,7 @@ func PromoteCustom(ctx context.Context, opts Options, hddLibRoot, ssdLibRoot, in
 		}
 	}
 	// Step 1: copy from HDD to SSD.
-	if err := registerStep(1, func() error {
-		if err := CheckSource(src); err != nil {
-			return err
-		}
-		if err := CheckDestination(dst, ssdLibRoot, installDir); err != nil {
-			return err
-		}
-		stop := monitorTransfer(ctx, src, dst, opts.ProgressFn)
-		copyErr := driverFn().Copy(ctx, src, dst)
-		stop(copyErr == nil)
-		if copyErr != nil {
-			return copyErr
-		}
-		return nil
-	}()); err != nil {
+	if err := registerStep(1, runCopy(ctx, opts, ssdLibRoot, installDir, src, dst)); err != nil {
 		return err
 	}
 	// Step 2: verify the SSD copy matches the HDD master.

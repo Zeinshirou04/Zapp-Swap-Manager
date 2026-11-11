@@ -62,10 +62,50 @@ describe('GameDetailView Component', () => {
     expect(screen.getByText('Back to Games')).toBeInTheDocument();
     expect(screen.getByText('Backup to HDD')).toBeInTheDocument();
     expect(screen.getByText('Evict to HDD')).toBeInTheDocument();
+    expect(screen.getByText('Game & Backup Status')).toBeInTheDocument();
+    expect(screen.getByText('Fast SSD Cache')).toBeInTheDocument();
+    expect(screen.getByText('Backup Verified')).toBeInTheDocument();
     expect(screen.getByText(/Full Directory:/)).toBeInTheDocument();
     expect(screen.getByText(/E:\\Game\\Arknights/)).toBeInTheDocument();
     expect(screen.getByText('Media & Captures (ShareX / NVIDIA ShadowPlay)')).toBeInTheDocument();
     expect(screen.getByText('Coming Soon')).toBeInTheDocument();
+  });
+
+  it('shows relative last played in hero and exact timestamp in Activity & Runtime for a Steam game', () => {
+    const nowIso = new Date().toISOString();
+    const steamTodayGame: Game = {
+      ...mockGame,
+      app_id: 105600,
+      name: 'Terraria',
+      is_custom: false,
+      last_played: nowIso,
+    };
+
+    render(
+      <GameDetailView
+        game={steamTodayGame}
+        libraries={mockLibraries}
+        jobs={[]}
+        onBack={vi.fn()}
+        onAction={vi.fn()}
+        actionLoading={false}
+        onGameUpdated={vi.fn()}
+      />
+    );
+
+    // Relative time in Hero
+    expect(screen.getByText('Today')).toBeInTheDocument();
+
+    // Exact timestamp in Activity & Runtime (not literally "Today")
+    const latestPlayedLabel = screen.getByText('Latest Played:');
+    const exactValueEl = latestPlayedLabel.parentElement?.querySelector('strong');
+    expect(exactValueEl).not.toBeNull();
+    expect(exactValueEl?.textContent).not.toBe('Today');
+    expect(exactValueEl?.textContent).toMatch(/\d{1,2}[:.]\d{2}/); // Contains HH:MM or HH.MM across locales
+
+    // Portrait grid cover image uses SteamGrid library_600x900
+    const gridCover = screen.getByAltText('Terraria') as HTMLImageElement;
+    expect(gridCover.src).toContain('library_600x900_2x.jpg');
   });
 
   it('hides Backup to HDD and Evict to HDD buttons when game is native HDD', () => {

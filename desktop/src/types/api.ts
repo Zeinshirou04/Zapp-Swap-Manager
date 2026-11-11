@@ -57,6 +57,10 @@ export interface Preferences {
   relay_server_url?: string;
   relay_device_id?: string;
   relay_device_secret?: string;
+  robocopy_threads?: number;
+  robocopy_retries?: number;
+  robocopy_wait_seconds?: number;
+  robocopy_unbuffered?: boolean;
 }
 
 export interface CreateCustomGameRequest {

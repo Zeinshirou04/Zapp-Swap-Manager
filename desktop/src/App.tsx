@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api, getApiConfig, setApiConfig } from './api/client.ts';
 import { readLocalAuthToken, restartCoreDaemon, startCoreDaemon, sleep } from './api/native.ts';
-import { Game, HealthResponse, Job, JobType, Library } from './types/api.ts';
+import { Game, HealthResponse, Job, JobType, Library, LibraryInput } from './types/api.ts';
 import { ConnectView } from './components/ConnectView.tsx';
 import { LoginView } from './components/LoginView.tsx';
 import { Titlebar } from './components/Titlebar.tsx';
 import { Sidebar, NavRoute } from './components/Sidebar.tsx';
 import { DashboardView } from './components/DashboardView.tsx';
 import { DrivesOverview } from './components/DrivesOverview.tsx';
+import { DriveDetailView } from './components/DriveDetailView.tsx';
 import { GameList } from './components/GameList.tsx';
 import { GameDetailView } from './components/GameDetailView.tsx';
 import { QueueMonitor } from './components/QueueMonitor.tsx';
@@ -62,6 +63,7 @@ export const App: React.FC = () => {
   });
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
+  const [selectedDrive, setSelectedDrive] = useState<Library | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<SwapAction | null>(null);
@@ -148,6 +150,37 @@ export const App: React.FC = () => {
       setActiveRoute(history[newIndex]);
     }
   }, [activeRoute, historyIndex, history, settingsDirty]);
+
+  const handleSelectDrive = useCallback(
+    (lib: Library) => {
+      setSelectedDrive(lib);
+      navigate('drive-detail');
+    },
+    [navigate]
+  );
+
+  const handleUpdateLibraryPath = useCallback(
+    async (libraryId: string, newPath: string) => {
+      const updatedInputs: LibraryInput[] = libraries.map((lib) => ({
+        id: lib.id,
+        type: lib.type,
+        path: (lib.id === libraryId ? newPath.trim() : lib.path) || '',
+      }));
+      const updatedLibs = await api.registerLibraries(updatedInputs);
+      setLibraries(updatedLibs);
+      const updatedSelected = updatedLibs.find((l) => l.id === libraryId);
+      if (updatedSelected) {
+        setSelectedDrive(updatedSelected);
+      }
+      addToast({
+        id: String(Date.now()),
+        type: 'success',
+        title: 'Library Path Updated',
+        message: `Library path successfully updated to ${newPath}`,
+      });
+    },
+    [libraries, addToast]
+  );
 
   // Check for updates (background on startup, or manual via button)
   const handleCheckUpdates = useCallback(async (manual = false) => {
@@ -616,6 +649,7 @@ export const App: React.FC = () => {
                 setSelectedGame(g);
                 navigate('game-detail');
               }}
+              onSelectDrive={handleSelectDrive}
             />
           )}
 
@@ -685,49 +719,36 @@ export const App: React.FC = () => {
                 </button>
               </div>
 
-              <DrivesOverview libraries={libraries} games={games} />
-
-              <div className="card" style={{ padding: '20px' }}>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '12px' }}>
-                  Configured Storage Paths ({libraries.length})
-                </h3>
-                {libraries.length === 0 ? (
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                    No libraries configured yet. Run the setup wizard to assign fast SSD and HDD directories.
-                  </p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {libraries.map((lib) => (
-                      <div
-                        key={lib.id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '12px 16px',
-                          backgroundColor: 'var(--bg-main)',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: 'var(--radius)',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>{lib.name}</span>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                            ({lib.type === 'ssd_cache' ? 'Fast SSD' : 'Storage HDD'})
-                          </span>
-                          {lib.path && (
-                            <code style={{ fontSize: '0.75rem' }}>{lib.path}</code>
-                          )}
-                        </div>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                          ID: {lib.id}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <DrivesOverview
+                libraries={libraries}
+                games={games}
+                onSelectDrive={handleSelectDrive}
+              />
             </div>
+          )}
+
+          {/* View 3b: Dedicated Drive Detail Page */}
+          {activeRoute === 'drive-detail' && selectedDrive && (
+            <DriveDetailView
+              library={libraries.find((l) => l.id === selectedDrive.id) || selectedDrive}
+              games={games}
+              allLibraries={libraries}
+              jobs={jobs}
+              onBack={() => {
+                if (historyIndex > 0) {
+                  goBack();
+                } else {
+                  navigate('drives');
+                }
+              }}
+              onAction={requestSwap}
+              actionLoading={actionLoading}
+              onUpdatePath={handleUpdateLibraryPath}
+              onSelectGame={(g) => {
+                setSelectedGame(g);
+                navigate('game-detail');
+              }}
+            />
           )}
 
           {/* View 4: Transfer Job Queue */}

@@ -2,7 +2,7 @@ import React from 'react';
 import { Wand2 } from 'lucide-react';
 import { ZappIcon } from './ZappIcon.tsx';
 
-export type NavRoute = 'dashboard' | 'games' | 'drives' | 'queue' | 'logs' | 'settings' | 'game-detail';
+export type NavRoute = 'dashboard' | 'games' | 'drives' | 'queue' | 'logs' | 'settings' | 'game-detail' | 'drive-detail';
 
 export interface SidebarProps {
   activeRoute: NavRoute;

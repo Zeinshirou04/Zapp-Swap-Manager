@@ -22,57 +22,73 @@ See [tokens-and-classes.md](./references/tokens-and-classes.md) for exact hex va
   - Reserve `var(--primary)` (`#6246EA`) for solid fills (`.btn-primary`, progress bars) paired with `var(--on-primary)` (`#FFFFFF`).
 - **Geometry & Typography**:
   - Font: `'Inter'` for UI copy; `ui-monospace` inside `<code>` or filesystem path inputs.
-  - Radii: `--radius` (`8px`) for buttons/inputs/pills; `--radius-card` (`12px`) for cards and modals.
+  - Radii: `--radius` (`8px`) for buttons/inputs/pills; `--radius-card` (`12px`) for elevated cards and modals.
 
 ---
 
-## 2. Core UI Principles (Minimalism & Clarity)
+## 2. Core UI Principles (Minimalism, Restraint & Clarity)
 
-1. **No Unnecessary Background Boxes ("Anti-Box Clutter")**:
-   - Do NOT wrap secondary numbers, sizes, or inline status actions inside extra nested boxes, background fills, or borders on top of cards or popups.
-   - *Approved pattern*: Display "Library Games Storage" size (`49.0 GB in 1 game`) directly on the card surface using typography hierarchy (`1.5rem` bold main figure + muted inline count), NOT inside a `var(--bg-main)` sub-box.
-   - *Approved pattern*: In `ActiveTransferBanner`, render action labels (`Moving to Fast SSD`, `Evicting to HDD Master`, `Backing up to HDD Master`) as plain colored icon + text (`font-weight: 600`), without a boxed badge container or border.
+1. **Do Not Overuse Card Backgrounds ("Not Every Card Needs a Background")**:
+   - **Never wrap every section or detail block in `.card` background boxes.** Over-boxing flattens visual hierarchy and creates boxy clutter.
+   - Reserve `--bg-card` surfaces purposefully for **interactive item grids** (Drive Overview cards, Game cards, Path Configuration interactive forms, floating banners/popups).
+   - **Read-only detail sections & Settings groups should stay backgroundless (flat on `--bg-main`)**:
+     - Game Details sub-sections (**Current Storage Path**, **Game & Backup Status**, **Activity & Runtime**, **Media & Captures**): transparent surface, clean section heading + icon, subtle hairline borders (`1px solid var(--border-color)`) if needed—no `.card` fill.
+     - Drive Details stats (**Hardware Capacity**, **Library Games Allocation**): sit directly on `--bg-main` canvas, while interactive **Storage Path Configuration** and **Game item cards** keep `--bg-card` surfaces.
+     - **Settings & Preferences**: All sub-settings groups (**Preferences**, **Appearance**, **Robocopy Config**, **Core Service & Security**, **App Updates**) render flat without `.card` background boxes, separated by spacing and crisp `border-bottom` dividers.
+   - Inside cards and popups, do NOT wrap secondary numbers, sizes, or inline status actions inside nested boxes (`var(--bg-main)` containers or bordered badges). Display figures and colored icon + text directly on the surface.
 2. **Zero Redundant Labels or Metadata**:
    - Omit text that merely restates what the visual layout or adjacent numbers already make clear.
    - Do NOT show raw internal library IDs (`ssd-0`, `hdd-0`) or verbose storage role descriptions (`Fast Cache Storage`) on top-level Overview cards.
    - Do NOT place redundant labels like `"Drive Used"` above capacity progress bars that already display percentage, `"Free: X GB"`, and `"Drive Capacity: Y GB"`.
    - On the **Dashboard Overview**, skip filler summary KPI boxes ("Total Games", "2 Drives") and lead immediately with **Drive Storage & Allocation**.
+   - Avoid repeating the parent context in action triggers (e.g., use **`Details →`** instead of `"Drive Details →"`).
 3. **Clear Click Affordance Without Heavy Buttons**:
-   - Secondary navigation actions inside overview cards should NOT be boxed buttons when clean inline interaction fits better.
-   - Make text actions unambiguously clickable using `var(--primary-text, var(--primary))`, `font-weight: 600`, clean hover state, and a trailing directional icon (`ArrowRight` from `lucide-react`, e.g. `Drive Details →`).
+   - Navigation triggers inside overview or detail cards should NOT be boxed buttons when clean inline interaction fits better.
+   - Make text actions unambiguously clickable using `var(--primary-text, var(--primary))`, `font-weight: 600`, hover state, and a trailing directional icon (`ArrowRight` from `lucide-react`, e.g. `Details →`).
    - Rule of thumb: If an item uses directional arrow icons or explicit action verbs, it must be clickable; if it is plain informational metadata, omit the icon and styling.
-4. **Consistent Formatting**:
+4. **Consistent Formatting & Temporal Precision**:
    - Windows paths must start with uppercase drive letters (e.g., `D:\SteamLibrary`) via `normalizePath()`.
-   - Library names must use clean friendly formatting (`Steam Library (C: Drive)`, `Games Library (D: Drive)`) via `formatLibraryName()`.
+   - Library names use friendly naming (`Steam Library (C: Drive)`, `Games Library (D: Drive)`) via `formatLibraryName()`.
    - Sizes use 1-decimal GB / 2-decimal TB formatting via `formatBytes()`.
+   - **Relative vs Exact Time**: Hero/overview headers show friendly relative time (`Today`, `Yesterday`, `3 days ago` via `formatLastPlayed()`), whereas **Activity & Runtime** detail blocks show the **exact localized date & time** (`formatExactTimestamp()`).
 
 ---
 
 ## 3. Information Architecture & Page Patterns
 
-### A. Progressive Disclosure (Overview → Detail → Config)
-Keep overview cards scannable while hosting technical details and management inside dedicated Detail pages:
+### A. Notion-Style Hero Banners & Portrait Grid Covers
+- **Game Artwork Standards**:
+  - Game cards (`GameCard` in **Games Library** and **Drive Details**) and the `GameDetailView` foreground cover use **portrait Grid** artwork (`2:3` aspect ratio via Steam CDN `library_600x900_2x.jpg` / `library_600x900.jpg`, with `header.jpg` fallback and `cover_url` override for custom games).
+  - Hero banners use wide landscape banner art (`library_hero.jpg` with cover fallback).
+- **`GameDetailView` Layout**:
+  - **Notion-Style Hero Banner**: Full-width banner image across the top with an acrylic glass layer (`backdrop-filter: blur(28px)` + translucent dark/light surface gradient) fading cleanly into the page background. Layered over the hero canvas sit the foreground **2:3 Grid cover**, Title (`<h1>`), App ID, Size, relative **Last Played** (`Today`), and swap action buttons (`Backup to HDD`, `Evict to HDD`, `Promote to SSD`).
+  - **Clean Title Area**: Do NOT place status badges (`Fast SSD Cache`, `Steam Game`, `Backup Verified`, `Native HDD`) above or beside the hero title. Consolidate all status badges inside the **Game & Backup Status** detail section below.
+  - **Detail Grid**: Render **Current Storage Path**, **Game & Backup Status**, **Activity & Runtime** (with exact date/time), and **Media & Captures** flat on `--bg-main` (no card boxes).
 
-- **Overview (`DashboardView`, `DrivesOverview`)**:
-  - Card header: Subtle primary icon tile (`--primary-subtle`) + friendly drive name + `Drive Details →` trigger.
-  - Primary stat: Library Games Storage (`X GB` in `N` games), unboxed.
-  - Capacity bar: Right-aligned percentage (`60%`), full-width bar, footer row (`Free: X GB` left, `Drive Capacity: Y GB` right).
-  - *Note*: Avoid duplicating a separate "Configured Storage Paths" section below drive cards; path inspection and editing belong inside each Drive Detail page.
-- **Dedicated Detail Pages (`DriveDetailView`, `GameDetailView`)**:
-  - Always include a clean borderless `← Back to ...` navigation link at the top left.
-  - Here (and only here) show technical identifiers (`Library ID: ssd-0`, role label `Fast Cache Storage (SSD)` / `Master Storage (HDD)`), hardware vs. library breakdown, path configuration inputs (synchronized with Setup Wizard / core `registerLibraries`), and a searchable list of items on that drive/game.
+### B. Drives & Per-Drive Games (`DrivesOverview`, `DriveDetailView`)
+- **Overview Cards**: Keep `--bg-card` surface, icon tile, friendly name, **`Details →`** text link, unboxed Library Games Storage figure, percentage bar without `"Drive Used"` text, and `Free` / `Drive Capacity` footer.
+- **`DriveDetailView`**:
+  - Clean borderless `← Back to Drives` trigger, drive title + technical Library ID & role subtitle (`Fast Cache Storage (SSD)` / `Master Storage (HDD)`).
+  - **Hardware Capacity** & **Library Games Allocation**: Render flat without card background boxes.
+  - **Storage Path Configuration**: Render inside a `.card` surface to distinguish the interactive settings panel.
+  - **Games Stored on this Drive**: Render cards using the **Games Library `GameCard` visual layout** (`2:3` portrait Grid artwork + card surface background), replacing swap action buttons with a clean **`Details →`** text link matching `DrivesOverview`.
 
-### B. Transfer Queue & History (`QueueMonitor`)
+### C. Transfer Queue & History (`QueueMonitor`)
 - Separate active transfers (`running`, `queued`) from historical outcomes (`succeeded`, `failed`, `cancelled`).
 - Provide segmented tabs: **All Transfers**, **Active Queue** (with active count pill), and **History**.
-- Always sort History **newest-first** (`completed_at || created_at`). Never drop currently running transfers by slicing raw FIFO/oldest-first backend arrays.
-- Detail each row clearly:
-  - Active jobs: game title, clean colored action indicator (no heavy border), target library code, start timestamp, transferred vs. total bytes, progress bar, and Cancel action.
-  - History rows: status icon (`CheckCircle2`, `AlertCircle`, `XCircle`), friendly action type, byte size, target library, uppercase status word (`SUCCEEDED` / `FAILED` / `CANCELLED`), completion timestamp, and a clean `--danger-subtle` diagnostic block if `job.error` is present.
+- Always sort History **newest-first** (`completed_at || created_at`). Never slice away running jobs.
 
-### C. Iconography & Navigation
+### D. Settings & Preferences (`SettingsView`)
+- Organize into clean, **flat (no card background boxes)** sub-settings sections separated by spacing and subtle hairline dividers (`border-bottom: 1px solid var(--border-color)`):
+  1. **Preferences**: Steam transfer lifecycle automation & Windows startup behavior.
+  2. **Appearance**: Light / Dark / System theme switcher.
+  3. **Robocopy Transfer Engine**: Multi-threading (`/MT:1..128`), retries (`/R`), wait delay (`/W`), and unbuffered I/O (`/J`) synced with core Preferences.
+  4. **Core Service & Security**: Daemon URL, bearer token, test & restart actions.
+  5. **App Updates**: Installed version and update check action.
+
+### E. Iconography & Navigation
 - Use custom SVG sprites in `ZappIcon.tsx` (`home`, `games`, `folder`, `queue`, `log`, `settings`, etc.) for Sidebar navigation and branding.
-- Use `lucide-react` (`size={14}` to `size={20}`) for inline contextual UI controls, arrows, search inputs, and status indicators.
+- Use `lucide-react` (`size={14}` to `size={20}`) for inline contextual controls, arrows (`ArrowRight`), search inputs, and status indicators.
 
 ---
 
@@ -80,7 +96,7 @@ Keep overview cards scannable while hosting technical details and management ins
 
 Whenever you finish any UI change (`desktop/src/**`, `desktop/src/index.css`, or `mobile/.../ui/**`):
 
-1. **Audit your changes** against Section 2 (Anti-Box Clutter, Zero Redundancy, Clear Click Affordance) and Section 1 (Tokens in Light & Dark mode).
+1. **Audit your changes** against Section 2 (Anti-Background Clutter, Zero Redundancy, Clear Click Affordance) and Section 1 (Tokens in Light & Dark mode).
 2. **Verify visually & in tests**: Update component unit tests in `desktop/src/test/` and ensure `npm --prefix desktop test`, `npm --prefix desktop run lint`, and `just check` pass.
 3. **Update this skill (`SKILL.md` / `references/`)** in the same task/PR if you:
    - Introduced or changed a reusable component or view pattern.
@@ -90,4 +106,5 @@ Whenever you finish any UI change (`desktop/src/**`, `desktop/src/index.css`, or
 
 ### Design Evolution Log
 - **v0.3.2**: Adopted official Volt & Ink palette (`tokens.json`), light/dark/system themes, accessible `--primary-text` pairing, custom SVG `ZappIcon` suite, and unboxed game card cover alignment.
-- **v0.3.3-beta.1**: Removed dashboard KPI clutter boxes, removed library ID / role subtitles from overview cards, stripped nested background boxes from Library Games Storage numbers and `ActiveTransferBanner` action labels, removed redundant `"Drive Used"` labels, added `Drive Details →` borderless clickable text triggers, introduced `DriveDetailView` (with hardware metrics, per-drive game inventory, and synchronized path configuration), removed bottom "Configured Storage Paths" panel, and revamped `QueueMonitor` with Active Queue + newest-first History tabs.
+- **v0.3.3-beta.1**: Removed dashboard KPI clutter boxes, removed library ID / role subtitles from overview cards, stripped nested background boxes from Library Games Storage numbers and `ActiveTransferBanner` action labels, removed redundant `"Drive Used"` labels, added directional link triggers, introduced `DriveDetailView`, and revamped `QueueMonitor` with Active Queue + newest-first History tabs.
+- **v0.3.3-beta.2**: Codified "Not Every Card Needs a Background" across detail sections and flat Settings groups; upgraded `GameDetailView` to a Notion-style acrylic Hero banner + `2:3` portrait Grid artwork with exact timestamp in Activity & Runtime and consolidated status pills inside Game & Backup Status; shortened `"Drive Details →"` to `"Details →"`; styled `DriveDetailView` game cards after `GameCard` (`2:3` portrait grids with `Details →`); added `Robocopy Transfer Engine` sub-section in flat `SettingsView`.

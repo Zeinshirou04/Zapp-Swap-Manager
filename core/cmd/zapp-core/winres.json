@@ -13,8 +13,8 @@
     "#1": {
       "0000": {
         "fixed": {
-          "file_version": "0.3.3.1",
-          "product_version": "0.3.3.1"
+          "file_version": "0.3.3.2",
+          "product_version": "0.3.3.2"
         },
         "info": {
           "0409": {
@@ -25,8 +25,8 @@
             "Comments": "Windows background daemon and Steam game swap service",
             "OriginalFilename": "zapp-core.exe",
             "InternalName": "zapp-core",
-            "ProductVersion": "0.3.3-beta.1",
-            "FileVersion": "0.3.3-beta.1"
+            "ProductVersion": "0.3.3-beta.2",
+            "FileVersion": "0.3.3-beta.2"
           }
         }
       }
@@ -37,7 +37,7 @@
       "0409": {
         "identity": {
           "name": "zapp-core.exe",
-          "version": "0.3.3.1"
+          "version": "0.3.3.2"
         },
         "description": "Zapp Swap Manager Core Service",
         "minimum-os": "win7",

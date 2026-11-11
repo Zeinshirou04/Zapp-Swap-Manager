@@ -85,16 +85,12 @@ export const ActiveTransferBanner: React.FC<ActiveTransferBannerProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
           <span
             style={{
-              backgroundColor: 'var(--bg-main)',
               color: actionInfo.color,
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius)',
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '2px 8px',
               fontWeight: 600,
-              fontSize: '0.75rem',
+              fontSize: '0.85rem',
             }}
           >
             {actionInfo.icon}

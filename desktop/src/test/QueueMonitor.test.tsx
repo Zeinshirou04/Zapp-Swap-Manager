@@ -60,7 +60,7 @@ const mockJobs: Job[] = [
 ];
 
 describe('QueueMonitor Component', () => {
-  it('renders game name, friendly action pill, and progress without redundant status pills', () => {
+  it('renders game name, friendly action pill, active queue and history sections', () => {
     const onCancel = vi.fn();
     render(
       <QueueMonitor
@@ -79,12 +79,12 @@ describe('QueueMonitor Component', () => {
     expect(screen.getByText('Move to SSD')).toBeInTheDocument();
     expect(screen.getByText('Backup to HDD')).toBeInTheDocument();
 
-    // Redundant status badges like "succeeded" or "running" as text badges should not be present
-    expect(screen.queryByText('succeeded')).not.toBeInTheDocument();
+    // History section shows succeeded status
+    expect(screen.getByText('succeeded')).toBeInTheDocument();
 
     // Running job shows percent and progress info
     expect(screen.getAllByText('46%').length).toBeGreaterThan(0);
-    expect(screen.getByText(/42\.38 GB \/ 93\.13 GB/i)).toBeInTheDocument();
+    expect(screen.getByText(/42\.4 GB of 93\.1 GB/i)).toBeInTheDocument();
 
     // Cancel button for running job
     const cancelBtn = screen.getByRole('button', { name: /cancel/i });
@@ -103,6 +103,9 @@ describe('QueueMonitor Component', () => {
       />
     );
 
-    expect(screen.getByText(/No transfer jobs in queue or history/i)).toBeInTheDocument();
+    expect(screen.getByText(/Queue is Empty/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/No transfer jobs are running, queued, or recorded in history/i)
+    ).toBeInTheDocument();
   });
 });

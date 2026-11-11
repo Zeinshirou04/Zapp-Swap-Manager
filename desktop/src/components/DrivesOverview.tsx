@@ -1,14 +1,15 @@
 import React from 'react';
 import { Game, Library } from '../types/api.ts';
-import { HardDrive, FolderKanban } from 'lucide-react';
+import { HardDrive, FolderKanban, ArrowRight } from 'lucide-react';
 import { formatBytes, formatLibraryName } from '../utils/format.ts';
 
 interface DrivesOverviewProps {
   libraries: Library[];
   games?: Game[];
+  onSelectDrive?: (library: Library) => void;
 }
 
-export const DrivesOverview: React.FC<DrivesOverviewProps> = ({ libraries, games = [] }) => {
+export const DrivesOverview: React.FC<DrivesOverviewProps> = ({ libraries, games = [], onSelectDrive }) => {
   return (
     <section>
       <div
@@ -19,7 +20,6 @@ export const DrivesOverview: React.FC<DrivesOverviewProps> = ({ libraries, games
         }}
       >
         {libraries.map((lib) => {
-          const isSSD = lib.type === 'ssd_cache';
           const libGames = games.filter((g) => g.current_library_id === lib.id);
           const libraryGamesSize = libGames.reduce((acc, g) => acc + g.size_bytes, 0);
 
@@ -55,23 +55,34 @@ export const DrivesOverview: React.FC<DrivesOverviewProps> = ({ libraries, games
                   </div>
                   <div>
                     <h2 style={{ fontSize: '1.05rem', fontWeight: 600 }}>{displayName}</h2>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Library ID: {lib.id} • {isSSD ? 'Fast Cache Storage' : 'Master Storage'}
-                    </span>
                   </div>
                 </div>
+
+                {onSelectDrive && (
+                  <button
+                    type="button"
+                    onClick={() => onSelectDrive(lib)}
+                    aria-label={`View details for ${displayName}`}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--primary-text, var(--primary))',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      cursor: 'pointer',
+                      padding: '4px 6px',
+                    }}
+                  >
+                    Drive Details <ArrowRight size={14} />
+                  </button>
+                )}
               </div>
 
-              {/* Primary Metric: Steam Library Storage Size */}
-              <div
-                style={{
-                  backgroundColor: 'var(--bg-main)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius)',
-                  padding: '12px 14px',
-                  marginBottom: '16px',
-                }}
-              >
+              {/* Primary Metric: Steam Library Storage Size (Clean, without background container) */}
+              <div style={{ marginBottom: '16px' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Library Games Storage
                 </div>
@@ -85,17 +96,16 @@ export const DrivesOverview: React.FC<DrivesOverviewProps> = ({ libraries, games
                 </div>
               </div>
 
-              {/* Secondary Metric: Entire Drive Storage */}
+              {/* Secondary Metric: Entire Drive Storage (Clean, without redundant label) */}
               <div style={{ marginBottom: '8px' }}>
                 <div
                   style={{
                     display: 'flex',
-                    justifyContent: 'space-between',
+                    justifyContent: 'flex-end',
                     fontSize: '0.8rem',
                     marginBottom: '6px',
                   }}
                 >
-                  <span style={{ color: 'var(--text-muted)' }}>Drive Used</span>
                   <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{usedPercent}%</span>
                 </div>
                 <div className="progress-bar-bg">

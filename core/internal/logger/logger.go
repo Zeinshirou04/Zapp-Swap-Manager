@@ -2,7 +2,6 @@ package logger
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -116,31 +115,40 @@ func Setup(customLogPath string) (func(), error) {
 		logPath = LogFilePath()
 	}
 
+	writers := []io.Writer{os.Stdout, globalRing}
+	var f *os.File
+	var openErr error
+
 	dir := filepath.Dir(logPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, fmt.Errorf("creating log directory: %w", err)
+	if err := os.MkdirAll(dir, 0755); err == nil {
+		if err := rotateIfNeeded(logPath); err != nil {
+			// Non-fatal, continue trying to open log file
+			slog.Warn("log rotation failed", "err", err)
+		}
+		f, openErr = os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if openErr == nil {
+			writers = append(writers, f)
+		}
+	} else {
+		openErr = err
 	}
 
-	if err := rotateIfNeeded(logPath); err != nil {
-		// Non-fatal, continue trying to open log file
-		slog.Warn("log rotation failed", "err", err)
-	}
-
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		return nil, fmt.Errorf("opening log file: %w", err)
-	}
-
-	multi := io.MultiWriter(os.Stdout, f, globalRing)
+	multi := io.MultiWriter(writers...)
 	handler := slog.NewTextHandler(multi, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	})
 	logger := slog.New(handler)
 	slog.SetDefault(logger)
 
+	if openErr != nil {
+		slog.Warn("failed to initialize persistent file logger, using stdout and memory buffer", "err", openErr)
+	}
+
 	cleanup := func() {
-		_ = f.Sync()
-		_ = f.Close()
+		if f != nil {
+			_ = f.Sync()
+			_ = f.Close()
+		}
 	}
 	return cleanup, nil
 }

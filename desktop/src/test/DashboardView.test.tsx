@@ -66,10 +66,10 @@ describe('DashboardView Component', () => {
       />
     );
 
-    expect(screen.getByText('TOTAL GAMES')).toBeInTheDocument();
-    expect(screen.getAllByText('Steam Library (C: Drive)')).toHaveLength(2);
-    expect(screen.getAllByText('Games Library (D: Drive)')).toHaveLength(2);
-    expect(screen.getByText('TRANSFER QUEUE')).toBeInTheDocument();
+    expect(screen.getByText('Drive Storage & Allocation')).toBeInTheDocument();
+    expect(screen.getByText('Steam Library (C: Drive)')).toBeInTheDocument();
+    expect(screen.getByText('Games Library (D: Drive)')).toBeInTheDocument();
+    expect(screen.getByText('Manage Drives')).toBeInTheDocument();
 
     // Check game preview
     expect(screen.getByText('Terraria')).toBeInTheDocument();
@@ -77,5 +77,26 @@ describe('DashboardView Component', () => {
     // Test navigate click
     fireEvent.click(screen.getByText(/View All Games/));
     expect(onNavigate).toHaveBeenCalledWith('games');
+  });
+
+  it('calls onSelectDrive when Drive Details button is clicked', () => {
+    const onSelectDrive = vi.fn();
+    render(
+      <DashboardView
+        games={mockGames}
+        libraries={mockLibraries}
+        jobs={mockJobs}
+        onNavigate={vi.fn()}
+        onAction={vi.fn()}
+        actionLoading={false}
+        onOpenWizard={vi.fn()}
+        onSelectDrive={onSelectDrive}
+      />
+    );
+
+    const detailButtons = screen.getAllByRole('button', { name: /View details for/i });
+    expect(detailButtons.length).toBeGreaterThan(0);
+    fireEvent.click(detailButtons[0]);
+    expect(onSelectDrive).toHaveBeenCalledWith(mockLibraries[0]);
   });
 });

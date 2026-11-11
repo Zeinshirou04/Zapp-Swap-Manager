@@ -209,7 +209,18 @@ func defaultExecutor(whitelist func() []steam.Library, prefFn func() config.Pref
 			return fmt.Errorf("source library %q not found", foundGame.LibraryID)
 		}
 
+		slog.Info("executor starting transfer",
+			"job_id", job.ID,
+			"type", job.Type,
+			"app_id", job.AppID,
+			"game", foundGame.Manifest.Name,
+			"source_lib", srcLib.Name,
+			"target_lib", targetLib.Name,
+			"size_bytes", foundGame.Manifest.SizeOnDisk,
+		)
+
 		manifestName := fmt.Sprintf("appmanifest_%s.acf", job.AppID)
+		lastLoggedPct := -1
 		opts := transfer.Options{
 			ProgressFn: func(bytesTransferred, totalBytes int64, percent float64) {
 				if qFn != nil {
@@ -217,31 +228,50 @@ func defaultExecutor(whitelist func() []steam.Library, prefFn func() config.Pref
 						_ = qInst.UpdateProgress(job.ID, percent, bytesTransferred, totalBytes)
 					}
 				}
+				pctInt := int(percent)
+				if pctInt%20 == 0 && pctInt != lastLoggedPct {
+					lastLoggedPct = pctInt
+					slog.Info("transfer progress",
+						"job_id", job.ID,
+						"game", foundGame.Manifest.Name,
+						"percent", pctInt,
+						"transferred_bytes", bytesTransferred,
+						"total_bytes", totalBytes,
+					)
+				}
 			},
 		}
 
+		var runErr error
 		switch job.Type {
 		case queue.TypePromote:
-			return step(1, "promote", func() error {
+			runErr = step(1, "promote", func() error {
 				if foundGame.IsCustom {
 					return transfer.PromoteCustom(ctx, opts, srcLib.Path, targetLib.Path, foundGame.Manifest.InstallDir)
 				}
 				return transfer.Promote(ctx, opts, srcLib.Path, targetLib.Path, manifestName, foundGame.Manifest.InstallDir)
 			})
 		case queue.TypeEvict:
-			return step(1, "evict", func() error {
+			runErr = step(1, "evict", func() error {
 				if foundGame.IsCustom {
 					return transfer.EvictCustom(ctx, opts, srcLib.Path, targetLib.Path, foundGame.Manifest.InstallDir)
 				}
 				return transfer.Evict(ctx, opts, srcLib.Path, targetLib.Path, manifestName, foundGame.Manifest.InstallDir)
 			})
 		case queue.TypeBackup:
-			return step(1, "backup", func() error {
+			runErr = step(1, "backup", func() error {
 				return transfer.Backup(ctx, opts, srcLib.Path, targetLib.Path, foundGame.Manifest.InstallDir)
 			})
 		default:
-			return fmt.Errorf("unsupported job type %q", job.Type)
+			runErr = fmt.Errorf("unsupported job type %q", job.Type)
 		}
+
+		if runErr != nil {
+			slog.Error("transfer failed", "job_id", job.ID, "type", job.Type, "game", foundGame.Manifest.Name, "err", runErr)
+			return runErr
+		}
+		slog.Info("transfer completed successfully", "job_id", job.ID, "type", job.Type, "game", foundGame.Manifest.Name)
+		return nil
 	}
 }
 

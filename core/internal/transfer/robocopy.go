@@ -33,6 +33,72 @@ const (
 // Common flags: no progress clutter, no file/dir lists, robust retry policy.
 var commonFlags = []string{"/NP", "/NFL", "/NDL", "/R:2", "/W:2"}
 
+// RobocopyConfig carries user-tunable performance and retry options.
+type RobocopyConfig struct {
+	Threads     int  // 1-128 (/MT:N)
+	Retries     int  // 0-20 (/R:N)
+	WaitSeconds int  // 0-60 (/W:N)
+	Unbuffered  bool // /J
+}
+
+type robocopyCtxKey struct{}
+
+// withRobocopyConfig attaches optional Robocopy flags to ctx for the driver.
+func withRobocopyConfig(ctx context.Context, cfg *RobocopyConfig) context.Context {
+	if cfg == nil {
+		return ctx
+	}
+	cp := *cfg
+	return context.WithValue(ctx, robocopyCtxKey{}, &cp)
+}
+
+func robocopyConfigFromContext(ctx context.Context) *RobocopyConfig {
+	if ctx == nil {
+		return nil
+	}
+	if cfg, ok := ctx.Value(robocopyCtxKey{}).(*RobocopyConfig); ok {
+		return cfg
+	}
+	return nil
+}
+
+func tailFlags(cfg *RobocopyConfig) []string {
+	if cfg == nil {
+		return commonFlags
+	}
+	retries := cfg.Retries
+	if retries < 0 {
+		retries = 0
+	} else if retries > 20 {
+		retries = 20
+	}
+	wait := cfg.WaitSeconds
+	if wait < 0 {
+		wait = 0
+	} else if wait > 60 {
+		wait = 60
+	}
+	threads := cfg.Threads
+	if threads <= 0 {
+		threads = 8
+	} else if threads > 128 {
+		threads = 128
+	}
+
+	flags := []string{
+		"/NP",
+		"/NFL",
+		"/NDL",
+		fmt.Sprintf("/R:%d", retries),
+		fmt.Sprintf("/W:%d", wait),
+		fmt.Sprintf("/MT:%d", threads),
+	}
+	if cfg.Unbuffered {
+		flags = append(flags, "/J")
+	}
+	return flags
+}
+
 // Result carries Robocopy's exit code and captured output.
 type Result struct {
 	ExitCode int
@@ -81,7 +147,8 @@ var runRobocopy = runRobocopyReal
 // an exec.ExitError is not an execution failure: decode the code and return
 // it in the Result.
 func runRobocopyReal(ctx context.Context, src, dst string, flags ...string) (Result, error) {
-	cmd := exec.CommandContext(ctx, "robocopy", buildArgs(src, dst, flags...)...)
+	args := buildArgsWithTail(src, dst, tailFlags(robocopyConfigFromContext(ctx)), flags...)
+	cmd := exec.CommandContext(ctx, "robocopy", args...)
 	hideConsole(cmd)
 	out, err := cmd.CombinedOutput()
 	res := Result{Output: string(out)}
@@ -95,11 +162,15 @@ func runRobocopyReal(ctx context.Context, src, dst string, flags ...string) (Res
 	return res, nil
 }
 
-func buildArgs(src, dst string, flags ...string) []string {
+func buildArgsWithTail(src, dst string, tail []string, flags ...string) []string {
 	args := []string{src, dst}
 	args = append(args, flags...)
-	args = append(args, commonFlags...)
+	args = append(args, tail...)
 	return args
+}
+
+func buildArgs(src, dst string, flags ...string) []string {
+	return buildArgsWithTail(src, dst, commonFlags, flags...)
 }
 
 // Run executes one Robocopy invocation and enforces the exit-code rule:

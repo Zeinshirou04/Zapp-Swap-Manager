@@ -139,3 +139,35 @@ func TestLibraryPathPersistence(t *testing.T) {
 	}
 }
 
+func TestPreferencesNormalization(t *testing.T) {
+	def := (Preferences{}).Normalized()
+	if def.RobocopyThreads != 8 {
+		t.Errorf("default threads = %d, want 8", def.RobocopyThreads)
+	}
+	if def.RobocopyRetries == nil || *def.RobocopyRetries != 2 {
+		t.Errorf("default retries = %v, want 2", def.RobocopyRetries)
+	}
+	if def.RobocopyWaitSeconds == nil || *def.RobocopyWaitSeconds != 2 {
+		t.Errorf("default wait = %v, want 2", def.RobocopyWaitSeconds)
+	}
+
+	clamped := (Preferences{
+		RobocopyThreads:     500,
+		RobocopyRetries:     intPtr(-3),
+		RobocopyWaitSeconds: intPtr(120),
+		RobocopyUnbuffered:  true,
+	}).Normalized()
+	if clamped.RobocopyThreads != 128 {
+		t.Errorf("clamped threads = %d, want 128", clamped.RobocopyThreads)
+	}
+	if *clamped.RobocopyRetries != 0 {
+		t.Errorf("clamped retries = %d, want 0", *clamped.RobocopyRetries)
+	}
+	if *clamped.RobocopyWaitSeconds != 60 {
+		t.Errorf("clamped wait = %d, want 60", *clamped.RobocopyWaitSeconds)
+	}
+	if !clamped.RobocopyUnbuffered {
+		t.Error("expected Unbuffered to stay true")
+	}
+}
+

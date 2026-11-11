@@ -772,12 +772,16 @@ func TestPreferencesEndpoints(t *testing.T) {
 		t.Fatalf("GET /preferences status = %d, want 200", status)
 	}
 
-	// 2. PUT /preferences updates settings
+	// 2. PUT /preferences updates settings including Robocopy configuration
 	newPrefs := map[string]any{
 		"close_steam_on_transfer":       true,
 		"relaunch_steam_after_transfer": true,
-		"run_on_startup":               true,
+		"run_on_startup":                true,
 		"theme":                         "light",
+		"robocopy_threads":              16,
+		"robocopy_retries":              0,
+		"robocopy_wait_seconds":         5,
+		"robocopy_unbuffered":           true,
 	}
 	status, updated := doJSON(t, ts, "PUT", "/preferences", newPrefs, true)
 	if status != http.StatusOK {
@@ -785,6 +789,9 @@ func TestPreferencesEndpoints(t *testing.T) {
 	}
 	if updated["close_steam_on_transfer"] != true || updated["theme"] != "light" {
 		t.Fatalf("unexpected updated prefs: %v", updated)
+	}
+	if updated["robocopy_threads"] != float64(16) || updated["robocopy_retries"] != float64(0) || updated["robocopy_wait_seconds"] != float64(5) || updated["robocopy_unbuffered"] != true {
+		t.Fatalf("unexpected robocopy prefs: %v", updated)
 	}
 }
 

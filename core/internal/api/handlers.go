@@ -376,19 +376,25 @@ func pathLike(s string) bool {
 // getPreferences: GET /preferences
 func (h handlers) getPreferences(w http.ResponseWriter, _ *http.Request) {
 	if h.cfg.PreferencesFn != nil {
-		writeJSON(w, http.StatusOK, h.cfg.PreferencesFn())
+		writeJSON(w, http.StatusOK, h.cfg.PreferencesFn().Normalized())
 		return
 	}
-	writeJSON(w, http.StatusOK, h.cfg.Preferences)
+	writeJSON(w, http.StatusOK, h.cfg.Preferences.Normalized())
 }
 
 // updatePreferences: PUT /preferences
 func (h handlers) updatePreferences(w http.ResponseWriter, r *http.Request) {
 	var p config.Preferences
+	if h.cfg.PreferencesFn != nil {
+		p = h.cfg.PreferencesFn().Normalized()
+	} else {
+		p = h.cfg.Preferences.Normalized()
+	}
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
 		return
 	}
+	p = p.Normalized()
 	if h.cfg.SetPreferences != nil {
 		if err := h.cfg.SetPreferences(p); err != nil {
 			writeError(w, http.StatusInternalServerError, "persist_failed", err.Error())

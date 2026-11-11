@@ -658,6 +658,28 @@ components:
         relay_device_secret:
           type: string
           description: Secret token for device authentication on the homeserver.
+        robocopy_threads:
+          type: integer
+          minimum: 1
+          maximum: 128
+          default: 8
+          description: Number of multithreaded copy threads for Robocopy (/MT:n).
+        robocopy_retries:
+          type: integer
+          minimum: 0
+          maximum: 20
+          default: 2
+          description: Number of retries on failed copies (/R:n).
+        robocopy_wait_seconds:
+          type: integer
+          minimum: 0
+          maximum: 60
+          default: 2
+          description: Wait time between retries in seconds (/W:n).
+        robocopy_unbuffered:
+          type: boolean
+          default: false
+          description: Use unbuffered I/O (/J), recommended for very large game files.
 
     JobType:
       type: string

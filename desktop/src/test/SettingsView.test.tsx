@@ -44,7 +44,7 @@ describe('SettingsView Component', () => {
       capture_folders: [],
     });
     (api.getHealth as any).mockResolvedValue({
-      version: '0.3.3-beta.2',
+      version: '0.3.3-beta.3',
       uptime_seconds: 120,
       steam_running: true,
     });
@@ -65,7 +65,7 @@ describe('SettingsView Component', () => {
   });
 
   it('renders sections and populates preferences from core', async () => {
-    render(<SettingsView appVersion="v0.3.3-beta.2" steamRunning={true} />);
+    render(<SettingsView appVersion="v0.3.3-beta.3" steamRunning={true} />);
 
     expect(screen.getByText('Settings & Preferences')).toBeInTheDocument();
     expect(screen.getByText('Steam Transfer Lifecycle')).toBeInTheDocument();
@@ -79,7 +79,7 @@ describe('SettingsView Component', () => {
   });
 
   it('allows testing core connection', async () => {
-    render(<SettingsView appVersion="v0.3.3-beta.2" steamRunning={true} />);
+    render(<SettingsView appVersion="v0.3.3-beta.3" steamRunning={true} />);
 
     const testBtn = screen.getByRole('button', { name: /test connection/i });
     fireEvent.click(testBtn);
@@ -92,7 +92,7 @@ describe('SettingsView Component', () => {
 
   it('saves updated preferences when clicking Save', async () => {
     const onSavedMock = vi.fn();
-    render(<SettingsView appVersion="v0.3.3-beta.2" steamRunning={true} onSaved={onSavedMock} />);
+    render(<SettingsView appVersion="v0.3.3-beta.3" steamRunning={true} onSaved={onSavedMock} />);
 
     const saveBtn = screen.getByRole('button', { name: /save all changes/i });
     fireEvent.click(saveBtn);
@@ -132,7 +132,7 @@ describe('SettingsView Component', () => {
   });
 
   it('switches sub-settings tabs and persists Robocopy engine configuration', async () => {
-    render(<SettingsView appVersion="v0.3.3-beta.2" steamRunning={true} />);
+    render(<SettingsView appVersion="v0.3.3-beta.3" steamRunning={true} />);
 
     await waitFor(() => {
       expect(api.getPreferences).toHaveBeenCalled();
@@ -164,7 +164,7 @@ describe('SettingsView Component', () => {
   });
 
   it('switches to Media & Captures tab, shows detected sources, adds custom folder, and saves preferences', async () => {
-    render(<SettingsView appVersion="v0.3.3-beta.2" steamRunning={true} />);
+    render(<SettingsView appVersion="v0.3.3-beta.3" steamRunning={true} />);
 
     await waitFor(() => {
       expect(api.getCaptureSources).toHaveBeenCalled();

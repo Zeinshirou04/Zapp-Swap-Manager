@@ -177,7 +177,9 @@ func TransferExecutor(libs []steam.Library) queue.Executor {
 		if cur.Path == target.Path {
 			return fmt.Errorf("game %s is already in library %q", job.AppID, job.TargetLibraryID)
 		}
-		opts := transfer.Options{} // LastBackup metrics wired from the journal later
+		opts := transfer.Options{
+			StepFn: transfer.StepFunc(step),
+		} // LastBackup metrics wired from the journal later
 		dir := game.Manifest.InstallDir
 
 		switch {
@@ -185,29 +187,23 @@ func TransferExecutor(libs []steam.Library) queue.Executor {
 			if cur.Type != steam.TypeSSDCache || target.Type != steam.TypeHDDMaster {
 				return fmt.Errorf("backup requires the game in an ssd library and an hdd target")
 			}
-			return step(1, "backup mirror", func() error {
-				return transfer.Backup(ctx, opts, cur.Path, target.Path, dir)
-			})
+			return transfer.Backup(ctx, opts, cur.Path, target.Path, dir)
 		case job.Type == queue.TypeEvict:
 			if cur.Type != steam.TypeSSDCache || target.Type != steam.TypeHDDMaster {
 				return fmt.Errorf("evict requires the game in an ssd library and an hdd target")
 			}
-			return step(1, "evict to hdd", func() error {
-				if game.IsCustom {
-					return transfer.EvictCustom(ctx, opts, cur.Path, target.Path, dir)
-				}
-				return transfer.Evict(ctx, opts, cur.Path, target.Path, manifestName, dir)
-			})
+			if game.IsCustom {
+				return transfer.EvictCustom(ctx, opts, cur.Path, target.Path, dir)
+			}
+			return transfer.Evict(ctx, opts, cur.Path, target.Path, manifestName, dir)
 		case job.Type == queue.TypePromote:
 			if cur.Type != steam.TypeHDDMaster || target.Type != steam.TypeSSDCache {
 				return fmt.Errorf("promote requires the game in the hdd library and an ssd target")
 			}
-			return step(1, "promote to ssd", func() error {
-				if game.IsCustom {
-					return transfer.PromoteCustom(ctx, opts, cur.Path, target.Path, dir)
-				}
-				return transfer.Promote(ctx, opts, cur.Path, target.Path, manifestName, dir)
-			})
+			if game.IsCustom {
+				return transfer.PromoteCustom(ctx, opts, cur.Path, target.Path, dir)
+			}
+			return transfer.Promote(ctx, opts, cur.Path, target.Path, manifestName, dir)
 		default:
 			return fmt.Errorf("unknown job type %q", job.Type)
 		}

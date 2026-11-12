@@ -834,3 +834,45 @@ func TestCustomGameManifestEndpoints(t *testing.T) {
 	}
 }
 
+func TestUpdateCustomGameBlockedWhileJobActive(t *testing.T) {
+	release := make(chan struct{})
+	defer close(release)
+
+	ts, _ := newTestAPI(t, func(cfg *Config) {
+		cfg.Queue = mustQueueBlocked(t, release)
+	})
+
+	createReq := map[string]any{
+		"name":        "Wuthering Waves",
+		"library_id":  "ssd0",
+		"install_dir": "WutheringWaves",
+	}
+	status, created := doJSON(t, ts, "POST", "/custom-games", createReq, true)
+	if status != http.StatusCreated {
+		t.Fatalf("POST /custom-games status = %d, want 201; body: %v", status, created)
+	}
+	appID := fmt.Sprintf("%.0f", created["app_id"].(float64))
+
+	// Enqueue a job for this custom game; the worker blocks on `release`.
+	status, job := doJSON(t, ts, "POST", "/jobs", map[string]any{
+		"type":              "evict",
+		"app_id":            appID,
+		"target_library_id": "hdd0",
+	}, true)
+	if status != http.StatusAccepted {
+		t.Fatalf("POST /jobs status = %d, want 202; body: %v", status, job)
+	}
+
+	// Editing metadata while active must return 409 Conflict (job_active) so
+	// zappmanifest.json is never mutated mid-transfer.
+	status, conflict := doJSON(t, ts, "PUT", "/custom-games/"+appID, map[string]any{
+		"tags": []string{"action"},
+	}, true)
+	if status != http.StatusConflict {
+		t.Fatalf("PUT /custom-games/%s during active job status = %d, want 409; body: %v", appID, status, conflict)
+	}
+	if conflict["code"] != "job_active" {
+		t.Errorf("conflict code = %v, want job_active", conflict["code"])
+	}
+}
+

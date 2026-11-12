@@ -2,6 +2,7 @@ package logger
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -66,5 +67,28 @@ func TestLoggerSetupAndRotation(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected recent logs to contain log entry, got: %v", recent)
+	}
+}
+
+type failingWriter struct{}
+
+func (failingWriter) Write(_ []byte) (int, error) {
+	return 0, fmt.Errorf("invalid handle")
+}
+
+func TestTolerantMultiWriterContinuesOnBrokenStdout(t *testing.T) {
+	rb := NewRingBuffer(10)
+	var fileBuf strings.Builder
+
+	mw := &tolerantMultiWriter{writers: []io.Writer{failingWriter{}, rb, &fileBuf}}
+	logger := slog.New(slog.NewTextHandler(mw, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger.Info("detached startup log", "status", "ok")
+
+	lines := rb.Lines(5)
+	if len(lines) != 1 || !strings.Contains(lines[0], "detached startup log") {
+		t.Fatalf("expected ring buffer to capture log despite failing stdout, got %v", lines)
+	}
+	if !strings.Contains(fileBuf.String(), "detached startup log") {
+		t.Fatalf("expected file writer to capture log despite failing stdout, got %q", fileBuf.String())
 	}
 }

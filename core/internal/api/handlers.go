@@ -557,6 +557,18 @@ func (h handlers) updateCustomGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Refuse metadata/zappmanifest.json mutations while a transfer job is active for
+	// this app_id so Step 2 (VerifyMatch) cannot observe a mid-copy source byte delta.
+	if h.cfg.Queue != nil {
+		if active, aErr := h.cfg.Queue.HasActiveJob(foundGame.Manifest.AppID); aErr != nil {
+			writeError(w, http.StatusInternalServerError, "queue_check_failed", aErr.Error())
+			return
+		} else if active {
+			writeError(w, http.StatusConflict, "job_active", "cannot modify game metadata while a transfer job is queued or running for this game")
+			return
+		}
+	}
+
 	// Locate game directory in its library
 	libs := h.libs()
 	var gameDir string
@@ -646,7 +658,6 @@ func (h handlers) updateCustomGame(w http.ResponseWriter, r *http.Request) {
 	foundGame.CoverURL = zm.CoverURL
 	foundGame.SwapEnabled = zm.SwapEnabled
 	foundGame.IsNativeHDD = zm.IsNativeHDD
-	foundGame.Tags = zm.Tags
 	foundGame.Tags = zm.Tags
 
 	writeJSON(w, http.StatusOK, toGameJSON(*foundGame))

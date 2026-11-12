@@ -237,26 +237,24 @@ func (q *Queue) execute(executor Executor, job Job) {
 		}
 		msg = &holder
 	}
-	progress := 0.0
-	if result == StatusSucceeded {
-		progress = 100
-	}
 	completed := now()
 	writeStatus := func() {
 		_, wErr := q.db.Exec(`UPDATE jobs
-			SET status = ?, progress_percent = ?,
-			    bytes_transferred = CASE WHEN ? = 100.0 AND total_bytes > 0 THEN total_bytes ELSE bytes_transferred END,
+			SET status = ?,
+			    progress_percent = CASE WHEN ? = 'succeeded' THEN 100.0 ELSE progress_percent END,
+			    bytes_transferred = CASE WHEN ? = 'succeeded' AND total_bytes > 0 THEN total_bytes ELSE bytes_transferred END,
 			    error = ?, completed_at = ?
 			WHERE id = ?`,
-			result, progress, progress, msg, nullTime(&completed), job.ID)
+			result, result, result, msg, nullTime(&completed), job.ID)
 		if wErr != nil {
 			time.Sleep(25 * time.Millisecond)
 			q.db.Exec(`UPDATE jobs
-				SET status = ?, progress_percent = ?,
-				    bytes_transferred = CASE WHEN ? = 100.0 AND total_bytes > 0 THEN total_bytes ELSE bytes_transferred END,
+				SET status = ?,
+				    progress_percent = CASE WHEN ? = 'succeeded' THEN 100.0 ELSE progress_percent END,
+				    bytes_transferred = CASE WHEN ? = 'succeeded' AND total_bytes > 0 THEN total_bytes ELSE bytes_transferred END,
 				    error = ?, completed_at = ?
 				WHERE id = ?`,
-				result, progress, progress, msg, nullTime(&completed), job.ID) // last-ditch retry; journal keeps the history
+				result, result, result, msg, nullTime(&completed), job.ID) // last-ditch retry; journal keeps the history
 		}
 	}
 	writeStatus()

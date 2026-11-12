@@ -321,3 +321,75 @@ func TestUpdateProgress(t *testing.T) {
 		t.Errorf("final BytesTransferred = %v, want 10000", finalJob.BytesTransferred)
 	}
 }
+
+func TestHasActiveJobAndFailedProgressPreserved(t *testing.T) {
+	dir := t.TempDir()
+	inProgress := make(chan struct{})
+	gate := make(chan struct{})
+
+	var q *Queue
+	exec := func(ctx context.Context, job Job, step StepFunc) error {
+		if job.AppID == "105600" {
+			close(inProgress)
+			<-gate
+		}
+		if err := q.UpdateProgress(job.ID, 95.0, 4096, 8192); err != nil {
+			t.Errorf("UpdateProgress inside failed job: %v", err)
+		}
+		return step(1, "verify", func() error {
+			return errors.New("verify mismatch")
+		})
+	}
+
+	var err error
+	q, err = New(filepath.Join(dir, "jobs.db"), exec)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { q.Close() })
+
+	if has, err := q.HasActiveJob("105600"); err != nil || has {
+		t.Fatalf("before enqueue HasActiveJob = (%v, %v), want (false, nil)", has, err)
+	}
+
+	job1, err := q.Enqueue(CreateJobRequest{Type: TypePromote, AppID: "105600", TargetLibraryID: "ssd0"})
+	if err != nil {
+		t.Fatalf("Enqueue job1: %v", err)
+	}
+	<-inProgress
+
+	// Enqueue a second job for a different app so we verify both running and queued states.
+	if _, err := q.Enqueue(CreateJobRequest{Type: TypeBackup, AppID: "200", TargetLibraryID: "hdd0"}); err != nil {
+		t.Fatalf("Enqueue job2: %v", err)
+	}
+
+	if has, err := q.HasActiveJob("105600"); err != nil || !has {
+		t.Errorf("while running HasActiveJob(105600) = (%v, %v), want (true, nil)", has, err)
+	}
+	if has, err := q.HasActiveJob("200"); err != nil || !has {
+		t.Errorf("while queued HasActiveJob(200) = (%v, %v), want (true, nil)", has, err)
+	}
+	if has, err := q.HasActiveJob("999"); err != nil || has {
+		t.Errorf("idle app HasActiveJob(999) = (%v, %v), want (false, nil)", has, err)
+	}
+
+	close(gate)
+	waitFor(t, "job1 reaches failed", func() bool {
+		got, err := q.GetJob(job1.ID)
+		return err == nil && got.Status == StatusFailed
+	})
+
+	got, err := q.GetJob(job1.ID)
+	if err != nil {
+		t.Fatalf("GetJob failed: %v", err)
+	}
+	if got.ProgressPercent != 95.0 {
+		t.Errorf("failed job ProgressPercent = %v, want 95.0 (must preserve last progress)", got.ProgressPercent)
+	}
+	if got.BytesTransferred != 4096 {
+		t.Errorf("failed job BytesTransferred = %v, want 4096", got.BytesTransferred)
+	}
+	if has, err := q.HasActiveJob("105600"); err != nil || has {
+		t.Errorf("after failure HasActiveJob(105600) = (%v, %v), want (false, nil)", has, err)
+	}
+}

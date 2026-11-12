@@ -42,10 +42,12 @@ export interface Game {
   backup_clean: boolean;
   is_custom?: boolean;
   cover_url?: string | null;
+  banner_url?: string | null;
   swap_enabled?: boolean;
   has_hdd_backup?: boolean;
   is_native_hdd?: boolean;
   tags?: string[];
+  capture_aliases?: string[];
 }
 
 export interface Preferences {
@@ -61,6 +63,9 @@ export interface Preferences {
   robocopy_retries?: number;
   robocopy_wait_seconds?: number;
   robocopy_unbuffered?: boolean;
+  sharex_enabled?: boolean;
+  shadowplay_enabled?: boolean;
+  capture_folders?: string[];
 }
 
 export interface CreateCustomGameRequest {
@@ -68,6 +73,7 @@ export interface CreateCustomGameRequest {
   library_id: string;
   install_dir: string;
   cover_url?: string;
+  banner_url?: string;
   swap_enabled?: boolean;
   is_native_hdd?: boolean;
   tags?: string[];
@@ -76,11 +82,61 @@ export interface CreateCustomGameRequest {
 export interface UpdateCustomGameRequest {
   name?: string;
   cover_url?: string;
+  banner_url?: string;
   install_dir?: string;
   library_id?: string;
   swap_enabled?: boolean;
   is_native_hdd?: boolean;
   tags?: string[];
+}
+
+export type ArtworkKind = 'grid' | 'banner';
+
+export interface UpdateGameArtworkRequest {
+  cover_url?: string | null;
+  banner_url?: string | null;
+}
+
+export type CaptureSource = 'sharex' | 'shadowplay' | 'custom';
+export type CaptureKind = 'image' | 'video';
+export type CaptureMatchBy = 'shadowplay_folder' | 'sharex_history' | 'filename' | 'alias';
+
+export interface CaptureItem {
+  id: string;
+  source: CaptureSource;
+  kind: CaptureKind;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  captured_at: string;
+  window_title?: string | null;
+  process_name?: string | null;
+  matched_by: CaptureMatchBy;
+}
+
+export interface CaptureListResponse {
+  items: CaptureItem[];
+  aliases: string[];
+  sources_checked?: {
+    sharex: boolean;
+    shadowplay: boolean;
+    custom: number;
+  };
+}
+
+export interface CaptureSources {
+  sharex: {
+    detected: boolean;
+    enabled: boolean;
+    root_path?: string;
+    history_db_path?: string;
+  };
+  shadowplay: {
+    detected: boolean;
+    enabled: boolean;
+    root_path?: string;
+  };
+  custom_folders: string[];
 }
 
 export type JobType = 'promote' | 'evict' | 'backup';

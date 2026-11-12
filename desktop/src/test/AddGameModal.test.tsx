@@ -162,4 +162,55 @@ describe('AddGameModal Component', () => {
 
     expect(screen.getByText(/Drive Z: is not registered in Zapp/i)).toBeInTheDocument();
   });
+
+  it('submits separate grid cover_url and hero banner_url when provided', async () => {
+    const createdGame: Game = {
+      app_id: 998877,
+      name: 'Wuthering Waves',
+      install_dir: 'WutheringWaves',
+      size_bytes: 50000000000,
+      state: 'active_ssd',
+      current_library_id: 'lib-games-e',
+      build_id: '',
+      last_backup_time: null,
+      backup_clean: false,
+      is_custom: true,
+      cover_url: 'https://example.com/grid.jpg',
+      banner_url: 'https://example.com/banner.jpg',
+    };
+    createCustomGameMock.mockResolvedValue(createdGame);
+
+    render(
+      <AddGameModal
+        open={true}
+        onClose={vi.fn()}
+        onSuccess={vi.fn()}
+        libraries={mockLibraries}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText(/Game Folder or Path/i), { target: { value: 'E:\\Game\\WutheringWaves' } });
+    fireEvent.change(screen.getByLabelText(/Game Title/i), { target: { value: 'Wuthering Waves' } });
+    fireEvent.change(screen.getByLabelText(/Grid Cover Artwork/i), {
+      target: { value: 'https://example.com/grid.jpg' },
+    });
+    fireEvent.change(screen.getByLabelText(/Hero Banner Artwork/i), {
+      target: { value: 'https://example.com/banner.jpg' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Register Game/i }));
+
+    await waitFor(() => {
+      expect(createCustomGameMock).toHaveBeenCalledWith({
+        name: 'Wuthering Waves',
+        library_id: 'lib-games-e',
+        install_dir: 'WutheringWaves',
+        cover_url: 'https://example.com/grid.jpg',
+        banner_url: 'https://example.com/banner.jpg',
+        swap_enabled: true,
+        is_native_hdd: false,
+        tags: undefined,
+      });
+    });
+  });
 });

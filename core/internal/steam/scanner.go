@@ -31,6 +31,7 @@ type Game struct {
 	LibraryID    string
 	IsCustom     bool
 	CoverURL     string
+	BannerURL    string
 	SwapEnabled  bool
 	HasHDDBackup bool
 	IsNativeHDD  bool
@@ -103,6 +104,7 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 			actualDir := filepath.Join(lib.Path, "steamapps", "common", m.InstallDir)
 
 			var coverURL string
+			var bannerURL string
 			swapEnabled := true
 			isNativeHDD := false
 			var tags []string
@@ -112,6 +114,9 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 				}
 				if zm.CoverURL != "" {
 					coverURL = zm.CoverURL
+				}
+				if zm.BannerURL != "" {
+					bannerURL = zm.BannerURL
 				}
 				swapEnabled = zm.SwapEnabled
 				isNativeHDD = zm.IsNativeHDD
@@ -158,6 +163,7 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 				LibraryID:    lib.ID,
 				IsCustom:     false,
 				CoverURL:     coverURL,
+				BannerURL:    bannerURL,
 				SwapEnabled:  swapEnabled,
 				HasHDDBackup: hasHDDBackup,
 				IsNativeHDD:  isNativeHDD,
@@ -195,6 +201,7 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 
 			gameTitle := filepath.Base(filepath.FromSlash(name))
 			var coverURL string
+			var bannerURL string
 			swapEnabled := true
 			isNativeHDD := false
 			var tags []string
@@ -210,6 +217,9 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 				}
 				if zm.CoverURL != "" {
 					coverURL = zm.CoverURL
+				}
+				if zm.BannerURL != "" {
+					bannerURL = zm.BannerURL
 				}
 				swapEnabled = zm.SwapEnabled
 				isNativeHDD = zm.IsNativeHDD
@@ -235,6 +245,7 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 					LibraryID:    lib.ID,
 					IsCustom:     true,
 					CoverURL:     coverURL,
+					BannerURL:    bannerURL,
 					SwapEnabled:  swapEnabled,
 					IsNativeHDD:  isNativeHDD,
 					Tags:         tags,

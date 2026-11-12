@@ -108,6 +108,8 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 		Version:        version,
 		Libraries:      cfg.Libraries,
 		LibrariesFn:    libs.Get,
+		ArtworkDir:     config.ArtworkDir(),
+		CapturesDir:    config.CapturesDir(),
 		SetLibraries: func(list []steam.Library) error {
 			libs.mu.Lock()
 			libs.list = list
@@ -234,22 +236,23 @@ func defaultExecutor(whitelist func() []steam.Library, prefFn func() config.Pref
 			WaitSeconds: waitSecs,
 			Unbuffered:  prefs.RobocopyUnbuffered,
 		}
-		lastLoggedPct := -1
+		lastLoggedBucket := -1
 		opts := transfer.Options{
 			Robocopy: robocopCfg,
+			StepFn:   transfer.StepFunc(step),
 			ProgressFn: func(bytesTransferred, totalBytes int64, percent float64) {
 				if qFn != nil {
 					if qInst := qFn(); qInst != nil {
 						_ = qInst.UpdateProgress(job.ID, percent, bytesTransferred, totalBytes)
 					}
 				}
-				pctInt := int(percent)
-				if pctInt%20 == 0 && pctInt != lastLoggedPct {
-					lastLoggedPct = pctInt
+				bucket := int(percent) / 10
+				if bucket > lastLoggedBucket {
+					lastLoggedBucket = bucket
 					slog.Info("transfer progress",
 						"job_id", job.ID,
 						"game", foundGame.Manifest.Name,
-						"percent", pctInt,
+						"percent", int(percent),
 						"transferred_bytes", bytesTransferred,
 						"total_bytes", totalBytes,
 					)
@@ -260,25 +263,23 @@ func defaultExecutor(whitelist func() []steam.Library, prefFn func() config.Pref
 		var runErr error
 		switch job.Type {
 		case queue.TypePromote:
-			runErr = step(1, "promote", func() error {
-				if foundGame.IsCustom {
-					return transfer.PromoteCustom(ctx, opts, srcLib.Path, targetLib.Path, foundGame.Manifest.InstallDir)
-				}
-				return transfer.Promote(ctx, opts, srcLib.Path, targetLib.Path, manifestName, foundGame.Manifest.InstallDir)
-			})
+			if foundGame.IsCustom {
+				runErr = transfer.PromoteCustom(ctx, opts, srcLib.Path, targetLib.Path, foundGame.Manifest.InstallDir)
+			} else {
+				runErr = transfer.Promote(ctx, opts, srcLib.Path, targetLib.Path, manifestName, foundGame.Manifest.InstallDir)
+			}
 		case queue.TypeEvict:
-			runErr = step(1, "evict", func() error {
-				if foundGame.IsCustom {
-					return transfer.EvictCustom(ctx, opts, srcLib.Path, targetLib.Path, foundGame.Manifest.InstallDir)
-				}
-				return transfer.Evict(ctx, opts, srcLib.Path, targetLib.Path, manifestName, foundGame.Manifest.InstallDir)
-			})
+			if foundGame.IsCustom {
+				runErr = transfer.EvictCustom(ctx, opts, srcLib.Path, targetLib.Path, foundGame.Manifest.InstallDir)
+			} else {
+				runErr = transfer.Evict(ctx, opts, srcLib.Path, targetLib.Path, manifestName, foundGame.Manifest.InstallDir)
+			}
 		case queue.TypeBackup:
-			runErr = step(1, "backup", func() error {
-				return transfer.Backup(ctx, opts, srcLib.Path, targetLib.Path, foundGame.Manifest.InstallDir)
-			})
+			runErr = transfer.Backup(ctx, opts, srcLib.Path, targetLib.Path, foundGame.Manifest.InstallDir)
 		default:
-			runErr = fmt.Errorf("unsupported job type %q", job.Type)
+			runErr = step(1, "unsupported", func() error {
+				return fmt.Errorf("unsupported job type %q", job.Type)
+			})
 		}
 
 		if runErr != nil {

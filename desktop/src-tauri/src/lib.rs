@@ -270,11 +270,55 @@ async fn install_update_now(
     Ok(())
 }
 
+#[cfg(windows)]
+mod win_frame;
+
+#[cfg(not(windows))]
+mod win_frame {
+    #[derive(Debug, Clone, serde::Serialize)]
+    pub struct WindowDiagnostics {
+        pub elevated: bool,
+        pub decorated_frame: bool,
+    }
+}
+
+#[tauri::command]
+fn get_window_diagnostics(
+    state: tauri::State<'_, win_frame::WindowDiagnostics>,
+) -> win_frame::WindowDiagnostics {
+    state.inner().clone()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(CoreState::default())
+        .setup(|app| {
+            use tauri::Manager;
+            if let Some(window) = app.get_webview_window("main") {
+                #[cfg(windows)]
+                {
+                    let diag = win_frame::setup_window(&window);
+                    app.manage(diag);
+                }
+                #[cfg(not(windows))]
+                {
+                    app.manage(win_frame::WindowDiagnostics {
+                        elevated: false,
+                        decorated_frame: false,
+                    });
+                }
+                let _ = window.show();
+            } else {
+                app.manage(win_frame::WindowDiagnostics {
+                    elevated: false,
+                    decorated_frame: false,
+                });
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             start_core_daemon,
             restart_core_daemon,
@@ -283,7 +327,8 @@ pub fn run() {
             read_local_auth_token,
             relaunch_app,
             open_logs_folder,
-            install_update_now
+            install_update_now,
+            get_window_diagnostics
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

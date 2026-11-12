@@ -1,11 +1,14 @@
 package transfer
 
 import (
+	"bufio"
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestExitCodeError(t *testing.T) {
@@ -70,7 +73,7 @@ func TestRunBuildsCommonFlags(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	got := buildArgs(`C:\s`, `C:\d`, MirrorFlag)
-	want := []string{`C:\s`, `C:\d`, "/MIR", "/NP", "/NFL", "/NDL", "/R:2", "/W:2"}
+	want := []string{`C:\s`, `C:\d`, "/MIR", "/NDL", "/R:2", "/W:2"}
 	if len(got) != len(want) {
 		t.Fatalf("args = %v", got)
 	}
@@ -89,7 +92,7 @@ func TestTailFlagsWithRobocopyConfig(t *testing.T) {
 		Unbuffered:  true,
 	}
 	got := buildArgsWithTail(`C:\s`, `C:\d`, tailFlags(cfg), CopyFlag)
-	want := []string{`C:\s`, `C:\d`, "/E", "/NP", "/NFL", "/NDL", "/R:5", "/W:10", "/MT:32", "/J"}
+	want := []string{`C:\s`, `C:\d`, "/E", "/NDL", "/R:5", "/W:10", "/MT:32", "/J"}
 	if len(got) != len(want) {
 		t.Fatalf("args = %v, want %v", got, want)
 	}
@@ -281,5 +284,54 @@ func TestMoveManifest(t *testing.T) {
 	}
 	if _, err := os.Stat(from); err != nil {
 		t.Error("refused move must keep the source manifest")
+	}
+}
+
+func TestScanCRorLF(t *testing.T) {
+	input := "  New File\t123\tpak chunk.pak\r  10.0%\r  25.5%\r\nERROR 32 access denied\n"
+	sc := bufio.NewScanner(strings.NewReader(input))
+	sc.Split(scanCRorLF)
+	var lines []string
+	for sc.Scan() {
+		if s := strings.TrimSpace(sc.Text()); s != "" {
+			lines = append(lines, s)
+		}
+	}
+	if err := sc.Err(); err != nil {
+		t.Fatalf("scan error: %v", err)
+	}
+	if len(lines) != 4 {
+		t.Fatalf("expected 4 lines split across CR/LF, got %d: %v", len(lines), lines)
+	}
+	if got := extractRobocopyFileName(lines[0]); got != "pak chunk.pak" {
+		t.Errorf("extractRobocopyFileName = %q, want %q", got, "pak chunk.pak")
+	}
+}
+
+func TestRobocopyStreamLoggerThrottlesAndSurfacesErrors(t *testing.T) {
+	cur := time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)
+	var emitted []string
+	l := &robocopyStreamLogger{
+		nowFn:   func() time.Time { return cur },
+		lastPct: -1,
+		emitFn: func(level slog.Level, msg string, attrs ...any) {
+			emitted = append(emitted, level.String()+":"+msg)
+		},
+	}
+
+	l.LogLine("Started : Thu Nov 12", false)
+	l.LogLine("New File\t1000\ta.pak", false)
+	l.LogLine("1.0%", false)
+	l.LogLine("2.0%", false) // throttled (<10% and <3s)
+	cur = cur.Add(4 * time.Second)
+	l.LogLine("5.0%", false) // allowed (>=3s)
+	l.LogLine("ERROR 32 (0x00000020) Accessing Source File", false)
+
+	wantCount := 5 // Started, New File, 1.0%, 5.0%, ERROR
+	if len(emitted) != wantCount {
+		t.Fatalf("expected %d emitted events, got %d: %v", wantCount, len(emitted), emitted)
+	}
+	if !strings.HasPrefix(emitted[len(emitted)-1], "WARN:") {
+		t.Errorf("expected error line at WARN level, got %q", emitted[len(emitted)-1])
 	}
 }

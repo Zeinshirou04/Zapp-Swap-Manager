@@ -15,8 +15,24 @@ const (
 	// MaxLogSizeBytes is 5MB before rotating to zapp-core.log.1
 	MaxLogSizeBytes = 5 * 1024 * 1024
 	// DefaultRingCapacity is the maximum number of recent lines kept in memory
-	DefaultRingCapacity = 1000
+	DefaultRingCapacity = 2000
 )
+
+// tolerantMultiWriter fans writes out to all non-nil writers even when an
+// individual destination fails (e.g. detached os.Stdout with an invalid handle
+// on Windows under CREATE_NO_WINDOW | DETACHED_PROCESS).
+type tolerantMultiWriter struct {
+	writers []io.Writer
+}
+
+func (t *tolerantMultiWriter) Write(p []byte) (int, error) {
+	for _, w := range t.writers {
+		if w != nil {
+			_, _ = w.Write(p)
+		}
+	}
+	return len(p), nil
+}
 
 // RingBuffer stores the most recent log lines in a thread-safe circular memory buffer.
 type RingBuffer struct {
@@ -133,7 +149,7 @@ func Setup(customLogPath string) (func(), error) {
 		openErr = err
 	}
 
-	multi := io.MultiWriter(writers...)
+	multi := &tolerantMultiWriter{writers: writers}
 	handler := slog.NewTextHandler(multi, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	})

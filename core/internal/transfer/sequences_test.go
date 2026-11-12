@@ -399,3 +399,89 @@ func TestGenericDirectoryRoundTrip(t *testing.T) {
 		t.Errorf("expected %q on SSD to NOT be a junction", ssdPath)
 	}
 }
+
+// TestPromoteAndEvictStepsAndProgressCap verifies that multi-step sequences emit
+// distinct StepFn stages and hold copy/mirror progress at or below 95% until
+// VerifyMatch and MoveManifest execute.
+func TestPromoteAndEvictStepsAndProgressCap(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("robocopy.exe is Windows-only")
+	}
+	ctx := context.Background()
+	ssd := setUpLibrary(t, map[string]int{gameDir + "/a.bin": 1024, gameDir + "/sub/b.bin": 2048}, manifestName)
+	hdd := setUpLibrary(t, nil, "")
+
+	type progressSample struct {
+		step    string
+		percent float64
+	}
+
+	runWithRecording := func(fn func(opts Options) error) ([]string, []progressSample) {
+		var steps []string
+		var samples []progressSample
+		var currentStep string
+		opts := Options{
+			StepFn: func(index int, name string, run func() error) error {
+				currentStep = name
+				steps = append(steps, name)
+				return run()
+			},
+			ProgressFn: func(bytesTransferred, totalBytes int64, percent float64) {
+				samples = append(samples, progressSample{step: currentStep, percent: percent})
+			},
+		}
+		if err := fn(opts); err != nil {
+			t.Fatalf("transfer failed: %v", err)
+		}
+		return steps, samples
+	}
+
+	evictSteps, evictSamples := runWithRecording(func(opts Options) error {
+		return Evict(ctx, opts, ssd, hdd, manifestName, installDir)
+	})
+	wantEvict := []string{"mirror", "verify", "move-manifest", "delete-ssd"}
+	if len(evictSteps) != len(wantEvict) {
+		t.Fatalf("Evict steps = %v, want %v", evictSteps, wantEvict)
+	}
+	for i := range wantEvict {
+		if evictSteps[i] != wantEvict[i] {
+			t.Errorf("Evict step[%d] = %q, want %q", i, evictSteps[i], wantEvict[i])
+		}
+	}
+	for _, s := range evictSamples {
+		if s.step == "mirror" && s.percent > 95.0 {
+			t.Errorf("Evict mirror reported %.1f%% (> 95.0%% before verify/move-manifest)", s.percent)
+		}
+		if s.percent >= 100.0 {
+			t.Errorf("Evict reported 100%% during transfer step %q; 100%% must wait for job completion", s.step)
+		}
+	}
+
+	promoteSteps, promoteSamples := runWithRecording(func(opts Options) error {
+		return Promote(ctx, opts, hdd, ssd, manifestName, installDir)
+	})
+	wantPromote := []string{"copy", "verify", "move-manifest"}
+	if len(promoteSteps) != len(wantPromote) {
+		t.Fatalf("Promote steps = %v, want %v", promoteSteps, wantPromote)
+	}
+	for i := range wantPromote {
+		if promoteSteps[i] != wantPromote[i] {
+			t.Errorf("Promote step[%d] = %q, want %q", i, promoteSteps[i], wantPromote[i])
+		}
+	}
+	var sawPostCopyStageProgress bool
+	for _, s := range promoteSamples {
+		if s.step == "copy" && s.percent > 95.0 {
+			t.Errorf("Promote copy reported %.1f%% (> 95.0%% before verify/move-manifest)", s.percent)
+		}
+		if (s.step == "verify" || s.step == "move-manifest") && s.percent > 95.0 && s.percent < 100.0 {
+			sawPostCopyStageProgress = true
+		}
+		if s.percent >= 100.0 {
+			t.Errorf("Promote reported 100%% during transfer step %q; 100%% must wait for job completion", s.step)
+		}
+	}
+	if !sawPostCopyStageProgress {
+		t.Errorf("expected post-copy verify/move-manifest stage progress in (95, 100), got %+v", promoteSamples)
+	}
+}

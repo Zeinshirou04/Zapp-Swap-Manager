@@ -58,12 +58,14 @@ See [tokens-and-classes.md](./references/tokens-and-classes.md) for exact hex va
 
 ### A. Notion-Style Hero Banners & Portrait Grid Covers
 - **Game Artwork Standards**:
-  - Game cards (`GameCard` in **Games Library** and **Drive Details**) and the `GameDetailView` foreground cover use **portrait Grid** artwork (`2:3` aspect ratio via Steam CDN `library_600x900_2x.jpg` / `library_600x900.jpg`, with `header.jpg` fallback and `cover_url` override for custom games).
-  - Hero banners use wide landscape banner art (`library_hero.jpg` with cover fallback).
+  - Game cards (`GameCard` in **Games Library** and **Drive Details**) and the `GameDetailView` foreground cover use **portrait Grid** artwork (`2:3` aspect ratio via Steam CDN `library_600x900_2x.jpg` / `library_600x900.jpg`, with `header.jpg` fallback and `cover_url` override).
+  - Hero banners are managed **separately** via `banner_url` (wide landscape artwork). Resolution falls back cleanly in order: custom `banner_url` -> Steam `library_hero.jpg` -> portrait Grid cover (`cover_url`).
+  - Use the dedicated **Edit Artwork** trigger in `GameDetailView` (`ArtworkEditorModal`) to configure Grid Cover (`2:3`) and Hero Banner separately via remote HTTP(S) URL, multipart local file upload (`POST /games/{app_id}/artwork`), or **Reset / Use Default** — never accept raw local filesystem path strings over API JSON.
 - **`GameDetailView` Layout**:
   - **Notion-Style Hero Banner**: Full-width banner image across the top with an acrylic glass layer (`backdrop-filter: blur(28px)` + translucent dark/light surface gradient) fading cleanly into the page background. Layered over the hero canvas sit the foreground **2:3 Grid cover**, Title (`<h1>`), App ID, Size, relative **Last Played** (`Today`), and swap action buttons (`Backup to HDD`, `Evict to HDD`, `Promote to SSD`).
   - **Clean Title Area**: Do NOT place status badges (`Fast SSD Cache`, `Steam Game`, `Backup Verified`, `Native HDD`) above or beside the hero title. Consolidate all status badges inside the **Game & Backup Status** detail section below.
-  - **Detail Grid**: Render **Current Storage Path**, **Game & Backup Status**, **Activity & Runtime** (with exact date/time), and **Media & Captures** flat on `--bg-main` (no card boxes).
+  - **Detail Grid**: Render **Current Storage Path**, **Game & Backup Status**, **Activity & Runtime** (with exact date/time), and **Media & Captures** (`GameCapturesSection`) flat on `--bg-main` (no section wrapper card box).
+  - **Media & Captures (`GameCapturesSection` & `CaptureViewerModal`)**: Auto-detect ShareX screenshots and NVIDIA ShadowPlay videos/screenshots in a flat responsive `16:9` thumbnail gallery (`All` / `Images` / `Videos` segmented filter, source badge pill, and one-click **Copy** image button writing RGBA bitmap to Windows clipboard via `@tauri-apps/plugin-clipboard-manager`). Clicking any item opens `CaptureViewerModal` (`role="dialog"`, `.card` surface over darkened backdrop) with full-size image Lightbox or HTML5 `<video controls>` byte-range player, `Matched via` attribution (`ShadowPlay Game Folder`, `ShareX History Tags`, `Filename Match`, `Custom Alias`), keyboard `ArrowLeft`/`ArrowRight`/`Escape` navigation, and inline **Match Aliases** management.
 
 ### B. Drives & Per-Drive Games (`DrivesOverview`, `DriveDetailView`)
 - **Overview Cards**: Keep `--bg-card` surface, icon tile, friendly name, **`Details →`** text link, unboxed Library Games Storage figure, percentage bar without `"Drive Used"` text, and `Free` / `Drive Capacity` footer.
@@ -83,8 +85,9 @@ See [tokens-and-classes.md](./references/tokens-and-classes.md) for exact hex va
   1. **Preferences**: Steam transfer lifecycle automation & Windows startup behavior.
   2. **Appearance**: Light / Dark / System theme switcher.
   3. **Robocopy Transfer Engine**: Multi-threading (`/MT:1..128`), retries (`/R`), wait delay (`/W`), and unbuffered I/O (`/J`) synced with core Preferences.
-  4. **Core Service & Security**: Daemon URL, bearer token, test & restart actions.
-  5. **App Updates**: Installed version and update check action.
+  4. **Media & Captures**: Auto-detected ShareX & NVIDIA ShadowPlay source toggles, detected paths readout, and extra whitelisted custom capture folders.
+  5. **Core Service & Security**: Daemon URL, bearer token, test & restart actions.
+  6. **App Updates**: Installed version and update check action.
 
 ### E. Iconography & Navigation
 - Use custom SVG sprites in `ZappIcon.tsx` (`home`, `games`, `folder`, `queue`, `log`, `settings`, etc.) for Sidebar navigation and branding.
@@ -108,3 +111,6 @@ Whenever you finish any UI change (`desktop/src/**`, `desktop/src/index.css`, or
 - **v0.3.2**: Adopted official Volt & Ink palette (`tokens.json`), light/dark/system themes, accessible `--primary-text` pairing, custom SVG `ZappIcon` suite, and unboxed game card cover alignment.
 - **v0.3.3-beta.1**: Removed dashboard KPI clutter boxes, removed library ID / role subtitles from overview cards, stripped nested background boxes from Library Games Storage numbers and `ActiveTransferBanner` action labels, removed redundant `"Drive Used"` labels, added directional link triggers, introduced `DriveDetailView`, and revamped `QueueMonitor` with Active Queue + newest-first History tabs.
 - **v0.3.3-beta.2**: Codified "Not Every Card Needs a Background" across detail sections and flat Settings groups; upgraded `GameDetailView` to a Notion-style acrylic Hero banner + `2:3` portrait Grid artwork with exact timestamp in Activity & Runtime and consolidated status pills inside Game & Backup Status; shortened `"Drive Details →"` to `"Details →"`; styled `DriveDetailView` game cards after `GameCard` (`2:3` portrait grids with `Details →`); added `Robocopy Transfer Engine` sub-section in flat `SettingsView`.
+- **v0.3.3-beta.3 (Plan 055)**: Added `95–99%` phase labels (`Finishing file copy...`, `Verifying file integrity...`, `Finalizing manifest & cleanup...`) and failed stop percentages in `QueueMonitor`; locked `GameDetailView` Settings save with an inline warning when a transfer job is queued or running; added startup elevation/UIPI warning toast in `App.tsx` backed by `win_frame.rs` genuine Win32 border frame subclassing.
+- **v0.3.3-beta.4 (Plan 056)**: Separated Grid Cover (`cover_url`) and Hero Banner (`banner_url`) with default Hero -> Steam `library_hero` -> Grid cover fallback; added `ArtworkEditorModal` (**Edit Artwork** button in Hero top bar) supporting separate URL inputs, local PNG/JPEG/WebP/GIF uploads via `POST /games/{app_id}/artwork`, and reset controls across both Steam and Custom games.
+- **v0.3.3-beta.5 (Plan 057)**: Added live Media & Captures (`GameCapturesSection`) in `GameDetailView` with `All`/`Images`/`Videos` filtering, ShareX & NVIDIA ShadowPlay source badges, one-click Windows clipboard image copy (`Copy`), `CaptureViewerModal` image Lightbox & `<video controls>` player, inline **Match Aliases** editor, and a **Media & Captures** sub-section in `SettingsView`.

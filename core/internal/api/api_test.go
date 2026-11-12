@@ -10,6 +10,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/captures"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/queue"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/steam"
 )
@@ -78,7 +81,9 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 func newTestAPI(t *testing.T, mutate func(cfg *Config)) (*httptest.Server, *Config) {
 	t.Helper()
 	cfg := Config{
-		Version: "test",
+		Version:     "test",
+		ArtworkDir:  t.TempDir(),
+		CapturesDir: t.TempDir(),
 		Libraries: []steam.Library{
 			{ID: "ssd0", Name: "SSD Cache", Path: prepLibrary(t, true), Type: steam.TypeSSDCache},
 			{ID: "hdd0", Name: "HDD Master", Path: prepLibrary(t, false), Type: steam.TypeHDDMaster},
@@ -831,6 +836,295 @@ func TestCustomGameManifestEndpoints(t *testing.T) {
 	}
 	if updated["name"] != "Wuthering Waves (Updated)" {
 		t.Fatalf("expected updated name, got %v", updated["name"])
+	}
+}
+
+func TestUpdateCustomGameBlockedWhileJobActive(t *testing.T) {
+	release := make(chan struct{})
+	defer close(release)
+
+	ts, _ := newTestAPI(t, func(cfg *Config) {
+		cfg.Queue = mustQueueBlocked(t, release)
+	})
+
+	createReq := map[string]any{
+		"name":        "Wuthering Waves",
+		"library_id":  "ssd0",
+		"install_dir": "WutheringWaves",
+	}
+	status, created := doJSON(t, ts, "POST", "/custom-games", createReq, true)
+	if status != http.StatusCreated {
+		t.Fatalf("POST /custom-games status = %d, want 201; body: %v", status, created)
+	}
+	appID := fmt.Sprintf("%.0f", created["app_id"].(float64))
+
+	// Enqueue a job for this custom game; the worker blocks on `release`.
+	status, job := doJSON(t, ts, "POST", "/jobs", map[string]any{
+		"type":              "evict",
+		"app_id":            appID,
+		"target_library_id": "hdd0",
+	}, true)
+	if status != http.StatusAccepted {
+		t.Fatalf("POST /jobs status = %d, want 202; body: %v", status, job)
+	}
+
+	// Editing metadata while active must return 409 Conflict (job_active) so
+	// zappmanifest.json is never mutated mid-transfer.
+	status, conflict := doJSON(t, ts, "PUT", "/custom-games/"+appID, map[string]any{
+		"tags": []string{"action"},
+	}, true)
+	if status != http.StatusConflict {
+		t.Fatalf("PUT /custom-games/%s during active job status = %d, want 409; body: %v", appID, status, conflict)
+	}
+	if conflict["code"] != "job_active" {
+		t.Errorf("conflict code = %v, want job_active", conflict["code"])
+	}
+}
+
+func TestSeparateGridAndBannerArtworkEndpoints(t *testing.T) {
+	ts, _ := newTestAPI(t, nil)
+
+	// 1. Custom game created without banner has separate cover only.
+	status, created := doJSON(t, ts, "POST", "/custom-games", map[string]any{
+		"name":        "Endfield",
+		"library_id":  "ssd0",
+		"install_dir": "Endfield",
+		"cover_url":   "https://example.com/grid.jpg",
+	}, true)
+	if status != http.StatusCreated {
+		t.Fatalf("POST /custom-games status = %d: %v", status, created)
+	}
+	customID := fmt.Sprintf("%.0f", created["app_id"].(float64))
+	if created["cover_url"] != "https://example.com/grid.jpg" || created["banner_url"] != nil {
+		t.Fatalf("unexpected initial artwork fields: %+v", created)
+	}
+
+	// GET /games/{id}/banner should 404 when no banner configured on custom game.
+	noRedirectClient := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	reqBannerMissing, _ := http.NewRequest("GET", ts.URL+"/games/"+customID+"/banner", nil)
+	authed(reqBannerMissing)
+	resMissing, err := noRedirectClient.Do(reqBannerMissing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resMissing.Body.Close()
+	if resMissing.StatusCode != http.StatusNotFound {
+		t.Fatalf("GET /games/%s/banner without banner = %d, want 404", customID, resMissing.StatusCode)
+	}
+
+	// 2. Reject raw local filesystem paths in PUT /games/{app_id}/artwork.
+	status, rawErr := doJSON(t, ts, "PUT", "/games/105600/artwork", map[string]any{
+		"banner_url": `C:\Users\alice\banner.png`,
+	}, true)
+	if status != http.StatusBadRequest || rawErr["code"] != "raw_path_rejected" {
+		t.Fatalf("expected 400 raw_path_rejected, got %d %v", status, rawErr)
+	}
+
+	// 3. Set Steam game's banner URL independently without altering grid cover.
+	status, updatedSteam := doJSON(t, ts, "PUT", "/games/105600/artwork", map[string]any{
+		"banner_url": "https://example.com/terraria-hero.jpg",
+	}, true)
+	if status != http.StatusOK {
+		t.Fatalf("PUT /games/105600/artwork status = %d: %v", status, updatedSteam)
+	}
+	if updatedSteam["banner_url"] != "https://example.com/terraria-hero.jpg" {
+		t.Errorf("banner_url = %v, want terraria-hero.jpg", updatedSteam["banner_url"])
+	}
+	if updatedSteam["cover_url"] != nil {
+		t.Errorf("cover_url should remain untouched (nil), got %v", updatedSteam["cover_url"])
+	}
+
+	// Verify /banner redirects to the custom banner URL while /cover falls back to Steam header.
+	reqB, _ := http.NewRequest("GET", ts.URL+"/games/105600/banner", nil)
+	authed(reqB)
+	resB, err := noRedirectClient.Do(reqB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resB.Body.Close()
+	if resB.StatusCode != http.StatusFound || resB.Header.Get("Location") != "https://example.com/terraria-hero.jpg" {
+		t.Fatalf("GET /games/105600/banner = %d Location=%q", resB.StatusCode, resB.Header.Get("Location"))
+	}
+
+	// 4. Upload binary PNG to banner slot via POST /games/{app_id}/artwork.
+	// Minimal valid 1x1 transparent PNG bytes.
+	tinyPNG := []byte{
+		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+		0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+		0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+		0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89,
+		0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54,
+		0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01,
+		0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00,
+		0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+	}
+
+	var mpBody bytes.Buffer
+	mw := multipart.NewWriter(&mpBody)
+	_ = mw.WriteField("kind", "banner")
+	fw, _ := mw.CreateFormFile("file", "banner.png")
+	_, _ = fw.Write(tinyPNG)
+	mw.Close()
+
+	upReq, _ := http.NewRequest("POST", ts.URL+"/games/"+customID+"/artwork", &mpBody)
+	upReq.Header.Set("Content-Type", mw.FormDataContentType())
+	authed(upReq)
+	upRes, err := ts.Client().Do(upReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var upGame map[string]any
+	_ = json.NewDecoder(upRes.Body).Decode(&upGame)
+	upRes.Body.Close()
+	if upRes.StatusCode != http.StatusOK {
+		t.Fatalf("POST /games/%s/artwork = %d: %v", customID, upRes.StatusCode, upGame)
+	}
+	if upGame["cover_url"] != "https://example.com/grid.jpg" {
+		t.Errorf("uploading banner overwrote cover_url: %v", upGame["cover_url"])
+	}
+	if bannerRef, _ := upGame["banner_url"].(string); bannerRef == "" {
+		t.Fatalf("expected cached banner_url reference, got %v", upGame["banner_url"])
+	}
+
+	// Fetch served banner bytes and verify PNG MIME + bytes.
+	getBanner, _ := http.NewRequest("GET", ts.URL+"/games/"+customID+"/banner", nil)
+	authed(getBanner)
+	gotBannerRes, err := ts.Client().Do(getBanner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotBannerRes.Body.Close()
+	if gotBannerRes.StatusCode != http.StatusOK || gotBannerRes.Header.Get("Content-Type") != "image/png" {
+		t.Fatalf("GET uploaded banner = %d Content-Type=%q", gotBannerRes.StatusCode, gotBannerRes.Header.Get("Content-Type"))
+	}
+
+	// 5. Clear custom banner back to empty/default via PUT /games/{app_id}/artwork.
+	status, cleared := doJSON(t, ts, "PUT", "/games/"+customID+"/artwork", map[string]any{
+		"banner_url": "",
+	}, true)
+	if status != http.StatusOK {
+		t.Fatalf("clear banner status = %d: %v", status, cleared)
+	}
+	if cleared["banner_url"] != nil && cleared["banner_url"] != "" {
+		t.Errorf("expected cleared banner_url, got %v", cleared["banner_url"])
+	}
+}
+
+func TestCapturesEndpointsAndByteRangeStreaming(t *testing.T) {
+	capRoot := t.TempDir()
+	shareXDir := filepath.Join(capRoot, "ShareX", "Screenshots", "2026-11")
+	shadowRoot := filepath.Join(capRoot, "ShadowPlay")
+	shadowTerraria := filepath.Join(shadowRoot, "Terraria")
+	customFolder := filepath.Join(capRoot, "CustomMedia")
+
+	for _, dir := range []string{shareXDir, shadowTerraria, customFolder} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	aliasShot := filepath.Join(shareXDir, "custom_boss_fight.png")
+	clipFile := filepath.Join(shadowTerraria, "Terraria_moonlord.mp4")
+	if err := os.WriteFile(aliasShot, []byte("PNGFAKEBINARYDATA"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(clipFile, []byte("0123456789ABCDEF"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	mgr := captures.NewManager(t.TempDir())
+	mgr.SetStaticSources(filepath.Join(capRoot, "ShareX", "Screenshots"), "", shadowRoot)
+
+	ts, _ := newTestAPI(t, func(cfg *Config) {
+		cfg.CaptureManager = mgr
+	})
+
+	// 1. Validate PUT /preferences rejects non-existent capture_folders.
+	status, prefErr := doJSON(t, ts, "PUT", "/preferences", map[string]any{
+		"capture_folders": []string{filepath.Join(capRoot, "DoesNotExist")},
+	}, true)
+	if status != http.StatusBadRequest || prefErr["code"] != "invalid_capture_folder" {
+		t.Fatalf("expected 400 invalid_capture_folder, got %d %v", status, prefErr)
+	}
+
+	// Accept valid custom capture directory.
+	status, _ = doJSON(t, ts, "PUT", "/preferences", map[string]any{
+		"capture_folders": []string{customFolder},
+	}, true)
+	if status != http.StatusOK {
+		t.Fatalf("PUT /preferences valid capture_folders status = %d", status)
+	}
+
+	// 2. Inspect detected capture sources.
+	status, srcResp := doJSON(t, ts, "GET", "/captures/sources", nil, true)
+	if status != http.StatusOK {
+		t.Fatalf("GET /captures/sources status = %d", status)
+	}
+	if sx, _ := srcResp["sharex"].(map[string]any); sx["detected"] != true {
+		t.Errorf("expected sharex.detected=true, got %v", srcResp)
+	}
+
+	// 3. Add custom alias for Terraria and verify GET /games/105600/captures picks up both captures.
+	status, updatedGame := doJSON(t, ts, "PUT", "/games/105600/captures/aliases", map[string]any{
+		"aliases": []string{"custom_boss"},
+	}, true)
+	if status != http.StatusOK {
+		t.Fatalf("PUT /games/105600/captures/aliases = %d: %v", status, updatedGame)
+	}
+
+	status, capList := doJSON(t, ts, "GET", "/games/105600/captures", nil, true)
+	if status != http.StatusOK {
+		t.Fatalf("GET /games/105600/captures = %d: %v", status, capList)
+	}
+	items, _ := capList["items"].([]any)
+	if len(items) != 2 {
+		t.Fatalf("got %d captures, want 2: %v", len(items), capList)
+	}
+
+	var videoID string
+	for _, raw := range items {
+		m := raw.(map[string]any)
+		if m["kind"] == "video" {
+			videoID = m["id"].(string)
+		}
+	}
+	if len(videoID) != 32 {
+		t.Fatalf("unexpected video capture id: %q", videoID)
+	}
+
+	// 4. Verify byte-range streaming (206 Partial Content) on video capture.
+	reqRange, _ := http.NewRequest("GET", ts.URL+"/captures/"+videoID+"/file", nil)
+	authed(reqRange)
+	reqRange.Header.Set("Range", "bytes=4-7")
+	resRange, err := ts.Client().Do(reqRange)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bodyBytes, _ := io.ReadAll(resRange.Body)
+	resRange.Body.Close()
+	if resRange.StatusCode != http.StatusPartialContent || string(bodyBytes) != "4567" {
+		t.Fatalf("range status=%d body=%q, want 206 & '4567'", resRange.StatusCode, string(bodyBytes))
+	}
+
+	// 5. Reject malformed / unknown capture IDs safely.
+	reqBad, _ := http.NewRequest("GET", ts.URL+"/captures/not-a-valid-hex-id/file", nil)
+	authed(reqBad)
+	resBad, _ := ts.Client().Do(reqBad)
+	resBad.Body.Close()
+	if resBad.StatusCode != http.StatusBadRequest {
+		t.Errorf("invalid capture id status = %d, want 400", resBad.StatusCode)
+	}
+
+	reqMiss, _ := http.NewRequest("GET", ts.URL+"/captures/00000000000000000000000000000000/file", nil)
+	authed(reqMiss)
+	resMiss, _ := ts.Client().Do(reqMiss)
+	resMiss.Body.Close()
+	if resMiss.StatusCode != http.StatusNotFound {
+		t.Errorf("unknown capture id status = %d, want 404", resMiss.StatusCode)
 	}
 }
 

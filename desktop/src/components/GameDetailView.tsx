@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { api, resolveCoverUrl } from '../api/client.ts';
+import { api, resolveBannerUrl, resolveCoverUrl } from '../api/client.ts';
+import { ArtworkEditorModal } from './ArtworkEditorModal.tsx';
+import { GameCapturesSection } from './GameCapturesSection.tsx';
 import { Game, Job, JobType, Library } from '../types/api.ts';
 import {
   formatBytes,
@@ -21,8 +23,7 @@ import {
   Folder,
   ShieldCheck,
   AlertTriangle,
-  Camera,
-  Film,
+  Image as ImageIcon,
   CheckCircle2,
   X,
   Loader2,
@@ -49,14 +50,17 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
 }) => {
   const [imgFailed, setImgFailed] = useState(false);
   const [steamFallbackIdx, setSteamFallbackIdx] = useState<number | null>(() => (game.cover_url ? null : 0));
+  const [bannerOverrideFailed, setBannerOverrideFailed] = useState(false);
   const [heroImgFailed, setHeroImgFailed] = useState(false);
   const [heroFallbackIdx, setHeroFallbackIdx] = useState<number>(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isArtworkOpen, setIsArtworkOpen] = useState(false);
   const [coverRevision, setCoverRevision] = useState(0);
 
   // Settings form states
   const [name, setName] = useState(game.name);
-  const [coverUrl, setCoverUrl] = useState(game.cover_url || '');
+  const [coverUrl, setCoverUrl] = useState(game.cover_url && !game.cover_url.startsWith('cached:') ? game.cover_url : '');
+  const [bannerUrl, setBannerUrl] = useState(game.banner_url && !game.banner_url.startsWith('cached:') ? game.banner_url : '');
   const [installDir, setInstallDir] = useState(game.install_dir);
   const [selectedLibId, setSelectedLibId] = useState(game.current_library_id);
   const [swapEnabled, setSwapEnabled] = useState(game.swap_enabled ?? true);
@@ -70,10 +74,12 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
   useEffect(() => {
     setImgFailed(false);
     setSteamFallbackIdx(game.cover_url ? null : 0);
+    setBannerOverrideFailed(false);
     setHeroImgFailed(false);
     setHeroFallbackIdx(0);
     setName(game.name);
-    setCoverUrl(game.cover_url || '');
+    setCoverUrl(game.cover_url && !game.cover_url.startsWith('cached:') ? game.cover_url : '');
+    setBannerUrl(game.banner_url && !game.banner_url.startsWith('cached:') ? game.banner_url : '');
     setInstallDir(game.install_dir);
     setSelectedLibId(game.current_library_id);
     setSwapEnabled(game.swap_enabled ?? true);
@@ -118,10 +124,15 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
     }
   };
 
-  // Hero Banner resolution (Steam library_hero.jpg first for Steam games, or fallback cover artwork)
+  // Hero Banner resolution (Explicit banner_url first, then Steam library_hero.jpg, then Grid cover fallback)
   const heroUrls = getSteamHeroUrls(game.app_id);
+  const bannerBust = coverRevision > 0 ? `${game.banner_url || 'default'}-${coverRevision}` : (game.banner_url || undefined);
+  const explicitBannerUrl = !bannerOverrideFailed ? resolveBannerUrl(game, bannerBust) : null;
+
   let heroDisplayUrl: string | null = null;
-  if (!heroImgFailed) {
+  if (explicitBannerUrl) {
+    heroDisplayUrl = explicitBannerUrl;
+  } else if (!heroImgFailed) {
     if (!game.is_custom && heroFallbackIdx < heroUrls.length) {
       heroDisplayUrl = heroUrls[heroFallbackIdx];
     } else if (displayUrl) {
@@ -130,7 +141,9 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
   }
 
   const handleHeroImgError = () => {
-    if (!game.is_custom && heroFallbackIdx < heroUrls.length - 1) {
+    if (explicitBannerUrl) {
+      setBannerOverrideFailed(true);
+    } else if (!game.is_custom && heroFallbackIdx < heroUrls.length - 1) {
       setHeroFallbackIdx(heroFallbackIdx + 1);
     } else {
       setHeroImgFailed(true);
@@ -139,7 +152,8 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
 
   const openSettingsModal = () => {
     setName(game.name);
-    setCoverUrl(game.cover_url || '');
+    setCoverUrl(game.cover_url && !game.cover_url.startsWith('cached:') ? game.cover_url : '');
+    setBannerUrl(game.banner_url && !game.banner_url.startsWith('cached:') ? game.banner_url : '');
     setInstallDir(game.install_dir);
     setSelectedLibId(game.current_library_id);
     setSwapEnabled(game.swap_enabled ?? true);
@@ -148,6 +162,14 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
     setError(null);
     setSaveSuccess(false);
     setIsSettingsOpen(true);
+  };
+
+  const handleArtworkUpdated = (updated: Game) => {
+    setCoverRevision((prev) => prev + 1);
+    setImgFailed(false);
+    setBannerOverrideFailed(false);
+    setHeroImgFailed(false);
+    onGameUpdated(updated);
   };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -162,9 +184,15 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
       .filter((t) => t.length > 0);
 
     try {
+      const trimmedCover = coverUrl.trim();
+      const trimmedBanner = bannerUrl.trim();
+      const coverPayload = trimmedCover === '' && game.cover_url?.startsWith('cached:') ? undefined : trimmedCover;
+      const bannerPayload = trimmedBanner === '' && game.banner_url?.startsWith('cached:') ? undefined : trimmedBanner;
+
       const updated = await api.updateCustomGame(game.app_id, {
         name: name.trim() || game.name,
-        cover_url: coverUrl.trim() || undefined,
+        ...(coverPayload !== undefined && (coverPayload !== '' || game.cover_url) ? { cover_url: coverPayload } : {}),
+        ...(bannerPayload !== undefined && (bannerPayload !== '' || game.banner_url) ? { banner_url: bannerPayload } : {}),
         install_dir: installDir.trim() || undefined,
         library_id: selectedLibId || undefined,
         swap_enabled: swapEnabled,
@@ -208,6 +236,7 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
         {/* Background Banner Image */}
         {heroDisplayUrl && (
           <img
+            data-testid="hero-banner-img"
             src={heroDisplayUrl}
             alt=""
             aria-hidden="true"
@@ -260,20 +289,37 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
               <ArrowLeft size={16} /> Back to Games
             </button>
 
-            <button
-              type="button"
-              onClick={openSettingsModal}
-              className="btn-secondary"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 14px',
-                fontSize: '0.85rem',
-              }}
-            >
-              <Settings size={15} /> Game Settings
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => setIsArtworkOpen(true)}
+                className="btn-secondary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 14px',
+                  fontSize: '0.85rem',
+                }}
+              >
+                <ImageIcon size={15} /> Edit Artwork
+              </button>
+
+              <button
+                type="button"
+                onClick={openSettingsModal}
+                className="btn-secondary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 14px',
+                  fontSize: '0.85rem',
+                }}
+              >
+                <Settings size={15} /> Game Settings
+              </button>
+            </div>
           </div>
 
           {/* Foreground Portrait Grid Poster, Title & Swap Actions */}
@@ -527,52 +573,7 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
       </div>
 
       {/* Media & Captures Section (Backgroundless, clean divider) */}
-      <div
-        style={{
-          paddingTop: '24px',
-          borderTop: '1px solid var(--border-color)',
-          position: 'relative',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Camera size={18} style={{ color: 'var(--primary-text)' }} />
-            <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>
-              Media & Captures (ShareX / NVIDIA ShadowPlay)
-            </h3>
-          </div>
-          <span
-            style={{
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              color: 'var(--primary-text)',
-            }}
-          >
-            Coming Soon
-          </span>
-        </div>
-
-        <div
-          style={{
-            padding: '28px 20px',
-            textAlign: 'center',
-            borderRadius: '8px',
-            border: '1px dashed var(--border-color)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '10px',
-          }}
-        >
-          <Film size={24} style={{ color: 'var(--primary-text)', opacity: 0.7 }} />
-          <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
-            No Captures Synced Yet
-          </h4>
-          <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            Screenshots and gameplay recordings for <strong>{game.name}</strong> will appear here for browsing and cloud backup.
-          </p>
-        </div>
-      </div>
+      <GameCapturesSection game={game} onGameUpdated={onGameUpdated} />
 
       {/* Game Settings Modal (Lively Login-Inspired Styling) */}
       {isSettingsOpen && (
@@ -647,6 +648,26 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
                 </p>
               </div>
             </div>
+
+            {activeJob && (
+              <div
+                style={{
+                  marginTop: '16px',
+                  padding: '10px 14px',
+                  backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  borderRadius: 'var(--radius)',
+                  color: 'var(--warning)',
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <AlertTriangle size={16} />
+                <span>A transfer job is queued or running for this game. Settings are locked until it completes.</span>
+              </div>
+            )}
 
             {error && (
               <div
@@ -780,12 +801,13 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
               )}
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>
-                  Cover Artwork URL or Local Path
+                <label htmlFor="settings-grid-cover-url" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>
+                  Grid Cover URL (2:3 Portrait)
                 </label>
                 <input
+                  id="settings-grid-cover-url"
                   type="text"
-                  placeholder="https://... or D:\covers\game.jpg"
+                  placeholder={game.cover_url?.startsWith('cached:') ? 'Uploaded image active (or paste https://...)' : 'https://... (leave blank for default)'}
                   value={coverUrl}
                   onChange={(e) => setCoverUrl(e.target.value)}
                   style={{
@@ -798,6 +820,31 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
                     fontSize: '0.875rem',
                   }}
                 />
+              </div>
+
+              <div>
+                <label htmlFor="settings-hero-banner-url" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>
+                  Hero Banner URL (Wide Backdrop)
+                </label>
+                <input
+                  id="settings-hero-banner-url"
+                  type="text"
+                  placeholder={game.banner_url?.startsWith('cached:') ? 'Uploaded banner active (or paste https://...)' : 'https://... (defaults to Steam hero / Grid image)'}
+                  value={bannerUrl}
+                  onChange={(e) => setBannerUrl(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    backgroundColor: 'var(--bg-main)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius)',
+                    color: 'var(--text-main)',
+                    fontSize: '0.875rem',
+                  }}
+                />
+                <span style={{ display: 'block', fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  To upload a local PNG/JPG/WebP file from your PC, use <strong>Edit Artwork</strong>.
+                </span>
               </div>
 
               <div>
@@ -856,7 +903,7 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
                 <button
                   type="submit"
                   className="btn-primary"
-                  disabled={saving}
+                  disabled={saving || Boolean(activeJob)}
                   style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
                   {saving && <Loader2 size={16} className="spin" />}
@@ -867,6 +914,15 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
           </div>
         </div>
       )}
+
+      <ArtworkEditorModal
+        open={isArtworkOpen}
+        game={game}
+        gridPreviewUrl={displayUrl}
+        bannerPreviewUrl={heroDisplayUrl}
+        onClose={() => setIsArtworkOpen(false)}
+        onGameUpdated={handleArtworkUpdated}
+      />
     </div>
   );
 };

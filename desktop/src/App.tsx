@@ -1,6 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api, getApiConfig, setApiConfig } from './api/client.ts';
-import { readLocalAuthToken, restartCoreDaemon, startCoreDaemon, sleep } from './api/native.ts';
+import {
+  getWindowDiagnostics,
+  isTauri,
+  readLocalAuthToken,
+  restartCoreDaemon,
+  sleep,
+  startCoreDaemon,
+} from './api/native.ts';
 import { Game, HealthResponse, Job, JobType, Library, LibraryInput } from './types/api.ts';
 import { ConnectView } from './components/ConnectView.tsx';
 import { LoginView } from './components/LoginView.tsx';
@@ -110,6 +117,29 @@ export const App: React.FC = () => {
   useEffect(() => {
     handleThemeChange(theme);
   }, [handleThemeChange, theme]);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let active = true;
+    getWindowDiagnostics()
+      .then((diag) => {
+        if (!active || !diag.elevated) return;
+        addToast({
+          id: 'uipi-elevation-warning',
+          type: 'warning',
+          title: 'Running as Administrator',
+          message:
+            'Windows UIPI can block ShareX window selection and interfere with always-on-top apps while elevated. Relaunch Zapp normally for full desktop integration.',
+          durationMs: 12000,
+        });
+      })
+      .catch(() => {
+        // Non-fatal diagnostic check
+      });
+    return () => {
+      active = false;
+    };
+  }, [addToast]);
 
   const navigate = useCallback((route: NavRoute) => {
     if (activeRoute === 'settings' && route !== 'settings' && settingsDirty) {

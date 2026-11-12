@@ -225,6 +225,16 @@ func (q *Queue) UpdateProgress(id string, progressPercent float64, bytesTransfer
 	return err
 }
 
+// HasActiveJob reports whether appID currently has a queued or running job.
+func (q *Queue) HasActiveJob(appID string) (bool, error) {
+	var count int
+	err := q.db.QueryRow(
+		`SELECT COUNT(1) FROM jobs WHERE app_id = ? AND status IN (?, ?)`,
+		appID, StatusQueued, StatusRunning,
+	).Scan(&count)
+	return count > 0, err
+}
+
 // jobColumns is the projection shared by queries.
 const jobColumns = `id, type, app_id, target_library_id, status, progress_percent,
 	bytes_transferred, total_bytes, error, created_at, started_at, completed_at`

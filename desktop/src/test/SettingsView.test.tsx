@@ -10,6 +10,7 @@ vi.mock('../api/client.ts', () => ({
     getPreferences: vi.fn(),
     updatePreferences: vi.fn(),
     getHealth: vi.fn(),
+    getCaptureSources: vi.fn(),
   },
 }));
 
@@ -25,6 +26,9 @@ describe('SettingsView Component', () => {
       robocopy_retries: 2,
       robocopy_wait_seconds: 2,
       robocopy_unbuffered: false,
+      sharex_enabled: true,
+      shadowplay_enabled: true,
+      capture_folders: [],
     });
     (api.updatePreferences as any).mockResolvedValue({
       close_steam_on_transfer: true,
@@ -35,11 +39,28 @@ describe('SettingsView Component', () => {
       robocopy_retries: 4,
       robocopy_wait_seconds: 6,
       robocopy_unbuffered: true,
+      sharex_enabled: true,
+      shadowplay_enabled: true,
+      capture_folders: [],
     });
     (api.getHealth as any).mockResolvedValue({
       version: '0.3.3-beta.2',
       uptime_seconds: 120,
       steam_running: true,
+    });
+    vi.mocked(api.getCaptureSources).mockResolvedValue({
+      sharex: {
+        detected: true,
+        enabled: true,
+        root_path: 'C:\\Users\\user\\Documents\\ShareX\\Screenshots',
+        history_db_path: 'C:\\Users\\user\\Documents\\ShareX\\History.db',
+      },
+      shadowplay: {
+        detected: true,
+        enabled: true,
+        root_path: 'C:\\Users\\user\\Videos\\NVIDIA',
+      },
+      custom_folders: [],
     });
   });
 
@@ -137,6 +158,38 @@ describe('SettingsView Component', () => {
           robocopy_retries: 4,
           robocopy_wait_seconds: 6,
           robocopy_unbuffered: true,
+        })
+      );
+    });
+  });
+
+  it('switches to Media & Captures tab, shows detected sources, adds custom folder, and saves preferences', async () => {
+    render(<SettingsView appVersion="v0.3.3-beta.2" steamRunning={true} />);
+
+    await waitFor(() => {
+      expect(api.getCaptureSources).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Media & Captures' }));
+    expect(await screen.findByText(/Detected: C:\\Users\\user\\Documents\\ShareX\\Screenshots/)).toBeInTheDocument();
+    expect(screen.getByText(/Detected: C:\\Users\\user\\Videos\\NVIDIA/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(/Scan ShareX Screenshots & History/i));
+    fireEvent.change(screen.getByLabelText(/Extra Whitelisted Capture Folders/i), {
+      target: { value: 'D:\\Media\\GameCaptures' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Add Folder/i }));
+
+    expect(screen.getByText('D:\\Media\\GameCaptures')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /save all changes/i }));
+
+    await waitFor(() => {
+      expect(api.updatePreferences).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sharex_enabled: false,
+          shadowplay_enabled: true,
+          capture_folders: ['D:\\Media\\GameCaptures'],
         })
       );
     });

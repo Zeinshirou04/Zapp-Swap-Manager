@@ -108,4 +108,33 @@ describe('QueueMonitor Component', () => {
       screen.getByText(/No transfer jobs are running, queued, or recorded in history/i)
     ).toBeInTheDocument();
   });
+
+  it('shows stage hints near 95-99% and failed stop percentage in history', () => {
+    const stageJobs: Job[] = [
+      {
+        ...mockJobs[0],
+        status: 'running',
+        progress_percent: 96.5,
+      },
+      {
+        ...mockJobs[1],
+        id: 'job-failed',
+        status: 'failed',
+        progress_percent: 95.0,
+        error: 'verify mismatch',
+      },
+    ];
+
+    render(
+      <QueueMonitor
+        jobs={stageJobs}
+        games={mockGames}
+        onCancelJob={vi.fn()}
+        cancelling={false}
+      />
+    );
+
+    expect(screen.getByText('Verifying file integrity...')).toBeInTheDocument();
+    expect(screen.getByText(/Stopped at 95%/i)).toBeInTheDocument();
+  });
 });

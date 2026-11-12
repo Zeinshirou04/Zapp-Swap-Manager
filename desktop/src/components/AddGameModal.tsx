@@ -23,6 +23,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
   const [installDir, setInstallDir] = useState('');
   const [libraryId, setLibraryId] = useState(libraries[0]?.id || '');
   const [coverUrl, setCoverUrl] = useState('');
+  const [bannerUrl, setBannerUrl] = useState('');
   const [swapEnabled, setSwapEnabled] = useState(true);
   const [isNativeHdd, setIsNativeHdd] = useState(false);
   const [tagsInput, setTagsInput] = useState('');
@@ -135,6 +136,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
         library_id: libraryId,
         install_dir: finalDir,
         cover_url: coverUrl.trim() || undefined,
+        ...(bannerUrl.trim() ? { banner_url: bannerUrl.trim() } : {}),
         swap_enabled: swapEnabled,
         is_native_hdd: isNativeHdd,
         tags: tags.length > 0 ? tags : undefined,
@@ -419,13 +421,13 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
             </div>
           )}
 
-          {/* Cover Art URL */}
+          {/* Grid Cover Art URL */}
           <div>
             <label
               htmlFor="add-game-cover"
               style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}
             >
-              Custom Cover Artwork (Web URL or Local File Path)
+              Grid Cover Artwork (2:3 URL, optional)
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Image size={16} style={{ color: 'var(--text-muted)' }} />
@@ -434,7 +436,36 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
                 type="text"
                 value={coverUrl}
                 onChange={(e) => setCoverUrl(e.target.value)}
-                placeholder="https://.../cover.jpg, C:\path\to\cover.png, or cover.png"
+                placeholder="https://.../grid-cover.jpg"
+                style={{
+                  flex: 1,
+                  padding: '10px 12px',
+                  background: 'var(--bg-main)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius)',
+                  color: 'var(--text-main)',
+                  fontSize: '0.875rem',
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Hero Banner Art URL */}
+          <div>
+            <label
+              htmlFor="add-game-banner"
+              style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}
+            >
+              Hero Banner Artwork (Wide URL, optional — defaults to Grid Cover)
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Image size={16} style={{ color: 'var(--text-muted)' }} />
+              <input
+                id="add-game-banner"
+                type="text"
+                value={bannerUrl}
+                onChange={(e) => setBannerUrl(e.target.value)}
+                placeholder="https://.../hero-banner.jpg"
                 style={{
                   flex: 1,
                   padding: '10px 12px',

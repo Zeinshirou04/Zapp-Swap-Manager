@@ -22,21 +22,25 @@ const (
 
 // Preferences represents user-configurable core and transfer preferences.
 type Preferences struct {
-	CloseSteamOnTransfer       bool   `json:"close_steam_on_transfer"`
-	RelaunchSteamAfterTransfer bool   `json:"relaunch_steam_after_transfer"`
-	RunOnStartup               bool   `json:"run_on_startup"`
-	Theme                      string `json:"theme"`
-	RelayEnabled               bool   `json:"relay_enabled"`
-	RelayServerURL             string `json:"relay_server_url"`
-	RelayDeviceID              string `json:"relay_device_id"`
-	RelayDeviceSecret          string `json:"relay_device_secret"`
-	RobocopyThreads            int    `json:"robocopy_threads"`
-	RobocopyRetries            *int   `json:"robocopy_retries,omitempty"`
-	RobocopyWaitSeconds        *int   `json:"robocopy_wait_seconds,omitempty"`
-	RobocopyUnbuffered         bool   `json:"robocopy_unbuffered"`
+	CloseSteamOnTransfer       bool     `json:"close_steam_on_transfer"`
+	RelaunchSteamAfterTransfer bool     `json:"relaunch_steam_after_transfer"`
+	RunOnStartup               bool     `json:"run_on_startup"`
+	Theme                      string   `json:"theme"`
+	RelayEnabled               bool     `json:"relay_enabled"`
+	RelayServerURL             string   `json:"relay_server_url"`
+	RelayDeviceID              string   `json:"relay_device_id"`
+	RelayDeviceSecret          string   `json:"relay_device_secret"`
+	RobocopyThreads            int      `json:"robocopy_threads"`
+	RobocopyRetries            *int     `json:"robocopy_retries,omitempty"`
+	RobocopyWaitSeconds        *int     `json:"robocopy_wait_seconds,omitempty"`
+	RobocopyUnbuffered         bool     `json:"robocopy_unbuffered"`
+	ShareXEnabled              *bool    `json:"sharex_enabled,omitempty"`
+	ShadowPlayEnabled          *bool    `json:"shadowplay_enabled,omitempty"`
+	CaptureFolders             []string `json:"capture_folders,omitempty"`
 }
 
-func intPtr(v int) *int { return &v }
+func intPtr(v int) *int    { return &v }
+func boolPtr(v bool) *bool { return &v }
 
 // Normalized returns a copy of Preferences with Robocopy defaults and safe bounds applied.
 func (p Preferences) Normalized() Preferences {
@@ -68,6 +72,34 @@ func (p Preferences) Normalized() Preferences {
 			w = 60
 		}
 		p.RobocopyWaitSeconds = intPtr(w)
+	}
+
+	if p.ShareXEnabled == nil {
+		p.ShareXEnabled = boolPtr(true)
+	}
+	if p.ShadowPlayEnabled == nil {
+		p.ShadowPlayEnabled = boolPtr(true)
+	}
+	if len(p.CaptureFolders) > 0 {
+		seen := make(map[string]struct{}, len(p.CaptureFolders))
+		cleaned := make([]string, 0, len(p.CaptureFolders))
+		for _, raw := range p.CaptureFolders {
+			c := strings.TrimSpace(raw)
+			if c == "" {
+				continue
+			}
+			c = filepath.Clean(c)
+			key := c
+			if runtime.GOOS == "windows" {
+				key = strings.ToLower(c)
+			}
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+			cleaned = append(cleaned, c)
+		}
+		p.CaptureFolders = cleaned
 	}
 	return p
 }
@@ -125,6 +157,12 @@ func DefaultConfigPath() string { return filepath.Join(AppDir(), "config.json") 
 // AuthTokenPath is the zero-config pairing token file the local desktop app
 // reads back (Plan 017/018).
 func AuthTokenPath() string { return filepath.Join(AppDir(), "auth.token") }
+
+// ArtworkDir is the managed cache directory for uploaded Grid cover and Hero banner images.
+func ArtworkDir() string { return filepath.Join(AppDir(), "artwork") }
+
+// CapturesDir stores per-game capture matching metadata such as custom aliases.
+func CapturesDir() string { return filepath.Join(AppDir(), "captures") }
 
 // GenerateRandomToken generates a cryptographically secure 32-byte hex token.
 func GenerateRandomToken() (string, error) {

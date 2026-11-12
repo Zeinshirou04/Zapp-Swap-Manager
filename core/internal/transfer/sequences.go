@@ -14,22 +14,41 @@ import (
 // ProgressFunc is called periodically with in-flight transfer metrics.
 type ProgressFunc func(bytesTransferred, totalBytes int64, percent float64)
 
+// StepFunc journals and executes one coarse transfer phase (copy, verify,
+// manifest move, SSD cleanup), matching queue.StepFunc without importing queue.
+type StepFunc func(index int, name string, run func() error) error
+
 // Options carries the optional context a caller (the Plan 005 queue) may
 // provide: metrics from the last recorded backup, whether the user
-// explicitly confirmed a >30% drop, and progress reporting.
-//
-// shortcut: LastBackup / DropConfirmed are wiring points for the SQLite
-// journal (Plan 005); until then the queue passes LastBackup=nil.
+// explicitly confirmed a >30% drop, progress reporting, and step journaling.
 type Options struct {
 	LastBackup    *TreeStats
 	DropConfirmed bool
 	ProgressFn    ProgressFunc
+	StepFn        StepFunc
 	Robocopy      *RobocopyConfig
 }
 
+func execStep(opts Options, index int, name string, fn func() error) error {
+	if opts.StepFn != nil {
+		return opts.StepFn(index, name, fn)
+	}
+	return fn()
+}
+
+func reportStageProgress(opts Options, totalBytes int64, percent float64) {
+	if opts.ProgressFn != nil {
+		opts.ProgressFn(totalBytes, totalBytes, percent)
+	}
+}
+
+const maxCopyProgressPercent = 95.0
+
 // monitorTransfer tracks destination size relative to source size during
 // file copy/mirror operations and periodically reports progress and logs.
-func monitorTransfer(ctx context.Context, src, dst string, fn ProgressFunc) func(success bool) {
+// Progress during file copy/mirror is capped at 95% so verification and
+// manifest relocation keep progress below 100% until every step succeeds.
+func monitorTransfer(ctx context.Context, src, dst string, fn ProgressFunc) (int64, func(success bool)) {
 	srcStats, err := MeasureTree(src)
 	totalBytes := int64(0)
 	if err == nil && srcStats.Bytes > 0 {
@@ -39,9 +58,9 @@ func monitorTransfer(ctx context.Context, src, dst string, fn ProgressFunc) func
 	initialDst, _ := MeasureTree(dst)
 	initBytes := initialDst.Bytes
 	if totalBytes > 0 {
-		initPct := float64(initBytes) / float64(totalBytes) * 100
-		if initPct > 99.9 {
-			initPct = 99.9
+		initPct := float64(initBytes) / float64(totalBytes) * maxCopyProgressPercent
+		if initPct > maxCopyProgressPercent {
+			initPct = maxCopyProgressPercent
 		}
 		if fn != nil {
 			fn(initBytes, totalBytes, initPct)
@@ -56,9 +75,9 @@ func monitorTransfer(ctx context.Context, src, dst string, fn ProgressFunc) func
 			close(done)
 			if success && totalBytes > 0 {
 				if fn != nil {
-					fn(totalBytes, totalBytes, 100.0)
+					fn(totalBytes, totalBytes, maxCopyProgressPercent)
 				}
-				slog.Info("transfer completed", "src", filepath.Base(src), "total_bytes", totalBytes)
+				slog.Info("transfer copy phase completed", "src", filepath.Base(src), "total_bytes", totalBytes)
 			}
 		})
 	}
@@ -89,12 +108,12 @@ func monitorTransfer(ctx context.Context, src, dst string, fn ProgressFunc) func
 				}
 
 				curBytes := dstStats.Bytes
-				pct := float64(curBytes) / float64(totalBytes) * 100
+				pct := float64(curBytes) / float64(totalBytes) * maxCopyProgressPercent
 				if pct < 0 {
 					pct = 0
 				}
-				if pct > 99.9 {
-					pct = 99.9
+				if pct > maxCopyProgressPercent {
+					pct = maxCopyProgressPercent
 				}
 
 				if fn != nil {
@@ -114,7 +133,7 @@ func monitorTransfer(ctx context.Context, src, dst string, fn ProgressFunc) func
 		}
 	}()
 
-	return stop
+	return totalBytes, stop
 }
 
 // Backup mirrors an SSD cache copy onto the HDD master.
@@ -122,36 +141,39 @@ func monitorTransfer(ctx context.Context, src, dst string, fn ProgressFunc) func
 func Backup(ctx context.Context, opts Options, ssdLibRoot, hddLibRoot, installDir string) error {
 	src := gameFolder(ssdLibRoot, installDir)
 	dst := gameFolder(hddLibRoot, installDir)
-	return runMirror(ctx, opts, hddLibRoot, installDir, src, dst)
+	return execStep(opts, 1, "backup-mirror", func() error {
+		_, err := runMirror(ctx, opts, hddLibRoot, installDir, src, dst)
+		return err
+	})
 }
 
 // runMirror holds the guard chain for SSD -> HDD mirror operations, shared
 // by Backup and Evict step 1: source guard, destination guard, threshold
 // guard, dry-run inspection, then /MIR.
-func runMirror(ctx context.Context, opts Options, hddLibRoot, installDir, src, dst string) error {
+func runMirror(ctx context.Context, opts Options, hddLibRoot, installDir, src, dst string) (int64, error) {
 	if err := validateInstallDir(installDir); err != nil {
-		return fmt.Errorf("backup/mirror: %w", err)
+		return 0, fmt.Errorf("backup/mirror: %w", err)
 	}
 	if err := CheckDropGuard(src, opts.LastBackup, opts.DropConfirmed); err != nil {
-		return fmt.Errorf("backup/mirror: %w", err)
+		return 0, fmt.Errorf("backup/mirror: %w", err)
 	}
 	if err := CheckDestination(dst, hddLibRoot, installDir); err != nil {
-		return fmt.Errorf("backup/mirror: %w", err)
+		return 0, fmt.Errorf("backup/mirror: %w", err)
 	}
 	// Dry-run inspection: read the planned actions before mirroring, then
 	// run the real mirror. Same flow for robocopy (/L then /MIR) and
 	// rsync (-n then --delete).
 	driverCtx := withRobocopyConfig(ctx, opts.Robocopy)
 	if err := driverFn().Mirror(driverCtx, src, dst, true); err != nil {
-		return fmt.Errorf("backup/mirror: dry run: %w", err)
+		return 0, fmt.Errorf("backup/mirror: dry run: %w", err)
 	}
-	stop := monitorTransfer(ctx, src, dst, opts.ProgressFn)
+	totalBytes, stop := monitorTransfer(ctx, src, dst, opts.ProgressFn)
 	mirrorErr := driverFn().Mirror(driverCtx, src, dst, false)
 	stop(mirrorErr == nil)
 	if mirrorErr != nil {
-		return fmt.Errorf("backup/mirror: %w", mirrorErr)
+		return totalBytes, fmt.Errorf("backup/mirror: %w", mirrorErr)
 	}
-	return nil
+	return totalBytes, nil
 }
 
 // Evict removes a game from the SSD cache after the HDD master copy is
@@ -170,39 +192,56 @@ func Evict(ctx context.Context, opts Options, ssdLibRoot, hddLibRoot, manifestNa
 	src := gameFolder(ssdLibRoot, installDir)
 	dst := gameFolder(hddLibRoot, installDir)
 
+	var copiedBytes int64
 	// Step 1: final mirror with the full guard chain.
-	if err := registerStep(1, runMirror(ctx, opts, hddLibRoot, installDir, src, dst)); err != nil {
+	if err := registerStep(1, execStep(opts, 1, "mirror", func() error {
+		n, err := runMirror(ctx, opts, hddLibRoot, installDir, src, dst)
+		copiedBytes = n
+		return err
+	})); err != nil {
 		return err
 	}
 	// Step 2: verify the HDD copy matches the SSD copy.
-	if err := registerStep(2, VerifyMatch(src, dst)); err != nil {
+	if err := registerStep(2, execStep(opts, 2, "verify", func() error {
+		reportStageProgress(opts, copiedBytes, 96.5)
+		slog.Info("verifying copy integrity", "src", src, "dst", dst)
+		return VerifyMatch(src, dst)
+	})); err != nil {
 		return err
 	}
 	// Step 3: move the manifest to the HDD library.
-	if err := registerStep(3, MoveManifest(
-		filepath.Join(steamappsFolder(ssdLibRoot), manifestName),
-		filepath.Join(steamappsFolder(hddLibRoot), manifestName),
-	)); err != nil {
+	if err := registerStep(3, execStep(opts, 3, "move-manifest", func() error {
+		reportStageProgress(opts, copiedBytes, 98.5)
+		slog.Info("moving steam manifest", "manifest", manifestName)
+		return MoveManifest(
+			filepath.Join(steamappsFolder(ssdLibRoot), manifestName),
+			filepath.Join(steamappsFolder(hddLibRoot), manifestName),
+		)
+	})); err != nil {
 		return err
 	}
 	// Step 4: delete the SSD copy, strictly after verification and manifest move.
-	if err := registerStep(4, os.RemoveAll(src)); err != nil {
+	if err := registerStep(4, execStep(opts, 4, "delete-ssd", func() error {
+		reportStageProgress(opts, copiedBytes, 99.5)
+		slog.Info("removing evicted SSD folder", "path", src)
+		return os.RemoveAll(src)
+	})); err != nil {
 		return err
 	}
 	return nil
 }
 
-func runCopy(ctx context.Context, opts Options, dstLibRoot, installDir, src, dst string) error {
+func runCopy(ctx context.Context, opts Options, dstLibRoot, installDir, src, dst string) (int64, error) {
 	if err := CheckSource(src); err != nil {
-		return err
+		return 0, err
 	}
 	if err := CheckDestination(dst, dstLibRoot, installDir); err != nil {
-		return err
+		return 0, err
 	}
-	stop := monitorTransfer(ctx, src, dst, opts.ProgressFn)
+	totalBytes, stop := monitorTransfer(ctx, src, dst, opts.ProgressFn)
 	copyErr := driverFn().Copy(withRobocopyConfig(ctx, opts.Robocopy), src, dst)
 	stop(copyErr == nil)
-	return copyErr
+	return totalBytes, copyErr
 }
 
 // Promote copies a game from the HDD master onto the SSD and relocates the
@@ -224,20 +263,33 @@ func Promote(ctx context.Context, opts Options, hddLibRoot, ssdLibRoot, manifest
 	if err := validateInstallDir(installDir); err != nil {
 		return registerStep(1, err)
 	}
+	var copiedBytes int64
 	// Step 1: copy (guards: source must exist non-empty; destination is
 	// built from whitelisted roots and checked against its expected form).
-	if err := registerStep(1, runCopy(ctx, opts, ssdLibRoot, installDir, src, dst)); err != nil {
+	if err := registerStep(1, execStep(opts, 1, "copy", func() error {
+		n, err := runCopy(ctx, opts, ssdLibRoot, installDir, src, dst)
+		copiedBytes = n
+		return err
+	})); err != nil {
 		return err
 	}
 	// Step 2: verify the SSD copy matches the HDD master.
-	if err := registerStep(2, VerifyMatch(src, dst)); err != nil {
+	if err := registerStep(2, execStep(opts, 2, "verify", func() error {
+		reportStageProgress(opts, copiedBytes, 96.5)
+		slog.Info("verifying copy integrity", "src", src, "dst", dst)
+		return VerifyMatch(src, dst)
+	})); err != nil {
 		return err
 	}
 	// Step 3: move the manifest to the SSD library.
-	if err := registerStep(3, MoveManifest(
-		filepath.Join(steamappsFolder(hddLibRoot), manifestName),
-		filepath.Join(steamappsFolder(ssdLibRoot), manifestName),
-	)); err != nil {
+	if err := registerStep(3, execStep(opts, 3, "move-manifest", func() error {
+		reportStageProgress(opts, copiedBytes, 98.5)
+		slog.Info("moving steam manifest", "manifest", manifestName)
+		return MoveManifest(
+			filepath.Join(steamappsFolder(hddLibRoot), manifestName),
+			filepath.Join(steamappsFolder(ssdLibRoot), manifestName),
+		)
+	})); err != nil {
 		return err
 	}
 	// Step 4: implicit — the HDD copy is retained untouched.
@@ -260,30 +312,45 @@ func EvictCustom(ctx context.Context, opts Options, ssdLibRoot, hddLibRoot, inst
 	src := gameFolder(ssdLibRoot, installDir)
 	dst := gameFolder(hddLibRoot, installDir)
 
+	var copiedBytes int64
 	// Step 1: final mirror with the full guard chain.
-	if err := registerStep(1, runMirror(ctx, opts, hddLibRoot, installDir, src, dst)); err != nil {
+	if err := registerStep(1, execStep(opts, 1, "mirror", func() error {
+		n, err := runMirror(ctx, opts, hddLibRoot, installDir, src, dst)
+		copiedBytes = n
+		return err
+	})); err != nil {
 		return err
 	}
 	// Step 2: verify the HDD copy matches the SSD copy.
-	if err := registerStep(2, VerifyMatch(src, dst)); err != nil {
+	if err := registerStep(2, execStep(opts, 2, "verify", func() error {
+		reportStageProgress(opts, copiedBytes, 96.5)
+		slog.Info("verifying copy integrity", "src", src, "dst", dst)
+		return VerifyMatch(src, dst)
+	})); err != nil {
 		return err
 	}
 	// Step 3: delete the SSD copy, strictly after verification.
-	if err := registerStep(3, os.RemoveAll(src)); err != nil {
+	if err := registerStep(3, execStep(opts, 3, "delete-ssd", func() error {
+		reportStageProgress(opts, copiedBytes, 98.5)
+		slog.Info("removing evicted SSD folder", "path", src)
+		return os.RemoveAll(src)
+	})); err != nil {
 		return err
 	}
 	// Step 4: create Directory Junction on SSD pointing to HDD.
-	if err := registerStep(4, CreateJunction(src, dst)); err != nil {
+	if err := registerStep(4, execStep(opts, 4, "create-junction", func() error {
+		reportStageProgress(opts, copiedBytes, 99.5)
+		return CreateJunction(src, dst)
+	})); err != nil {
 		return err
 	}
 	return nil
 }
 
 // PromoteCustom copies a non-Steam game from the HDD master onto the SSD:
-//  1. remove existing junction on SSD if present,
-//  2. copy HDD -> SSD with /E,
-//  3. verify file count and byte size match,
-//  4. keep the HDD copy as master backup.
+//  1. remove existing junction on SSD if present + copy HDD -> SSD with /E,
+//  2. verify file count and byte size match,
+//  3. keep the HDD copy as master backup.
 func PromoteCustom(ctx context.Context, opts Options, hddLibRoot, ssdLibRoot, installDir string) error {
 	registerStep := func(step int, err error) error {
 		if err == nil {
@@ -297,18 +364,26 @@ func PromoteCustom(ctx context.Context, opts Options, hddLibRoot, ssdLibRoot, in
 	if err := validateInstallDir(installDir); err != nil {
 		return registerStep(1, err)
 	}
-	// Remove existing junction on destination if present.
-	if IsJunction(dst) {
-		if err := RemoveJunction(dst); err != nil {
-			return registerStep(1, fmt.Errorf("remove junction: %w", err))
+	var copiedBytes int64
+	// Step 1: remove existing junction if present, then copy from HDD to SSD.
+	if err := registerStep(1, execStep(opts, 1, "copy", func() error {
+		if IsJunction(dst) {
+			if err := RemoveJunction(dst); err != nil {
+				return fmt.Errorf("remove junction: %w", err)
+			}
 		}
-	}
-	// Step 1: copy from HDD to SSD.
-	if err := registerStep(1, runCopy(ctx, opts, ssdLibRoot, installDir, src, dst)); err != nil {
+		n, err := runCopy(ctx, opts, ssdLibRoot, installDir, src, dst)
+		copiedBytes = n
+		return err
+	})); err != nil {
 		return err
 	}
 	// Step 2: verify the SSD copy matches the HDD master.
-	if err := registerStep(2, VerifyMatch(src, dst)); err != nil {
+	if err := registerStep(2, execStep(opts, 2, "verify", func() error {
+		reportStageProgress(opts, copiedBytes, 96.5)
+		slog.Info("verifying copy integrity", "src", src, "dst", dst)
+		return VerifyMatch(src, dst)
+	})); err != nil {
 		return err
 	}
 	// Step 3: implicit — the HDD copy is retained untouched.

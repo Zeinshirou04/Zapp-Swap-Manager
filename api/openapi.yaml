@@ -216,24 +216,276 @@ paths:
 
   /games/{app_id}/cover:
     get:
-      summary: Get game cover artwork
-      description: Streams local cover artwork or redirects to remote cover image URL.
+      summary: Get game grid cover artwork
+      description: Streams local cached grid cover artwork or redirects to remote cover image URL.
       operationId: getGameCover
       tags: [Games]
       parameters:
         - $ref: '#/components/parameters/AppId'
       responses:
         '200':
-          description: Cover image data.
+          description: Grid cover image data.
           content:
             image/*:
               schema:
                 type: string
                 format: binary
         '302':
-          description: Redirect to remote cover URL.
+          description: Redirect to remote grid cover URL.
         '404':
-          description: No cover artwork found for this game.
+          description: No custom grid cover artwork found for this game.
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /games/{app_id}/banner:
+    get:
+      summary: Get game hero banner artwork
+      description: Streams local cached hero banner artwork or redirects to remote banner image URL.
+      operationId: getGameBanner
+      tags: [Games]
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      responses:
+        '200':
+          description: Hero banner image data.
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        '302':
+          description: Redirect to remote banner URL.
+        '404':
+          description: No custom banner artwork found for this game.
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /games/{app_id}/artwork:
+    put:
+      summary: Set or clear custom grid cover and banner URLs
+      description: >
+        Updates or clears separate Grid Cover (`cover_url`) and Hero Banner (`banner_url`)
+        remote URLs for any Steam or custom game. Pass an empty string or null to clear
+        back to default fallback behavior. Raw filesystem paths are rejected; local images
+        must be imported via POST /games/{app_id}/artwork.
+      operationId: updateGameArtwork
+      tags: [Games]
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cover_url:
+                  type: string
+                  nullable: true
+                banner_url:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Updated game.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Game'
+        '400':
+          description: Invalid URL or rejected raw filesystem path.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown game app ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      summary: Upload local grid cover or hero banner image
+      description: >
+        Stores an uploaded PNG/JPEG/WebP/GIF image safely inside the core artwork cache
+        without exposing raw filesystem paths in the API.
+      operationId: uploadGameArtwork
+      tags: [Games]
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [kind, file]
+              properties:
+                kind:
+                  type: string
+                  enum: [grid, banner]
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Updated game with cached artwork reference.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Game'
+        '400':
+          description: Unsupported media type, missing kind, or oversized upload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown game app ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /games/{app_id}/captures:
+    get:
+      summary: List screenshots and video captures matched to a game
+      description: >
+        Scans detected ShareX, NVIDIA ShadowPlay, and whitelisted capture directories
+        for screenshots and gameplay recordings matching this game's title, install folder,
+        or custom capture aliases. Returns opaque capture IDs (never raw filesystem paths).
+      operationId: getGameCaptures
+      tags: [Captures]
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - name: kind
+          in: query
+          schema:
+            type: string
+            enum: [all, image, video]
+            default: all
+        - name: source
+          in: query
+          schema:
+            type: string
+            enum: [all, sharex, shadowplay, custom]
+            default: all
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 120
+            maximum: 500
+      responses:
+        '200':
+          description: Matched captures sorted newest-first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptureListResponse'
+        '404':
+          description: Unknown game app ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /games/{app_id}/captures/aliases:
+    put:
+      summary: Set custom capture matching aliases for a game
+      description: >
+        Stores extra window titles, process names, or folder tags used to match ShareX
+        and NVIDIA ShadowPlay captures to this game without altering game files.
+      operationId: updateGameCaptureAliases
+      tags: [Captures]
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [aliases]
+              properties:
+                aliases:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Updated game record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Game'
+        '404':
+          description: Unknown game app ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /captures/sources:
+    get:
+      summary: Inspect detected and configured capture sources
+      description: Reports auto-detected ShareX and NVIDIA ShadowPlay paths and custom whitelisted capture folders.
+      operationId: getCaptureSources
+      tags: [Captures]
+      responses:
+        '200':
+          description: Detected capture source status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptureSources'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /captures/{capture_id}/file:
+    get:
+      summary: Stream a capture image or video file by opaque ID
+      description: >
+        Streams an image or video referenced by opaque capture ID from a verified capture source.
+        Supports HTTP Range requests (206 Partial Content) for smooth video playback.
+      operationId: getCaptureFile
+      tags: [Captures]
+      parameters:
+        - name: capture_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{32}$'
+      responses:
+        '200':
+          description: Full media file stream.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: Partial byte-range stream.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Capture ID not found or outside active capture roots.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -295,6 +547,8 @@ paths:
                   type: string
                 cover_url:
                   type: string
+                banner_url:
+                  type: string
                 swap_enabled:
                   type: boolean
                 is_native_hdd:
@@ -316,7 +570,7 @@ paths:
   /custom-games/{app_id}:
     put:
       summary: Update a custom game manifest
-      description: Updates name, cover URL, swap eligibility, or tags for a non-Steam game.
+      description: Updates name, grid cover URL, banner URL, swap eligibility, or tags for a non-Steam game.
       operationId: updateCustomGame
       tags: [Games]
       parameters:
@@ -332,6 +586,10 @@ paths:
                   type: string
                 cover_url:
                   type: string
+                  nullable: true
+                banner_url:
+                  type: string
+                  nullable: true
                 swap_enabled:
                   type: boolean
                 is_native_hdd:
@@ -347,6 +605,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Game'
+        '409':
+          description: Game metadata locked while a transfer job is queued or running.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -616,7 +880,11 @@ components:
         cover_url:
           type: string
           nullable: true
-          description: Custom cover artwork image URL or local path.
+          description: Custom portrait Grid artwork URL or managed local artwork reference.
+        banner_url:
+          type: string
+          nullable: true
+          description: Custom Hero banner artwork URL or managed local artwork reference.
         swap_enabled:
           type: boolean
           description: True if this game can be swapped/promoted to SSD.
@@ -630,6 +898,11 @@ components:
           type: array
           items:
             type: string
+        capture_aliases:
+          type: array
+          items:
+            type: string
+          description: Custom window titles, process names, or folder names used to match screenshots/clips.
 
     Preferences:
       type: object
@@ -680,6 +953,105 @@ components:
           type: boolean
           default: false
           description: Use unbuffered I/O (/J), recommended for very large game files.
+        sharex_enabled:
+          type: boolean
+          default: true
+          description: Include auto-detected ShareX screenshots in game capture scanning.
+        shadowplay_enabled:
+          type: boolean
+          default: true
+          description: Include auto-detected NVIDIA ShadowPlay screenshots and video clips in capture scanning.
+        capture_folders:
+          type: array
+          items:
+            type: string
+          description: Optional additional whitelisted capture root folders configured by the user.
+
+    CaptureSources:
+      type: object
+      required: [sharex, shadowplay, custom_folders]
+      properties:
+        sharex:
+          type: object
+          required: [detected, enabled]
+          properties:
+            detected:
+              type: boolean
+            enabled:
+              type: boolean
+            root_path:
+              type: string
+            history_db_path:
+              type: string
+        shadowplay:
+          type: object
+          required: [detected, enabled]
+          properties:
+            detected:
+              type: boolean
+            enabled:
+              type: boolean
+            root_path:
+              type: string
+        custom_folders:
+          type: array
+          items:
+            type: string
+
+    CaptureItem:
+      type: object
+      required: [id, source, kind, filename, mime_type, size_bytes, captured_at, matched_by]
+      properties:
+        id:
+          type: string
+          pattern: '^[a-f0-9]{32}$'
+        source:
+          type: string
+          enum: [sharex, shadowplay, custom]
+        kind:
+          type: string
+          enum: [image, video]
+        filename:
+          type: string
+        mime_type:
+          type: string
+        size_bytes:
+          type: integer
+          format: int64
+        captured_at:
+          type: string
+          format: date-time
+        window_title:
+          type: string
+          nullable: true
+        process_name:
+          type: string
+          nullable: true
+        matched_by:
+          type: string
+          enum: [shadowplay_folder, sharex_history, filename, alias]
+
+    CaptureListResponse:
+      type: object
+      required: [items, aliases]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CaptureItem'
+        aliases:
+          type: array
+          items:
+            type: string
+        sources_checked:
+          type: object
+          properties:
+            sharex:
+              type: boolean
+            shadowplay:
+              type: boolean
+            custom:
+              type: integer
 
     JobType:
       type: string

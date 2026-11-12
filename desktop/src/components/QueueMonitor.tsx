@@ -301,7 +301,13 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({
                           }}
                         >
                           <span>
-                            Transferred: {formatBytes(job.bytes_transferred)} of {formatBytes(job.total_bytes)}
+                            {job.progress_percent >= 98
+                              ? 'Finalizing manifest & cleanup...'
+                              : job.progress_percent >= 96
+                              ? 'Verifying file integrity...'
+                              : job.progress_percent >= 95
+                              ? 'Finishing file copy...'
+                              : `Transferred: ${formatBytes(job.bytes_transferred)} of ${formatBytes(job.total_bytes)}`}
                           </span>
                           <span>{Math.round(job.progress_percent)}%</span>
                         </div>
@@ -390,7 +396,11 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({
                             </span>
                           </div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                            App ID: {job.app_id} • Size: {formatBytes(job.total_bytes || job.bytes_transferred)} • Target: <code>{job.target_library_id}</code>
+                            App ID: {job.app_id} • Size: {formatBytes(job.total_bytes || job.bytes_transferred)}
+                            {isFailed && job.progress_percent > 0 && job.progress_percent < 100
+                              ? ` • Stopped at ${Math.round(job.progress_percent)}%`
+                              : ''}{' '}
+                            • Target: <code>{job.target_library_id}</code>
                           </div>
                         </div>
                       </div>

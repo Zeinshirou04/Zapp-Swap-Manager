@@ -648,6 +648,26 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
               </div>
             </div>
 
+            {activeJob && (
+              <div
+                style={{
+                  marginTop: '16px',
+                  padding: '10px 14px',
+                  backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  borderRadius: 'var(--radius)',
+                  color: 'var(--warning)',
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <AlertTriangle size={16} />
+                <span>A transfer job is queued or running for this game. Settings are locked until it completes.</span>
+              </div>
+            )}
+
             {error && (
               <div
                 style={{
@@ -856,7 +876,7 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
                 <button
                   type="submit"
                   className="btn-primary"
-                  disabled={saving}
+                  disabled={saving || Boolean(activeJob)}
                   style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
                   {saving && <Loader2 size={16} className="spin" />}

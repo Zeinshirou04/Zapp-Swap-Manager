@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { GameDetailView } from '../components/GameDetailView.tsx';
 import { Game, Library } from '../types/api.ts';
 
@@ -169,5 +169,40 @@ describe('GameDetailView Component', () => {
     expect(screen.getByRole('heading', { name: 'Wuthering Waves', level: 1 })).toBeInTheDocument();
     expect(screen.getByText('Promote to SSD')).toBeInTheDocument();
     expect(screen.getByText('Storage HDD Master')).toBeInTheDocument();
+  });
+
+  it('locks Game Settings save button and displays warning while a transfer job is active', () => {
+    render(
+      <GameDetailView
+        game={mockGame}
+        libraries={mockLibraries}
+        jobs={[
+          {
+            id: 'job-active-1',
+            type: 'evict',
+            app_id: String(mockGame.app_id),
+            target_library_id: 'lib-hdd',
+            status: 'running',
+            progress_percent: 42,
+            bytes_transferred: 1000,
+            total_bytes: 2500,
+            error: null,
+            created_at: '2026-11-12T00:00:00Z',
+            started_at: '2026-11-12T00:00:01Z',
+            completed_at: null,
+          },
+        ]}
+        onBack={vi.fn()}
+        onAction={vi.fn()}
+        actionLoading={false}
+        onGameUpdated={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Game Settings/i }));
+    expect(
+      screen.getByText(/A transfer job is queued or running for this game\. Settings are locked until it completes\./i)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Save Changes/i })).toBeDisabled();
   });
 });

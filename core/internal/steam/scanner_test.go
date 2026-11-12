@@ -456,6 +456,7 @@ func TestZappManifestAndRealFolderSize(t *testing.T) {
 		Name:         "Wuthering Waves (Custom)",
 		InstallDir:   "WutheringWaves",
 		CoverURL:     "https://example.com/cover.png",
+		BannerURL:    "https://example.com/banner.png",
 		SwapEnabled:  true,
 		IsNativeHDD:  false,
 		Tags:         []string{"RPG", "OpenWorld"},
@@ -499,6 +500,9 @@ func TestZappManifestAndRealFolderSize(t *testing.T) {
 	}
 	if g.CoverURL != "https://example.com/cover.png" {
 		t.Errorf("CoverURL = %s, want https://example.com/cover.png", g.CoverURL)
+	}
+	if g.BannerURL != "https://example.com/banner.png" {
+		t.Errorf("BannerURL = %s, want https://example.com/banner.png", g.BannerURL)
 	}
 	if !g.SwapEnabled {
 		t.Errorf("SwapEnabled = false, want true")

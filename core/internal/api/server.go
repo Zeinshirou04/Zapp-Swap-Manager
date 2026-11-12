@@ -32,6 +32,7 @@ type Config struct {
 	Libraries      []steam.Library
 	LibrariesFn    func() []steam.Library
 	SetLibraries   func([]steam.Library) error
+	ArtworkDir     string
 	Preferences    config.Preferences
 	PreferencesFn  func() config.Preferences
 	SetPreferences func(config.Preferences) error
@@ -98,7 +99,7 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 func newRouter(cfg Config) *http.ServeMux {
-	h := handlers{cfg: cfg, start: time.Now()}
+	h := handlers{cfg: cfg, start: time.Now(), artwork: newArtworkStore(cfg.ArtworkDir)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", h.health)
 	mux.HandleFunc("GET /logs", h.logs)
@@ -108,6 +109,9 @@ func newRouter(cfg Config) *http.ServeMux {
 	mux.HandleFunc("GET /games", h.listGames)
 	mux.HandleFunc("GET /games/{app_id}", h.getGame)
 	mux.HandleFunc("GET /games/{app_id}/cover", h.getGameCover)
+	mux.HandleFunc("GET /games/{app_id}/banner", h.getGameBanner)
+	mux.HandleFunc("PUT /games/{app_id}/artwork", h.updateGameArtwork)
+	mux.HandleFunc("POST /games/{app_id}/artwork", h.uploadGameArtwork)
 	mux.HandleFunc("GET /jobs", h.listJobs)
 	mux.HandleFunc("POST /jobs", h.createJob)
 	mux.HandleFunc("GET /jobs/{job_id}", h.getJob)

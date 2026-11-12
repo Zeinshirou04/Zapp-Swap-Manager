@@ -126,6 +126,9 @@ func DefaultConfigPath() string { return filepath.Join(AppDir(), "config.json") 
 // reads back (Plan 017/018).
 func AuthTokenPath() string { return filepath.Join(AppDir(), "auth.token") }
 
+// ArtworkDir is the managed cache directory for uploaded Grid cover and Hero banner images.
+func ArtworkDir() string { return filepath.Join(AppDir(), "artwork") }
+
 // GenerateRandomToken generates a cryptographically secure 32-byte hex token.
 func GenerateRandomToken() (string, error) {
 	bytes := make([]byte, 32)

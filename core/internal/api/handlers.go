@@ -18,8 +18,16 @@ import (
 )
 
 type handlers struct {
-	cfg   Config
-	start time.Time
+	cfg     Config
+	start   time.Time
+	artwork *artworkStore
+}
+
+func (h handlers) artworkStore() *artworkStore {
+	if h.artwork != nil {
+		return h.artwork
+	}
+	return newArtworkStore(h.cfg.ArtworkDir)
 }
 
 // health: uptime, version, Steam process state (backup-skip guard probe).
@@ -191,6 +199,7 @@ type gameJSON struct {
 	BackupClean      bool       `json:"backup_clean"`
 	IsCustom         bool       `json:"is_custom"`
 	CoverURL         string     `json:"cover_url,omitempty"`
+	BannerURL        string     `json:"banner_url,omitempty"`
 	SwapEnabled      bool       `json:"swap_enabled"`
 	HasHDDBackup     bool       `json:"has_hdd_backup"`
 	IsNativeHDD      bool       `json:"is_native_hdd"`
@@ -211,6 +220,7 @@ func toGameJSON(g steam.Game) gameJSON {
 		BackupClean:      false, // honest default until backup metrics are journaled
 		IsCustom:         g.IsCustom,
 		CoverURL:         g.CoverURL,
+		BannerURL:        g.BannerURL,
 		SwapEnabled:      g.SwapEnabled,
 		HasHDDBackup:     g.HasHDDBackup,
 		IsNativeHDD:      g.IsNativeHDD,
@@ -219,7 +229,9 @@ func toGameJSON(g steam.Game) gameJSON {
 }
 
 func (h handlers) scanGames() ([]steam.Game, error) {
-	return steam.ScanLibraries(h.libs())
+	games, err := steam.ScanLibraries(h.libs())
+	h.artworkStore().Apply(games)
+	return games, err
 }
 
 // listGames: GET /games?state=&library_id=
@@ -409,6 +421,7 @@ type createCustomGameInput struct {
 	LibraryID   string   `json:"library_id"`
 	InstallDir  string   `json:"install_dir"`
 	CoverURL    string   `json:"cover_url,omitempty"`
+	BannerURL   string   `json:"banner_url,omitempty"`
 	SwapEnabled *bool    `json:"swap_enabled,omitempty"`
 	IsNativeHDD *bool    `json:"is_native_hdd,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
@@ -482,6 +495,7 @@ func (h handlers) createCustomGame(w http.ResponseWriter, r *http.Request) {
 		Name:        name,
 		InstallDir:  in.InstallDir,
 		CoverURL:    in.CoverURL,
+		BannerURL:   in.BannerURL,
 		SwapEnabled: swapEnabled,
 		IsNativeHDD: isNativeHDD,
 		Tags:        in.Tags,
@@ -512,6 +526,7 @@ func (h handlers) createCustomGame(w http.ResponseWriter, r *http.Request) {
 		CurrentLibraryID: targetLib.ID,
 		IsCustom:         true,
 		CoverURL:         in.CoverURL,
+		BannerURL:        in.BannerURL,
 		SwapEnabled:      swapEnabled,
 		IsNativeHDD:      isNativeHDD,
 		Tags:             in.Tags,
@@ -520,7 +535,8 @@ func (h handlers) createCustomGame(w http.ResponseWriter, r *http.Request) {
 
 type updateCustomGameInput struct {
 	Name        string   `json:"name"`
-	CoverURL    string   `json:"cover_url"`
+	CoverURL    *string  `json:"cover_url,omitempty"`
+	BannerURL   *string  `json:"banner_url,omitempty"`
 	InstallDir  string   `json:"install_dir,omitempty"`
 	LibraryID   string   `json:"library_id,omitempty"`
 	SwapEnabled *bool    `json:"swap_enabled,omitempty"`
@@ -634,8 +650,11 @@ func (h handlers) updateCustomGame(w http.ResponseWriter, r *http.Request) {
 	if in.Name != "" {
 		zm.Name = in.Name
 	}
-	if in.CoverURL != "" {
-		zm.CoverURL = in.CoverURL
+	if in.CoverURL != nil {
+		zm.CoverURL = strings.TrimSpace(*in.CoverURL)
+	}
+	if in.BannerURL != nil {
+		zm.BannerURL = strings.TrimSpace(*in.BannerURL)
 	}
 	if in.SwapEnabled != nil {
 		zm.SwapEnabled = *in.SwapEnabled
@@ -651,11 +670,13 @@ func (h handlers) updateCustomGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "write_manifest_failed", err.Error())
 		return
 	}
+	h.artworkStore().ClearOverrideFields(foundGame.Manifest.AppID, in.CoverURL != nil, in.BannerURL != nil)
 
 	foundGame.Manifest.Name = zm.Name
 	foundGame.Manifest.InstallDir = targetInstallDir
 	foundGame.LibraryID = targetLibID
 	foundGame.CoverURL = zm.CoverURL
+	foundGame.BannerURL = zm.BannerURL
 	foundGame.SwapEnabled = zm.SwapEnabled
 	foundGame.IsNativeHDD = zm.IsNativeHDD
 	foundGame.Tags = zm.Tags
@@ -665,95 +686,10 @@ func (h handlers) updateCustomGame(w http.ResponseWriter, r *http.Request) {
 
 // getGameCover: GET /games/{app_id}/cover
 func (h handlers) getGameCover(w http.ResponseWriter, r *http.Request) {
-	appID := r.PathValue("app_id")
-	games, err := h.scanGames()
-	if err != nil && len(games) == 0 {
-		writeError(w, http.StatusInternalServerError, "scan_failed", err.Error())
-		return
-	}
+	h.serveGameArtwork(w, r, artworkKindGrid)
+}
 
-	var foundGame *steam.Game
-	for i := range games {
-		gID := games[i].Manifest.AppID
-		gAppID, _ := strconv.ParseInt(gID, 10, 64)
-		if gID == appID || fmt.Sprint(gAppID) == appID || strings.EqualFold(games[i].Manifest.InstallDir, appID) || steam.CustomAppID(games[i].Manifest.InstallDir) == appID {
-			foundGame = &games[i]
-			break
-		}
-	}
-	if foundGame == nil {
-		writeError(w, http.StatusNotFound, "game_not_found", "game not found")
-		return
-	}
-
-	coverURL := strings.TrimSpace(foundGame.CoverURL)
-	if coverURL == "" {
-		if !foundGame.IsCustom {
-			http.Redirect(w, r, fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", foundGame.Manifest.AppID), http.StatusFound)
-			return
-		}
-		writeError(w, http.StatusNotFound, "no_cover", "no cover image configured for this game")
-		return
-	}
-
-	if strings.HasPrefix(coverURL, "http://") || strings.HasPrefix(coverURL, "https://") {
-		http.Redirect(w, r, coverURL, http.StatusFound)
-		return
-	}
-
-	// Local file path
-	localPath := coverURL
-	if !filepath.IsAbs(localPath) {
-		libs := h.libs()
-		for _, l := range libs {
-			if l.ID == foundGame.LibraryID {
-				p1 := filepath.Join(l.Path, "steamapps", "common", filepath.FromSlash(foundGame.Manifest.InstallDir), localPath)
-				if fi, err := os.Stat(p1); err == nil && !fi.IsDir() {
-					localPath = p1
-					break
-				}
-				p2 := filepath.Join(l.Path, filepath.FromSlash(foundGame.Manifest.InstallDir), localPath)
-				if fi, err := os.Stat(p2); err == nil && !fi.IsDir() {
-					localPath = p2
-					break
-				}
-			}
-		}
-	}
-
-	f, err := os.Open(localPath)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "cover_file_missing", fmt.Sprintf("local cover file not found: %s", err))
-		return
-	}
-	defer f.Close()
-
-	fi, err := f.Stat()
-	if err != nil || fi.IsDir() {
-		writeError(w, http.StatusNotFound, "cover_file_invalid", "cover path is not a file")
-		return
-	}
-
-	ext := strings.ToLower(filepath.Ext(localPath))
-	var cType string
-	switch ext {
-	case ".png":
-		cType = "image/png"
-	case ".jpg", ".jpeg":
-		cType = "image/jpeg"
-	case ".webp":
-		cType = "image/webp"
-	case ".gif":
-		cType = "image/gif"
-	case ".svg":
-		cType = "image/svg+xml"
-	case ".ico":
-		cType = "image/x-icon"
-	default:
-		cType = "application/octet-stream"
-	}
-
-	w.Header().Set("Content-Type", cType)
-	w.Header().Set("Cache-Control", "public, max-age=86400")
-	http.ServeContent(w, r, filepath.Base(localPath), fi.ModTime(), f)
+// getGameBanner: GET /games/{app_id}/banner
+func (h handlers) getGameBanner(w http.ResponseWriter, r *http.Request) {
+	h.serveGameArtwork(w, r, artworkKindBanner)
 }

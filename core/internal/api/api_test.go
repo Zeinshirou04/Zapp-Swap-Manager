@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -78,7 +79,8 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 func newTestAPI(t *testing.T, mutate func(cfg *Config)) (*httptest.Server, *Config) {
 	t.Helper()
 	cfg := Config{
-		Version: "test",
+		Version:    "test",
+		ArtworkDir: t.TempDir(),
 		Libraries: []steam.Library{
 			{ID: "ssd0", Name: "SSD Cache", Path: prepLibrary(t, true), Type: steam.TypeSSDCache},
 			{ID: "hdd0", Name: "HDD Master", Path: prepLibrary(t, false), Type: steam.TypeHDDMaster},
@@ -873,6 +875,139 @@ func TestUpdateCustomGameBlockedWhileJobActive(t *testing.T) {
 	}
 	if conflict["code"] != "job_active" {
 		t.Errorf("conflict code = %v, want job_active", conflict["code"])
+	}
+}
+
+func TestSeparateGridAndBannerArtworkEndpoints(t *testing.T) {
+	ts, _ := newTestAPI(t, nil)
+
+	// 1. Custom game created without banner has separate cover only.
+	status, created := doJSON(t, ts, "POST", "/custom-games", map[string]any{
+		"name":        "Endfield",
+		"library_id":  "ssd0",
+		"install_dir": "Endfield",
+		"cover_url":   "https://example.com/grid.jpg",
+	}, true)
+	if status != http.StatusCreated {
+		t.Fatalf("POST /custom-games status = %d: %v", status, created)
+	}
+	customID := fmt.Sprintf("%.0f", created["app_id"].(float64))
+	if created["cover_url"] != "https://example.com/grid.jpg" || created["banner_url"] != nil {
+		t.Fatalf("unexpected initial artwork fields: %+v", created)
+	}
+
+	// GET /games/{id}/banner should 404 when no banner configured on custom game.
+	noRedirectClient := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	reqBannerMissing, _ := http.NewRequest("GET", ts.URL+"/games/"+customID+"/banner", nil)
+	authed(reqBannerMissing)
+	resMissing, err := noRedirectClient.Do(reqBannerMissing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resMissing.Body.Close()
+	if resMissing.StatusCode != http.StatusNotFound {
+		t.Fatalf("GET /games/%s/banner without banner = %d, want 404", customID, resMissing.StatusCode)
+	}
+
+	// 2. Reject raw local filesystem paths in PUT /games/{app_id}/artwork.
+	status, rawErr := doJSON(t, ts, "PUT", "/games/105600/artwork", map[string]any{
+		"banner_url": `C:\Users\alice\banner.png`,
+	}, true)
+	if status != http.StatusBadRequest || rawErr["code"] != "raw_path_rejected" {
+		t.Fatalf("expected 400 raw_path_rejected, got %d %v", status, rawErr)
+	}
+
+	// 3. Set Steam game's banner URL independently without altering grid cover.
+	status, updatedSteam := doJSON(t, ts, "PUT", "/games/105600/artwork", map[string]any{
+		"banner_url": "https://example.com/terraria-hero.jpg",
+	}, true)
+	if status != http.StatusOK {
+		t.Fatalf("PUT /games/105600/artwork status = %d: %v", status, updatedSteam)
+	}
+	if updatedSteam["banner_url"] != "https://example.com/terraria-hero.jpg" {
+		t.Errorf("banner_url = %v, want terraria-hero.jpg", updatedSteam["banner_url"])
+	}
+	if updatedSteam["cover_url"] != nil {
+		t.Errorf("cover_url should remain untouched (nil), got %v", updatedSteam["cover_url"])
+	}
+
+	// Verify /banner redirects to the custom banner URL while /cover falls back to Steam header.
+	reqB, _ := http.NewRequest("GET", ts.URL+"/games/105600/banner", nil)
+	authed(reqB)
+	resB, err := noRedirectClient.Do(reqB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resB.Body.Close()
+	if resB.StatusCode != http.StatusFound || resB.Header.Get("Location") != "https://example.com/terraria-hero.jpg" {
+		t.Fatalf("GET /games/105600/banner = %d Location=%q", resB.StatusCode, resB.Header.Get("Location"))
+	}
+
+	// 4. Upload binary PNG to banner slot via POST /games/{app_id}/artwork.
+	// Minimal valid 1x1 transparent PNG bytes.
+	tinyPNG := []byte{
+		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+		0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+		0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+		0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89,
+		0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54,
+		0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01,
+		0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00,
+		0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+	}
+
+	var mpBody bytes.Buffer
+	mw := multipart.NewWriter(&mpBody)
+	_ = mw.WriteField("kind", "banner")
+	fw, _ := mw.CreateFormFile("file", "banner.png")
+	_, _ = fw.Write(tinyPNG)
+	mw.Close()
+
+	upReq, _ := http.NewRequest("POST", ts.URL+"/games/"+customID+"/artwork", &mpBody)
+	upReq.Header.Set("Content-Type", mw.FormDataContentType())
+	authed(upReq)
+	upRes, err := ts.Client().Do(upReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var upGame map[string]any
+	_ = json.NewDecoder(upRes.Body).Decode(&upGame)
+	upRes.Body.Close()
+	if upRes.StatusCode != http.StatusOK {
+		t.Fatalf("POST /games/%s/artwork = %d: %v", customID, upRes.StatusCode, upGame)
+	}
+	if upGame["cover_url"] != "https://example.com/grid.jpg" {
+		t.Errorf("uploading banner overwrote cover_url: %v", upGame["cover_url"])
+	}
+	if bannerRef, _ := upGame["banner_url"].(string); bannerRef == "" {
+		t.Fatalf("expected cached banner_url reference, got %v", upGame["banner_url"])
+	}
+
+	// Fetch served banner bytes and verify PNG MIME + bytes.
+	getBanner, _ := http.NewRequest("GET", ts.URL+"/games/"+customID+"/banner", nil)
+	authed(getBanner)
+	gotBannerRes, err := ts.Client().Do(getBanner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotBannerRes.Body.Close()
+	if gotBannerRes.StatusCode != http.StatusOK || gotBannerRes.Header.Get("Content-Type") != "image/png" {
+		t.Fatalf("GET uploaded banner = %d Content-Type=%q", gotBannerRes.StatusCode, gotBannerRes.Header.Get("Content-Type"))
+	}
+
+	// 5. Clear custom banner back to empty/default via PUT /games/{app_id}/artwork.
+	status, cleared := doJSON(t, ts, "PUT", "/games/"+customID+"/artwork", map[string]any{
+		"banner_url": "",
+	}, true)
+	if status != http.StatusOK {
+		t.Fatalf("clear banner status = %d: %v", status, cleared)
+	}
+	if cleared["banner_url"] != nil && cleared["banner_url"] != "" {
+		t.Errorf("expected cleared banner_url, got %v", cleared["banner_url"])
 	}
 }
 

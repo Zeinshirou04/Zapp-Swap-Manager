@@ -14,6 +14,7 @@ type ZappManifest struct {
 	Name        string     `json:"name"`
 	InstallDir  string     `json:"install_dir"`
 	CoverURL    string     `json:"cover_url,omitempty"`
+	BannerURL   string     `json:"banner_url,omitempty"`
 	SwapEnabled bool       `json:"swap_enabled"`
 	IsNativeHDD bool       `json:"is_native_hdd"`
 	Tags        []string   `json:"tags,omitempty"`

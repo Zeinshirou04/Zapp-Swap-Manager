@@ -1,4 +1,5 @@
 import {
+  ArtworkKind,
   CreateCustomGameRequest,
   CreateJobRequest,
   DetectedLibrary,
@@ -12,6 +13,7 @@ import {
   LibraryInput,
   Preferences,
   UpdateCustomGameRequest,
+  UpdateGameArtworkRequest,
 } from '../types/api.ts';
 
 const CONFIG_KEY = 'zapp_api_config';
@@ -40,31 +42,57 @@ export function setApiConfig(config: ApiConfig): void {
   localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
-export function getGameCoverUrl(appId: number | string, cacheBust?: string | number): string {
+function buildGameAssetUrl(appId: number | string, endpoint: 'cover' | 'banner', cacheBust?: string | number): string {
   const config = getApiConfig();
   const sep = config.bearerToken ? '&' : '?';
   const bustParam = cacheBust !== undefined && cacheBust !== '' ? `${sep}v=${encodeURIComponent(cacheBust)}` : '';
   if (config.bearerToken) {
-    return `${config.baseUrl}/games/${appId}/cover?token=${encodeURIComponent(config.bearerToken)}${bustParam}`;
+    return `${config.baseUrl}/games/${appId}/${endpoint}?token=${encodeURIComponent(config.bearerToken)}${bustParam}`;
   }
-  return `${config.baseUrl}/games/${appId}/cover${bustParam}`;
+  return `${config.baseUrl}/games/${appId}/${endpoint}${bustParam}`;
+}
+
+function resolveExplicitArtworkUrl(
+  rawUrl: string | null | undefined,
+  appId: number | string,
+  endpoint: 'cover' | 'banner',
+  cacheBust?: string | number,
+): string | null {
+  const trimmed = rawUrl?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    if (cacheBust !== undefined && cacheBust !== '' && cacheBust !== trimmed) {
+      const sep = trimmed.includes('?') ? '&' : '?';
+      return `${trimmed}${sep}v=${encodeURIComponent(cacheBust)}`;
+    }
+    return trimmed;
+  }
+  return buildGameAssetUrl(appId, endpoint, cacheBust);
+}
+
+export function getGameCoverUrl(appId: number | string, cacheBust?: string | number): string {
+  return buildGameAssetUrl(appId, 'cover', cacheBust);
+}
+
+export function getGameBannerUrl(appId: number | string, cacheBust?: string | number): string {
+  return buildGameAssetUrl(appId, 'banner', cacheBust);
 }
 
 export function resolveCoverUrl(game: Game, cacheBust?: string | number): string | null {
-  if (game.cover_url) {
-    if (game.cover_url.startsWith('http://') || game.cover_url.startsWith('https://')) {
-      if (cacheBust !== undefined && cacheBust !== '' && cacheBust !== game.cover_url) {
-        const sep = game.cover_url.includes('?') ? '&' : '?';
-        return `${game.cover_url}${sep}v=${encodeURIComponent(cacheBust)}`;
-      }
-      return game.cover_url;
-    }
-    return getGameCoverUrl(game.app_id, cacheBust);
+  const explicit = resolveExplicitArtworkUrl(game.cover_url, game.app_id, 'cover', cacheBust);
+  if (explicit) {
+    return explicit;
   }
   if (!game.is_custom) {
     return `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${game.app_id}/header.jpg`;
   }
   return null;
+}
+
+export function resolveBannerUrl(game: Game, cacheBust?: string | number): string | null {
+  return resolveExplicitArtworkUrl(game.banner_url, game.app_id, 'banner', cacheBust);
 }
 
 class ApiClient {
@@ -182,6 +210,42 @@ class ApiClient {
       method: 'PUT',
       body: JSON.stringify(req),
     });
+  }
+
+  async updateGameArtwork(appId: string | number, req: UpdateGameArtworkRequest): Promise<Game> {
+    return this.request<Game>(`/games/${appId}/artwork`, {
+      method: 'PUT',
+      body: JSON.stringify(req),
+    });
+  }
+
+  async uploadGameArtwork(appId: string | number, kind: ArtworkKind, file: File): Promise<Game> {
+    const config = getApiConfig();
+    const form = new FormData();
+    form.append('kind', kind);
+    form.append('file', file);
+
+    const headers: Record<string, string> = {};
+    if (config.bearerToken) {
+      headers.Authorization = `Bearer ${config.bearerToken}`;
+    }
+
+    const res = await fetch(`${config.baseUrl}/games/${appId}/artwork`, {
+      method: 'POST',
+      headers,
+      body: form,
+    });
+    if (!res.ok) {
+      let errMsg = `Artwork upload failed (${res.status})`;
+      try {
+        const errData = (await res.json()) as Partial<ErrorResponse> & { error?: string; code?: string };
+        errMsg = errData.message || errData.error || errData.code || errMsg;
+      } catch {
+        // fallback
+      }
+      throw new Error(errMsg);
+    }
+    return (await res.json()) as Game;
   }
 }
 

@@ -35,6 +35,7 @@ export const GameDetailModal: React.FC<GameDetailModalProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(game?.name || '');
   const [coverUrl, setCoverUrl] = useState(game?.cover_url || '');
+  const [bannerUrl, setBannerUrl] = useState(game?.banner_url || '');
   const [swapEnabled, setSwapEnabled] = useState(game?.swap_enabled ?? true);
   const [isNativeHdd, setIsNativeHdd] = useState(game?.is_native_hdd ?? false);
   const [tagsInput, setTagsInput] = useState((game?.tags || []).join(', '));
@@ -48,6 +49,7 @@ export const GameDetailModal: React.FC<GameDetailModalProps> = ({
     if (game) {
       setName(game.name);
       setCoverUrl(game.cover_url || '');
+      setBannerUrl(game.banner_url || '');
       setSwapEnabled(game.swap_enabled ?? true);
       setIsNativeHdd(game.is_native_hdd ?? false);
       setTagsInput((game.tags || []).join(', '));
@@ -79,6 +81,7 @@ export const GameDetailModal: React.FC<GameDetailModalProps> = ({
       const updated = await api.updateCustomGame(game.app_id, {
         name: name.trim() || game.name,
         cover_url: coverUrl.trim() || undefined,
+        ...(bannerUrl.trim() ? { banner_url: bannerUrl.trim() } : {}),
         swap_enabled: swapEnabled,
         is_native_hdd: isNativeHdd,
         tags,
@@ -440,13 +443,34 @@ export const GameDetailModal: React.FC<GameDetailModalProps> = ({
 
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '4px' }}>
-                    Custom Cover Artwork (Web URL or Local File Path)
+                    Grid Cover URL (2:3)
                   </label>
                   <input
                     type="text"
                     value={coverUrl}
                     onChange={(e) => setCoverUrl(e.target.value)}
-                    placeholder="https://.../capsule.jpg, C:\path\to\cover.png, or cover.png"
+                    placeholder="https://.../grid-cover.jpg"
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius)',
+                      color: 'var(--text-main)',
+                      fontSize: '0.875rem',
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '4px' }}>
+                    Hero Banner URL (Wide)
+                  </label>
+                  <input
+                    type="text"
+                    value={bannerUrl}
+                    onChange={(e) => setBannerUrl(e.target.value)}
+                    placeholder="https://.../hero-banner.jpg (optional)"
                     style={{
                       width: '100%',
                       padding: '8px 10px',

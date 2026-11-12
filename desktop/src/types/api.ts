@@ -42,6 +42,7 @@ export interface Game {
   backup_clean: boolean;
   is_custom?: boolean;
   cover_url?: string | null;
+  banner_url?: string | null;
   swap_enabled?: boolean;
   has_hdd_backup?: boolean;
   is_native_hdd?: boolean;
@@ -68,6 +69,7 @@ export interface CreateCustomGameRequest {
   library_id: string;
   install_dir: string;
   cover_url?: string;
+  banner_url?: string;
   swap_enabled?: boolean;
   is_native_hdd?: boolean;
   tags?: string[];
@@ -76,11 +78,19 @@ export interface CreateCustomGameRequest {
 export interface UpdateCustomGameRequest {
   name?: string;
   cover_url?: string;
+  banner_url?: string;
   install_dir?: string;
   library_id?: string;
   swap_enabled?: boolean;
   is_native_hdd?: boolean;
   tags?: string[];
+}
+
+export type ArtworkKind = 'grid' | 'banner';
+
+export interface UpdateGameArtworkRequest {
+  cover_url?: string | null;
+  banner_url?: string | null;
 }
 
 export type JobType = 'promote' | 'evict' | 'backup';

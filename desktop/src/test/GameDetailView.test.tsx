@@ -1,9 +1,14 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { api } from '../api/client.ts';
 import { GameDetailView } from '../components/GameDetailView.tsx';
 import { Game, Library } from '../types/api.ts';
 
 describe('GameDetailView Component', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   const mockLibraries: (Library & { path?: string })[] = [
     {
       id: 'lib-ssd',
@@ -204,5 +209,102 @@ describe('GameDetailView Component', () => {
       screen.getByText(/A transfer job is queued or running for this game\. Settings are locked until it completes\./i)
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Save Changes/i })).toBeDisabled();
+  });
+
+  it('renders separate Grid Cover and Hero Banner, falling back to Grid when banner is unset', () => {
+    const coverOnlyCustomGame: Game = {
+      ...mockGame,
+      cover_url: 'https://example.com/grid-only.jpg',
+      banner_url: undefined,
+    };
+    const { rerender } = render(
+      <GameDetailView
+        game={coverOnlyCustomGame}
+        libraries={mockLibraries}
+        jobs={[]}
+        onBack={vi.fn()}
+        onAction={vi.fn()}
+        actionLoading={false}
+        onGameUpdated={vi.fn()}
+      />
+    );
+
+    const gridImg = screen.getByAltText('Arknights: Endfield') as HTMLImageElement;
+    const heroImgDefault = screen.getByTestId('hero-banner-img') as HTMLImageElement;
+    expect(gridImg.src).toContain('https://example.com/grid-only.jpg');
+    expect(heroImgDefault.src).toContain('https://example.com/grid-only.jpg');
+
+    rerender(
+      <GameDetailView
+        game={{ ...coverOnlyCustomGame, banner_url: 'https://example.com/custom-banner.jpg' }}
+        libraries={mockLibraries}
+        jobs={[]}
+        onBack={vi.fn()}
+        onAction={vi.fn()}
+        actionLoading={false}
+        onGameUpdated={vi.fn()}
+      />
+    );
+
+    expect((screen.getByAltText('Arknights: Endfield') as HTMLImageElement).src).toContain(
+      'https://example.com/grid-only.jpg'
+    );
+    expect((screen.getByTestId('hero-banner-img') as HTMLImageElement).src).toContain(
+      'https://example.com/custom-banner.jpg'
+    );
+  });
+
+  it('updates Hero Banner URL, uploads Grid Cover file, and resets Banner via Edit Artwork modal', async () => {
+    const onGameUpdated = vi.fn();
+    const withCover: Game = {
+      ...mockGame,
+      cover_url: 'https://example.com/grid-initial.jpg',
+      banner_url: 'https://example.com/banner-initial.jpg',
+    };
+
+    const updateSpy = vi
+      .spyOn(api, 'updateGameArtwork')
+      .mockResolvedValueOnce({ ...withCover, banner_url: 'https://example.com/new-banner.png' })
+      .mockResolvedValueOnce({ ...withCover, banner_url: '' });
+    const uploadSpy = vi
+      .spyOn(api, 'uploadGameArtwork')
+      .mockResolvedValueOnce({ ...withCover, cover_url: 'cached:grid:123' });
+
+    render(
+      <GameDetailView
+        game={withCover}
+        libraries={mockLibraries}
+        jobs={[]}
+        onBack={vi.fn()}
+        onAction={vi.fn()}
+        actionLoading={false}
+        onGameUpdated={onGameUpdated}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Edit Artwork/i }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    const bannerInput = screen.getByLabelText(/Hero Banner URL/i);
+    fireEvent.change(bannerInput, { target: { value: 'https://example.com/new-banner.png' } });
+    fireEvent.click(screen.getByRole('button', { name: /Apply Banner/i }));
+
+    await waitFor(() => {
+      expect(updateSpy).toHaveBeenCalledWith(489201, { banner_url: 'https://example.com/new-banner.png' });
+    });
+
+    const uploadGridInput = screen.getByLabelText(/Upload Grid Cover Image/i) as HTMLInputElement;
+    const pngFile = new File(['pngbytes'], 'cover.png', { type: 'image/png' });
+    fireEvent.change(uploadGridInput, { target: { files: [pngFile] } });
+
+    await waitFor(() => {
+      expect(uploadSpy).toHaveBeenCalledWith(489201, 'grid', pngFile);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Use Default/i }));
+    await waitFor(() => {
+      expect(updateSpy).toHaveBeenCalledWith(489201, { banner_url: '' });
+    });
+    expect(onGameUpdated).toHaveBeenCalledTimes(3);
   });
 });

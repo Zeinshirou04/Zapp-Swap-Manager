@@ -351,6 +351,144 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /games/{app_id}/captures:
+    get:
+      summary: List screenshots and video captures matched to a game
+      description: >
+        Scans detected ShareX, NVIDIA ShadowPlay, and whitelisted capture directories
+        for screenshots and gameplay recordings matching this game's title, install folder,
+        or custom capture aliases. Returns opaque capture IDs (never raw filesystem paths).
+      operationId: getGameCaptures
+      tags: [Captures]
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - name: kind
+          in: query
+          schema:
+            type: string
+            enum: [all, image, video]
+            default: all
+        - name: source
+          in: query
+          schema:
+            type: string
+            enum: [all, sharex, shadowplay, custom]
+            default: all
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 120
+            maximum: 500
+      responses:
+        '200':
+          description: Matched captures sorted newest-first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptureListResponse'
+        '404':
+          description: Unknown game app ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /games/{app_id}/captures/aliases:
+    put:
+      summary: Set custom capture matching aliases for a game
+      description: >
+        Stores extra window titles, process names, or folder tags used to match ShareX
+        and NVIDIA ShadowPlay captures to this game without altering game files.
+      operationId: updateGameCaptureAliases
+      tags: [Captures]
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [aliases]
+              properties:
+                aliases:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Updated game record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Game'
+        '404':
+          description: Unknown game app ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /captures/sources:
+    get:
+      summary: Inspect detected and configured capture sources
+      description: Reports auto-detected ShareX and NVIDIA ShadowPlay paths and custom whitelisted capture folders.
+      operationId: getCaptureSources
+      tags: [Captures]
+      responses:
+        '200':
+          description: Detected capture source status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptureSources'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /captures/{capture_id}/file:
+    get:
+      summary: Stream a capture image or video file by opaque ID
+      description: >
+        Streams an image or video referenced by opaque capture ID from a verified capture source.
+        Supports HTTP Range requests (206 Partial Content) for smooth video playback.
+      operationId: getCaptureFile
+      tags: [Captures]
+      parameters:
+        - name: capture_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{32}$'
+      responses:
+        '200':
+          description: Full media file stream.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: Partial byte-range stream.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Capture ID not found or outside active capture roots.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /preferences:
     get:
       summary: Get core preferences
@@ -760,6 +898,11 @@ components:
           type: array
           items:
             type: string
+        capture_aliases:
+          type: array
+          items:
+            type: string
+          description: Custom window titles, process names, or folder names used to match screenshots/clips.
 
     Preferences:
       type: object
@@ -810,6 +953,105 @@ components:
           type: boolean
           default: false
           description: Use unbuffered I/O (/J), recommended for very large game files.
+        sharex_enabled:
+          type: boolean
+          default: true
+          description: Include auto-detected ShareX screenshots in game capture scanning.
+        shadowplay_enabled:
+          type: boolean
+          default: true
+          description: Include auto-detected NVIDIA ShadowPlay screenshots and video clips in capture scanning.
+        capture_folders:
+          type: array
+          items:
+            type: string
+          description: Optional additional whitelisted capture root folders configured by the user.
+
+    CaptureSources:
+      type: object
+      required: [sharex, shadowplay, custom_folders]
+      properties:
+        sharex:
+          type: object
+          required: [detected, enabled]
+          properties:
+            detected:
+              type: boolean
+            enabled:
+              type: boolean
+            root_path:
+              type: string
+            history_db_path:
+              type: string
+        shadowplay:
+          type: object
+          required: [detected, enabled]
+          properties:
+            detected:
+              type: boolean
+            enabled:
+              type: boolean
+            root_path:
+              type: string
+        custom_folders:
+          type: array
+          items:
+            type: string
+
+    CaptureItem:
+      type: object
+      required: [id, source, kind, filename, mime_type, size_bytes, captured_at, matched_by]
+      properties:
+        id:
+          type: string
+          pattern: '^[a-f0-9]{32}$'
+        source:
+          type: string
+          enum: [sharex, shadowplay, custom]
+        kind:
+          type: string
+          enum: [image, video]
+        filename:
+          type: string
+        mime_type:
+          type: string
+        size_bytes:
+          type: integer
+          format: int64
+        captured_at:
+          type: string
+          format: date-time
+        window_title:
+          type: string
+          nullable: true
+        process_name:
+          type: string
+          nullable: true
+        matched_by:
+          type: string
+          enum: [shadowplay_folder, sharex_history, filename, alias]
+
+    CaptureListResponse:
+      type: object
+      required: [items, aliases]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CaptureItem'
+        aliases:
+          type: array
+          items:
+            type: string
+        sources_checked:
+          type: object
+          properties:
+            sharex:
+              type: boolean
+            shadowplay:
+              type: boolean
+            custom:
+              type: integer
 
     JobType:
       type: string

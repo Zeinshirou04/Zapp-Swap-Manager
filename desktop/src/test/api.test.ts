@@ -3,6 +3,7 @@ import {
   api,
   getApiConfig,
   setApiConfig,
+  getCaptureFileUrl,
   getGameCoverUrl,
   getGameBannerUrl,
   resolveCoverUrl,
@@ -185,5 +186,64 @@ describe('ApiClient', () => {
     expect(uploadCall[1].body).toBeInstanceOf(FormData);
     expect((uploadCall[1].body as FormData).get('kind')).toBe('banner');
     expect((uploadCall[1].body as FormData).get('file')).toBeInstanceOf(File);
+  });
+
+  it('builds capture file URLs and calls captures API endpoints', async () => {
+    setApiConfig({ baseUrl: 'http://127.0.0.1:8765', bearerToken: 'cap-tok' });
+    expect(getCaptureFileUrl('0123456789abcdef0123456789abcdef')).toBe(
+      'http://127.0.0.1:8765/captures/0123456789abcdef0123456789abcdef/file?token=cap-tok',
+    );
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          sharex: { detected: true, enabled: true, root_path: 'C:\\ShareX' },
+          shadowplay: { detected: false, enabled: true },
+          custom_folders: ['D:\\Captures'],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ items: [], aliases: ['Endfield'] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ app_id: 105600, name: 'Terraria', capture_aliases: ['TerrariaHD'] }),
+      });
+    globalThis.fetch = fetchMock;
+
+    const sources = await api.getCaptureSources();
+    expect(sources.sharex.detected).toBe(true);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, 'http://127.0.0.1:8765/captures/sources', {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer cap-tok',
+      },
+    });
+
+    const list = await api.getGameCaptures(105600, { kind: 'image', source: 'sharex', limit: 25 });
+    expect(list.aliases).toEqual(['Endfield']);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://127.0.0.1:8765/games/105600/captures?kind=image&source=sharex&limit=25',
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer cap-tok',
+        },
+      },
+    );
+
+    await api.updateGameCaptureAliases(105600, ['TerrariaHD']);
+    expect(fetchMock).toHaveBeenNthCalledWith(3, 'http://127.0.0.1:8765/games/105600/captures/aliases', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer cap-tok',
+      },
+      body: JSON.stringify({ aliases: ['TerrariaHD'] }),
+    });
   });
 });

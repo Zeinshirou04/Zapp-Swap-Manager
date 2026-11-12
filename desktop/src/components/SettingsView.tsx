@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getApiConfig, setApiConfig, api } from '../api/client.ts';
-import { Preferences } from '../types/api.ts';
+import { CaptureSources, Preferences } from '../types/api.ts';
 import { restartCoreDaemon } from '../api/native.ts';
 import { ZappIcon } from './ZappIcon.tsx';
 import {
+  Camera,
   Check,
   AlertCircle,
   Sparkles,
@@ -11,6 +12,8 @@ import {
   RotateCcw,
   CheckCircle2,
   Cpu,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -54,6 +57,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [robocopyWaitSeconds, setRobocopyWaitSeconds] = useState<number>(2);
   const [robocopyUnbuffered, setRobocopyUnbuffered] = useState<boolean>(false);
 
+  // Media & captures sources
+  const [sharexEnabled, setSharexEnabled] = useState<boolean>(true);
+  const [shadowplayEnabled, setShadowplayEnabled] = useState<boolean>(true);
+  const [captureFolders, setCaptureFolders] = useState<string[]>([]);
+  const [newCaptureFolder, setNewCaptureFolder] = useState<string>('');
+  const [detectedSources, setDetectedSources] = useState<CaptureSources | null>(null);
+
   const [initialValues, setInitialValues] = useState<{
     baseUrl: string;
     bearerToken: string;
@@ -65,10 +75,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     robocopyRetries: number;
     robocopyWaitSeconds: number;
     robocopyUnbuffered: boolean;
+    sharexEnabled: boolean;
+    shadowplayEnabled: boolean;
+    captureFolders: string[];
   } | null>(null);
 
   const [shaking, setShaking] = useState(false);
-  const [subTab, setSubTab] = useState<'all' | 'preferences' | 'appearance' | 'robocopy' | 'core' | 'updates'>('all');
+  const [subTab, setSubTab] = useState<'all' | 'preferences' | 'appearance' | 'robocopy' | 'captures' | 'core' | 'updates'>('all');
 
   useEffect(() => {
     if (shakeTrigger && shakeTrigger > 0) {
@@ -94,6 +107,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         const retries = prefs.robocopy_retries ?? 2;
         const waitSecs = prefs.robocopy_wait_seconds ?? 2;
         const unbuffered = !!prefs.robocopy_unbuffered;
+        const sxEnabled = prefs.sharex_enabled ?? true;
+        const spEnabled = prefs.shadowplay_enabled ?? true;
+        const capFolders = Array.isArray(prefs.capture_folders) ? prefs.capture_folders : [];
 
         setCloseSteamOnTransfer(closeSteam);
         setRelaunchSteamAfterTransfer(relaunchSteam);
@@ -103,6 +119,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         setRobocopyRetries(retries);
         setRobocopyWaitSeconds(waitSecs);
         setRobocopyUnbuffered(unbuffered);
+        setSharexEnabled(sxEnabled);
+        setShadowplayEnabled(spEnabled);
+        setCaptureFolders(capFolders);
         onThemeChange?.(loadedTheme);
 
         setInitialValues({
@@ -116,6 +135,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           robocopyRetries: retries,
           robocopyWaitSeconds: waitSecs,
           robocopyUnbuffered: unbuffered,
+          sharexEnabled: sxEnabled,
+          shadowplayEnabled: spEnabled,
+          captureFolders: capFolders,
         });
       })
       .catch(() => {
@@ -130,8 +152,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           robocopyRetries: 2,
           robocopyWaitSeconds: 2,
           robocopyUnbuffered: false,
+          sharexEnabled: true,
+          shadowplayEnabled: true,
+          captureFolders: [],
         });
       });
+
+    if (typeof api.getCaptureSources === 'function') {
+      api
+        .getCaptureSources()
+        .then((sources) => setDetectedSources(sources))
+        .catch(() => setDetectedSources(null));
+    }
   }, [onThemeChange]);
 
   const isDirty = useMemo(() => {
@@ -146,7 +178,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       robocopyThreads !== initialValues.robocopyThreads ||
       robocopyRetries !== initialValues.robocopyRetries ||
       robocopyWaitSeconds !== initialValues.robocopyWaitSeconds ||
-      robocopyUnbuffered !== initialValues.robocopyUnbuffered
+      robocopyUnbuffered !== initialValues.robocopyUnbuffered ||
+      sharexEnabled !== initialValues.sharexEnabled ||
+      shadowplayEnabled !== initialValues.shadowplayEnabled ||
+      captureFolders.join('\n') !== initialValues.captureFolders.join('\n')
     );
   }, [
     initialValues,
@@ -160,6 +195,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     robocopyRetries,
     robocopyWaitSeconds,
     robocopyUnbuffered,
+    sharexEnabled,
+    shadowplayEnabled,
+    captureFolders,
   ]);
 
   useEffect(() => {
@@ -178,7 +216,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setRobocopyRetries(initialValues.robocopyRetries);
     setRobocopyWaitSeconds(initialValues.robocopyWaitSeconds);
     setRobocopyUnbuffered(initialValues.robocopyUnbuffered);
+    setSharexEnabled(initialValues.sharexEnabled);
+    setShadowplayEnabled(initialValues.shadowplayEnabled);
+    setCaptureFolders(initialValues.captureFolders);
+    setNewCaptureFolder('');
     onThemeChange?.(initialValues.theme);
+  };
+
+  const handleAddCaptureFolder = () => {
+    const trimmed = newCaptureFolder.trim();
+    if (!trimmed) return;
+    if (!captureFolders.some((f) => f.toLowerCase() === trimmed.toLowerCase())) {
+      setCaptureFolders((prev) => [...prev, trimmed]);
+    }
+    setNewCaptureFolder('');
   };
 
   const handleThemeChange = (t: 'system' | 'light' | 'dark') => {
@@ -204,8 +255,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         robocopy_retries: clampedRetries,
         robocopy_wait_seconds: clampedWait,
         robocopy_unbuffered: robocopyUnbuffered,
+        sharex_enabled: sharexEnabled,
+        shadowplay_enabled: shadowplayEnabled,
+        capture_folders: captureFolders,
       };
       await api.updatePreferences(updatedPrefs).catch((err) => {
+        if (err instanceof Error && /capture folder|invalid/i.test(err.message)) {
+          throw err;
+        }
         console.warn('Failed to persist preferences to core:', err);
       });
       localStorage.setItem('zapp_theme', theme);
@@ -223,7 +280,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         robocopyRetries: clampedRetries,
         robocopyWaitSeconds: clampedWait,
         robocopyUnbuffered,
+        sharexEnabled,
+        shadowplayEnabled,
+        captureFolders,
       });
+      if (typeof api.getCaptureSources === 'function') {
+        api.getCaptureSources().then(setDetectedSources).catch(() => {});
+      }
       setSaveSuccess(true);
       if (onSaved) onSaved();
       setTimeout(() => setSaveSuccess(false), 3500);
@@ -272,7 +335,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  const showSection = (id: 'preferences' | 'appearance' | 'robocopy' | 'core' | 'updates') =>
+  const showSection = (id: 'preferences' | 'appearance' | 'robocopy' | 'captures' | 'core' | 'updates') =>
     subTab === 'all' || subTab === id;
 
   return (
@@ -298,6 +361,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               { id: 'preferences', label: 'Preferences' },
               { id: 'appearance', label: 'Appearance' },
               { id: 'robocopy', label: 'Robocopy Config' },
+              { id: 'captures', label: 'Media & Captures' },
               { id: 'core', label: 'Core Service' },
               { id: 'updates', label: 'Updates' },
             ] as const
@@ -765,7 +829,143 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </section>
       )}
 
-      {/* Sub-Section 4: Core Daemon Connection & Tokens */}
+      {/* Sub-Section 4: Media & Captures Sources */}
+      {showSection('captures') && (
+        <section
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            paddingBottom: '24px',
+            borderBottom: '1px solid var(--border-color)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Camera size={20} style={{ color: 'var(--primary-text)' }} />
+            <div>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 600, margin: 0 }}>Media & Captures</h3>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
+                Auto-detect ShareX and NVIDIA ShadowPlay libraries plus optional custom capture folders.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '4px' }}>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer', userSelect: 'none' }}>
+              <input
+                type="checkbox"
+                checked={sharexEnabled}
+                onChange={(e) => setSharexEnabled(e.target.checked)}
+                style={{ marginTop: '3px', cursor: 'pointer', width: '16px', height: '16px' }}
+              />
+              <div>
+                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                  Scan ShareX Screenshots & History
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  {detectedSources?.sharex.detected
+                    ? `Detected: ${detectedSources.sharex.root_path || detectedSources.sharex.history_db_path}`
+                    : 'Auto-checks Documents\\ShareX (Screenshots & History.db)'}
+                </div>
+              </div>
+            </label>
+
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer', userSelect: 'none' }}>
+              <input
+                type="checkbox"
+                checked={shadowplayEnabled}
+                onChange={(e) => setShadowplayEnabled(e.target.checked)}
+                style={{ marginTop: '3px', cursor: 'pointer', width: '16px', height: '16px' }}
+              />
+              <div>
+                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                  Scan NVIDIA ShadowPlay Clips & Screenshots
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  {detectedSources?.shadowplay.detected
+                    ? `Detected: ${detectedSources.shadowplay.root_path}`
+                    : 'Auto-checks NVIDIA ShadowPlay DefaultPathW & Videos\\NVIDIA'}
+                </div>
+              </div>
+            </label>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '4px' }}>
+              <label
+                htmlFor="settings-custom-capture-folder"
+                style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}
+              >
+                Extra Whitelisted Capture Folders
+              </label>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <input
+                  id="settings-custom-capture-folder"
+                  type="text"
+                  value={newCaptureFolder}
+                  onChange={(e) => setNewCaptureFolder(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddCaptureFolder();
+                    }
+                  }}
+                  placeholder="e.g. D:\\Media\\GameCaptures"
+                  style={{
+                    flex: '1 1 280px',
+                    padding: '8px 12px',
+                    background: 'transparent',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius)',
+                    color: 'var(--text-main)',
+                    fontSize: '0.85rem',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleAddCaptureFolder}
+                  className="btn-secondary"
+                  disabled={!newCaptureFolder.trim()}
+                  style={{ fontSize: '0.82rem', padding: '6px 12px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                >
+                  <Plus size={14} /> Add Folder
+                </button>
+              </div>
+
+              {captureFolders.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+                  {captureFolders.map((folder) => (
+                    <div
+                      key={folder}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '10px',
+                        padding: '6px 10px',
+                        borderRadius: 'var(--radius)',
+                        border: '1px solid var(--border-color)',
+                        fontSize: '0.8rem',
+                      }}
+                    >
+                      <code style={{ wordBreak: 'break-all' }}>{folder}</code>
+                      <button
+                        type="button"
+                        aria-label={`Remove folder ${folder}`}
+                        onClick={() => setCaptureFolders((prev) => prev.filter((f) => f !== folder))}
+                        className="btn-ghost"
+                        style={{ padding: '4px', color: 'var(--danger)' }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Sub-Section 5: Core Daemon Connection & Tokens */}
       {showSection('core') && (
         <section
           style={{

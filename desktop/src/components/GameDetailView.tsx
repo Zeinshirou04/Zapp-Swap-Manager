@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api, resolveBannerUrl, resolveCoverUrl } from '../api/client.ts';
 import { ArtworkEditorModal } from './ArtworkEditorModal.tsx';
+import { GameCapturesSection } from './GameCapturesSection.tsx';
 import { Game, Job, JobType, Library } from '../types/api.ts';
 import {
   formatBytes,
@@ -22,8 +23,6 @@ import {
   Folder,
   ShieldCheck,
   AlertTriangle,
-  Camera,
-  Film,
   Image as ImageIcon,
   CheckCircle2,
   X,
@@ -574,52 +573,7 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
       </div>
 
       {/* Media & Captures Section (Backgroundless, clean divider) */}
-      <div
-        style={{
-          paddingTop: '24px',
-          borderTop: '1px solid var(--border-color)',
-          position: 'relative',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Camera size={18} style={{ color: 'var(--primary-text)' }} />
-            <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>
-              Media & Captures (ShareX / NVIDIA ShadowPlay)
-            </h3>
-          </div>
-          <span
-            style={{
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              color: 'var(--primary-text)',
-            }}
-          >
-            Coming Soon
-          </span>
-        </div>
-
-        <div
-          style={{
-            padding: '28px 20px',
-            textAlign: 'center',
-            borderRadius: '8px',
-            border: '1px dashed var(--border-color)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '10px',
-          }}
-        >
-          <Film size={24} style={{ color: 'var(--primary-text)', opacity: 0.7 }} />
-          <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
-            No Captures Synced Yet
-          </h4>
-          <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            Screenshots and gameplay recordings for <strong>{game.name}</strong> will appear here for browsing and cloud backup.
-          </p>
-        </div>
-      </div>
+      <GameCapturesSection game={game} onGameUpdated={onGameUpdated} />
 
       {/* Game Settings Modal (Lively Login-Inspired Styling) */}
       {isSettingsOpen && (

@@ -1,5 +1,9 @@
 import {
   ArtworkKind,
+  CaptureKind,
+  CaptureListResponse,
+  CaptureSource,
+  CaptureSources,
   CreateCustomGameRequest,
   CreateJobRequest,
   DetectedLibrary,
@@ -93,6 +97,14 @@ export function resolveCoverUrl(game: Game, cacheBust?: string | number): string
 
 export function resolveBannerUrl(game: Game, cacheBust?: string | number): string | null {
   return resolveExplicitArtworkUrl(game.banner_url, game.app_id, 'banner', cacheBust);
+}
+
+export function getCaptureFileUrl(captureId: string): string {
+  const config = getApiConfig();
+  if (config.bearerToken) {
+    return `${config.baseUrl}/captures/${encodeURIComponent(captureId)}/file?token=${encodeURIComponent(config.bearerToken)}`;
+  }
+  return `${config.baseUrl}/captures/${encodeURIComponent(captureId)}/file`;
 }
 
 class ApiClient {
@@ -246,6 +258,29 @@ class ApiClient {
       throw new Error(errMsg);
     }
     return (await res.json()) as Game;
+  }
+
+  async getCaptureSources(): Promise<CaptureSources> {
+    return this.request<CaptureSources>('/captures/sources');
+  }
+
+  async getGameCaptures(
+    appId: string | number,
+    options?: { kind?: CaptureKind | 'all'; source?: CaptureSource | 'all'; limit?: number },
+  ): Promise<CaptureListResponse> {
+    const params = new URLSearchParams();
+    if (options?.kind && options.kind !== 'all') params.set('kind', options.kind);
+    if (options?.source && options.source !== 'all') params.set('source', options.source);
+    if (options?.limit) params.set('limit', String(options.limit));
+    const q = params.toString();
+    return this.request<CaptureListResponse>(`/games/${appId}/captures${q ? `?${q}` : ''}`);
+  }
+
+  async updateGameCaptureAliases(appId: string | number, aliases: string[]): Promise<Game> {
+    return this.request<Game>(`/games/${appId}/captures/aliases`, {
+      method: 'PUT',
+      body: JSON.stringify({ aliases }),
+    });
   }
 }
 

@@ -246,7 +246,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               <Radio size={14} style={{ color: '#4ade80' }} />
               <span>Relay Ready</span>
             </div>
-            <span>v0.3.3-beta.2</span>
+            <span>v0.3.3-beta.3</span>
           </div>
         </div>
 

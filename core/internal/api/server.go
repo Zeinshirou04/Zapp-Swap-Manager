@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/captures"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/config"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/queue"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/steam"
@@ -27,12 +28,14 @@ import (
 // SetLibraries; LibrariesFn reports the live list. Paths entering the
 // whitelist are validated server-side (existing absolute directories).
 type Config struct {
-	Port         int
-	Version      string
+	Port           int
+	Version        string
 	Libraries      []steam.Library
 	LibrariesFn    func() []steam.Library
 	SetLibraries   func([]steam.Library) error
 	ArtworkDir     string
+	CapturesDir    string
+	CaptureManager *captures.Manager
 	Preferences    config.Preferences
 	PreferencesFn  func() config.Preferences
 	SetPreferences func(config.Preferences) error
@@ -99,7 +102,16 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 func newRouter(cfg Config) *http.ServeMux {
-	h := handlers{cfg: cfg, start: time.Now(), artwork: newArtworkStore(cfg.ArtworkDir)}
+	capMgr := cfg.CaptureManager
+	if capMgr == nil {
+		capMgr = captures.NewManager(cfg.CapturesDir)
+	}
+	h := handlers{
+		cfg:      cfg,
+		start:    time.Now(),
+		artwork:  newArtworkStore(cfg.ArtworkDir),
+		captures: capMgr,
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", h.health)
 	mux.HandleFunc("GET /logs", h.logs)
@@ -112,6 +124,10 @@ func newRouter(cfg Config) *http.ServeMux {
 	mux.HandleFunc("GET /games/{app_id}/banner", h.getGameBanner)
 	mux.HandleFunc("PUT /games/{app_id}/artwork", h.updateGameArtwork)
 	mux.HandleFunc("POST /games/{app_id}/artwork", h.uploadGameArtwork)
+	mux.HandleFunc("GET /games/{app_id}/captures", h.getGameCaptures)
+	mux.HandleFunc("PUT /games/{app_id}/captures/aliases", h.updateGameCaptureAliases)
+	mux.HandleFunc("GET /captures/sources", h.getCaptureSources)
+	mux.HandleFunc("GET /captures/{capture_id}/file", h.serveCaptureFile)
 	mux.HandleFunc("GET /jobs", h.listJobs)
 	mux.HandleFunc("POST /jobs", h.createJob)
 	mux.HandleFunc("GET /jobs/{job_id}", h.getJob)
@@ -232,8 +248,9 @@ func corsMiddleware(next http.Handler) http.Handler {
 		if reqHeaders != "" {
 			w.Header().Set("Access-Control-Allow-Headers", reqHeaders)
 		} else {
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Cf-Access-Jwt-Assertion, Accept")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Cf-Access-Jwt-Assertion, Accept, Range")
 		}
+		w.Header().Set("Access-Control-Expose-Headers", "Accept-Ranges, Content-Range, Content-Length, Content-Type")
 		w.Header().Set("Access-Control-Max-Age", "86400")
 
 		// Support Private Network Access (PNA) for Chromium webviews

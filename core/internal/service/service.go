@@ -109,6 +109,7 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 		Libraries:      cfg.Libraries,
 		LibrariesFn:    libs.Get,
 		ArtworkDir:     config.ArtworkDir(),
+		CapturesDir:    config.CapturesDir(),
 		SetLibraries: func(list []steam.Library) error {
 			libs.mu.Lock()
 			libs.list = list

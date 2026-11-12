@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/captures"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/queue"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/steam"
 )
@@ -79,8 +81,9 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 func newTestAPI(t *testing.T, mutate func(cfg *Config)) (*httptest.Server, *Config) {
 	t.Helper()
 	cfg := Config{
-		Version:    "test",
-		ArtworkDir: t.TempDir(),
+		Version:     "test",
+		ArtworkDir:  t.TempDir(),
+		CapturesDir: t.TempDir(),
 		Libraries: []steam.Library{
 			{ID: "ssd0", Name: "SSD Cache", Path: prepLibrary(t, true), Type: steam.TypeSSDCache},
 			{ID: "hdd0", Name: "HDD Master", Path: prepLibrary(t, false), Type: steam.TypeHDDMaster},
@@ -1008,6 +1011,120 @@ func TestSeparateGridAndBannerArtworkEndpoints(t *testing.T) {
 	}
 	if cleared["banner_url"] != nil && cleared["banner_url"] != "" {
 		t.Errorf("expected cleared banner_url, got %v", cleared["banner_url"])
+	}
+}
+
+func TestCapturesEndpointsAndByteRangeStreaming(t *testing.T) {
+	capRoot := t.TempDir()
+	shareXDir := filepath.Join(capRoot, "ShareX", "Screenshots", "2026-11")
+	shadowRoot := filepath.Join(capRoot, "ShadowPlay")
+	shadowTerraria := filepath.Join(shadowRoot, "Terraria")
+	customFolder := filepath.Join(capRoot, "CustomMedia")
+
+	for _, dir := range []string{shareXDir, shadowTerraria, customFolder} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	aliasShot := filepath.Join(shareXDir, "custom_boss_fight.png")
+	clipFile := filepath.Join(shadowTerraria, "Terraria_moonlord.mp4")
+	if err := os.WriteFile(aliasShot, []byte("PNGFAKEBINARYDATA"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(clipFile, []byte("0123456789ABCDEF"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	mgr := captures.NewManager(t.TempDir())
+	mgr.SetStaticSources(filepath.Join(capRoot, "ShareX", "Screenshots"), "", shadowRoot)
+
+	ts, _ := newTestAPI(t, func(cfg *Config) {
+		cfg.CaptureManager = mgr
+	})
+
+	// 1. Validate PUT /preferences rejects non-existent capture_folders.
+	status, prefErr := doJSON(t, ts, "PUT", "/preferences", map[string]any{
+		"capture_folders": []string{filepath.Join(capRoot, "DoesNotExist")},
+	}, true)
+	if status != http.StatusBadRequest || prefErr["code"] != "invalid_capture_folder" {
+		t.Fatalf("expected 400 invalid_capture_folder, got %d %v", status, prefErr)
+	}
+
+	// Accept valid custom capture directory.
+	status, _ = doJSON(t, ts, "PUT", "/preferences", map[string]any{
+		"capture_folders": []string{customFolder},
+	}, true)
+	if status != http.StatusOK {
+		t.Fatalf("PUT /preferences valid capture_folders status = %d", status)
+	}
+
+	// 2. Inspect detected capture sources.
+	status, srcResp := doJSON(t, ts, "GET", "/captures/sources", nil, true)
+	if status != http.StatusOK {
+		t.Fatalf("GET /captures/sources status = %d", status)
+	}
+	if sx, _ := srcResp["sharex"].(map[string]any); sx["detected"] != true {
+		t.Errorf("expected sharex.detected=true, got %v", srcResp)
+	}
+
+	// 3. Add custom alias for Terraria and verify GET /games/105600/captures picks up both captures.
+	status, updatedGame := doJSON(t, ts, "PUT", "/games/105600/captures/aliases", map[string]any{
+		"aliases": []string{"custom_boss"},
+	}, true)
+	if status != http.StatusOK {
+		t.Fatalf("PUT /games/105600/captures/aliases = %d: %v", status, updatedGame)
+	}
+
+	status, capList := doJSON(t, ts, "GET", "/games/105600/captures", nil, true)
+	if status != http.StatusOK {
+		t.Fatalf("GET /games/105600/captures = %d: %v", status, capList)
+	}
+	items, _ := capList["items"].([]any)
+	if len(items) != 2 {
+		t.Fatalf("got %d captures, want 2: %v", len(items), capList)
+	}
+
+	var videoID string
+	for _, raw := range items {
+		m := raw.(map[string]any)
+		if m["kind"] == "video" {
+			videoID = m["id"].(string)
+		}
+	}
+	if len(videoID) != 32 {
+		t.Fatalf("unexpected video capture id: %q", videoID)
+	}
+
+	// 4. Verify byte-range streaming (206 Partial Content) on video capture.
+	reqRange, _ := http.NewRequest("GET", ts.URL+"/captures/"+videoID+"/file", nil)
+	authed(reqRange)
+	reqRange.Header.Set("Range", "bytes=4-7")
+	resRange, err := ts.Client().Do(reqRange)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bodyBytes, _ := io.ReadAll(resRange.Body)
+	resRange.Body.Close()
+	if resRange.StatusCode != http.StatusPartialContent || string(bodyBytes) != "4567" {
+		t.Fatalf("range status=%d body=%q, want 206 & '4567'", resRange.StatusCode, string(bodyBytes))
+	}
+
+	// 5. Reject malformed / unknown capture IDs safely.
+	reqBad, _ := http.NewRequest("GET", ts.URL+"/captures/not-a-valid-hex-id/file", nil)
+	authed(reqBad)
+	resBad, _ := ts.Client().Do(reqBad)
+	resBad.Body.Close()
+	if resBad.StatusCode != http.StatusBadRequest {
+		t.Errorf("invalid capture id status = %d, want 400", resBad.StatusCode)
+	}
+
+	reqMiss, _ := http.NewRequest("GET", ts.URL+"/captures/00000000000000000000000000000000/file", nil)
+	authed(reqMiss)
+	resMiss, _ := ts.Client().Do(reqMiss)
+	resMiss.Body.Close()
+	if resMiss.StatusCode != http.StatusNotFound {
+		t.Errorf("unknown capture id status = %d, want 404", resMiss.StatusCode)
 	}
 }
 

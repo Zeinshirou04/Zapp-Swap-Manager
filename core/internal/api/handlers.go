@@ -12,15 +12,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/captures"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/config"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/queue"
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/steam"
 )
 
 type handlers struct {
-	cfg     Config
-	start   time.Time
-	artwork *artworkStore
+	cfg      Config
+	start    time.Time
+	artwork  *artworkStore
+	captures *captures.Manager
 }
 
 func (h handlers) artworkStore() *artworkStore {
@@ -28,6 +30,20 @@ func (h handlers) artworkStore() *artworkStore {
 		return h.artwork
 	}
 	return newArtworkStore(h.cfg.ArtworkDir)
+}
+
+func (h handlers) captureManager() *captures.Manager {
+	if h.captures != nil {
+		return h.captures
+	}
+	return captures.NewManager(h.cfg.CapturesDir)
+}
+
+func (h handlers) currentPreferences() config.Preferences {
+	if h.cfg.PreferencesFn != nil {
+		return h.cfg.PreferencesFn().Normalized()
+	}
+	return h.cfg.Preferences.Normalized()
 }
 
 // health: uptime, version, Steam process state (backup-skip guard probe).
@@ -204,9 +220,10 @@ type gameJSON struct {
 	HasHDDBackup     bool       `json:"has_hdd_backup"`
 	IsNativeHDD      bool       `json:"is_native_hdd"`
 	Tags             []string   `json:"tags,omitempty"`
+	CaptureAliases   []string   `json:"capture_aliases,omitempty"`
 }
 
-func toGameJSON(g steam.Game) gameJSON {
+func toGameJSONWithAliases(g steam.Game, aliases []string) gameJSON {
 	appID, _ := strconv.ParseInt(g.Manifest.AppID, 10, 64)
 	return gameJSON{
 		AppID:            appID,
@@ -225,7 +242,12 @@ func toGameJSON(g steam.Game) gameJSON {
 		HasHDDBackup:     g.HasHDDBackup,
 		IsNativeHDD:      g.IsNativeHDD,
 		Tags:             g.Tags,
+		CaptureAliases:   aliases,
 	}
+}
+
+func (h handlers) toGameResponse(g steam.Game) gameJSON {
+	return toGameJSONWithAliases(g, h.captureManager().GetAliases(g.Manifest.AppID))
 }
 
 func (h handlers) scanGames() ([]steam.Game, error) {
@@ -245,6 +267,7 @@ func (h handlers) listGames(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("games scan had non-fatal warnings", "err", err)
 	}
 	state, libID := r.URL.Query().Get("state"), r.URL.Query().Get("library_id")
+	aliasMap := h.captureManager().AllAliases()
 	out := make([]gameJSON, 0, len(games))
 	for _, g := range games {
 		if state != "" && g.State != state {
@@ -253,7 +276,7 @@ func (h handlers) listGames(w http.ResponseWriter, r *http.Request) {
 		if libID != "" && g.LibraryID != libID {
 			continue
 		}
-		out = append(out, toGameJSON(g))
+		out = append(out, toGameJSONWithAliases(g, aliasMap[g.Manifest.AppID]))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -271,7 +294,7 @@ func (h handlers) getGame(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, g := range games {
 		if g.Manifest.AppID == appID {
-			writeJSON(w, http.StatusOK, toGameJSON(g))
+			writeJSON(w, http.StatusOK, h.toGameResponse(g))
 			return
 		}
 	}
@@ -387,24 +410,27 @@ func pathLike(s string) bool {
 
 // getPreferences: GET /preferences
 func (h handlers) getPreferences(w http.ResponseWriter, _ *http.Request) {
-	if h.cfg.PreferencesFn != nil {
-		writeJSON(w, http.StatusOK, h.cfg.PreferencesFn().Normalized())
-		return
-	}
-	writeJSON(w, http.StatusOK, h.cfg.Preferences.Normalized())
+	writeJSON(w, http.StatusOK, h.currentPreferences())
 }
 
 // updatePreferences: PUT /preferences
 func (h handlers) updatePreferences(w http.ResponseWriter, r *http.Request) {
-	var p config.Preferences
-	if h.cfg.PreferencesFn != nil {
-		p = h.cfg.PreferencesFn().Normalized()
-	} else {
-		p = h.cfg.Preferences.Normalized()
-	}
+	p := h.currentPreferences()
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
 		return
+	}
+	if len(p.CaptureFolders) > 0 {
+		validated := make([]string, 0, len(p.CaptureFolders))
+		for _, folder := range p.CaptureFolders {
+			clean, vErr := captures.ValidateCaptureFolder(folder)
+			if vErr != nil {
+				writeError(w, http.StatusBadRequest, "invalid_capture_folder", vErr.Error())
+				return
+			}
+			validated = append(validated, clean)
+		}
+		p.CaptureFolders = validated
 	}
 	p = p.Normalized()
 	if h.cfg.SetPreferences != nil {
@@ -511,7 +537,7 @@ func (h handlers) createCustomGame(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		for _, g := range games {
 			if strings.EqualFold(g.Manifest.InstallDir, in.InstallDir) {
-				writeJSON(w, http.StatusCreated, toGameJSON(g))
+				writeJSON(w, http.StatusCreated, h.toGameResponse(g))
 				return
 			}
 		}
@@ -681,7 +707,7 @@ func (h handlers) updateCustomGame(w http.ResponseWriter, r *http.Request) {
 	foundGame.IsNativeHDD = zm.IsNativeHDD
 	foundGame.Tags = zm.Tags
 
-	writeJSON(w, http.StatusOK, toGameJSON(*foundGame))
+	writeJSON(w, http.StatusOK, h.toGameResponse(*foundGame))
 }
 
 // getGameCover: GET /games/{app_id}/cover

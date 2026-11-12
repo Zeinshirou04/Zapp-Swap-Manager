@@ -493,7 +493,7 @@ func (h handlers) updateGameArtwork(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "scan_failed", "failed to reload updated game")
 		return
 	}
-	writeJSON(w, http.StatusOK, toGameJSON(*updated))
+	writeJSON(w, http.StatusOK, h.toGameResponse(*updated))
 }
 
 // uploadGameArtwork: POST /games/{app_id}/artwork (multipart form: kind=grid|banner, file=binary)
@@ -551,5 +551,5 @@ func (h handlers) uploadGameArtwork(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "scan_failed", "failed to reload updated game")
 		return
 	}
-	writeJSON(w, http.StatusOK, toGameJSON(*updated))
+	writeJSON(w, http.StatusOK, h.toGameResponse(*updated))
 }

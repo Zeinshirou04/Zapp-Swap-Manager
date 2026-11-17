@@ -514,3 +514,110 @@ func TestZappManifestAndRealFolderSize(t *testing.T) {
 		t.Errorf("Tags = %v, want [RPG OpenWorld]", g.Tags)
 	}
 }
+
+func TestScanLibrariesIgnoresUninstalledAndStaleEntries(t *testing.T) {
+	restoreDisk := stubDisk(t, 41*1<<30, 240*1<<30)
+	defer restoreDisk()
+	restoreSteam := stubSteamRunning(t, false)
+	defer restoreSteam()
+
+	ssd := t.TempDir()
+	hdd := t.TempDir()
+
+	// Create steamapps/common on both SSD and HDD
+	if err := os.MkdirAll(filepath.Join(ssd, "steamapps", "common"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(hdd, "steamapps", "common"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Uninstalled PUBG: no manifest, leftover folder with empty subdirs and a log file (no executables).
+	pubgLogs := filepath.Join(ssd, "steamapps", "common", "PUBG", "TslGame", "Saved", "Logs")
+	if err := os.MkdirAll(pubgLogs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pubgLogs, "crash.log"), []byte("leftover"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Empty leftover folder
+	if err := os.MkdirAll(filepath.Join(ssd, "steamapps", "common", "EmptyLeftover"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Stale manifest on SSD (Terraria StateFlags=4) whose SSD folder was deleted,
+	// while the real manifest & files live on HDD!
+	if err := os.WriteFile(filepath.Join(ssd, "steamapps", "appmanifest_105600.acf"), fixture(t, "appmanifest_105600.acf"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hdd, "steamapps", "appmanifest_105600.acf"), fixture(t, "appmanifest_105600.acf"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hddTerraria := filepath.Join(hdd, "steamapps", "common", "Terraria")
+	if err := os.MkdirAll(hddTerraria, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hddTerraria, "Terraria.exe"), []byte("binary"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. Real SSD game whose HDD backup folder is completely empty -> HasHDDBackup must be false.
+	ssdReal := filepath.Join(ssd, "steamapps", "common", "RealGame")
+	if err := os.MkdirAll(ssdReal, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ssdReal, "RealGame.exe"), []byte("game"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(hdd, "steamapps", "common", "RealGame"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	realACF := `"AppState"
+{
+	"appid"		"999001"
+	"name"		"RealGame"
+	"StateFlags"		"4"
+	"installdir"		"RealGame"
+	"SizeOnDisk"		"4"
+	"buildid"		"1"
+}
+`
+	if err := os.WriteFile(filepath.Join(ssd, "steamapps", "appmanifest_999001.acf"), []byte(realACF), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	libs := []Library{
+		{ID: "ssd0", Name: "SSD Cache", Path: ssd, Type: TypeSSDCache},
+		{ID: "hdd0", Name: "HDD Master", Path: hdd, Type: TypeHDDMaster},
+	}
+
+	games, err := ScanLibraries(libs)
+	if err != nil {
+		t.Fatalf("ScanLibraries: %v", err)
+	}
+
+	if len(games) != 2 {
+		t.Fatalf("got %d games (%+v), want exactly 2 (Terraria on HDD + RealGame on SSD; PUBG & EmptyLeftover ignored)", len(games), games)
+	}
+
+	byID := map[string]Game{}
+	for _, g := range games {
+		byID[g.Manifest.AppID] = g
+	}
+
+	terraria, ok := byID["105600"]
+	if !ok {
+		t.Fatalf("Terraria missing from scan results")
+	}
+	if terraria.State != StateStorageHDD || terraria.LibraryID != "hdd0" {
+		t.Errorf("Terraria = (state=%s, lib=%s), want (storage_hdd, hdd0)", terraria.State, terraria.LibraryID)
+	}
+
+	realGame, ok := byID["999001"]
+	if !ok {
+		t.Fatalf("RealGame missing from scan results")
+	}
+	if realGame.HasHDDBackup {
+		t.Errorf("RealGame.HasHDDBackup = true, want false when HDD folder is empty")
+	}
+}

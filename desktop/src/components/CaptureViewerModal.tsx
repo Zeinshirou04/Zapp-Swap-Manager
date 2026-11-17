@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import { CaptureItem } from '../types/api.ts';
 import { getCaptureFileUrl } from '../api/client.ts';
 import { formatBytes, formatExactTimestamp } from '../utils/format.ts';
+import { CustomImageViewer } from './CustomImageViewer.tsx';
+import { CustomVideoPlayer } from './CustomVideoPlayer.tsx';
 import {
   Check,
   ChevronLeft,
@@ -53,10 +55,12 @@ export const CaptureViewerModal: React.FC<CaptureViewerModalProps> = ({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose();
-      } else if (e.key === 'ArrowLeft' && safeIdx > 0) {
-        onSelectIndex(safeIdx - 1);
-      } else if (e.key === 'ArrowRight' && safeIdx < items.length - 1) {
-        onSelectIndex(safeIdx + 1);
+      } else if (current.kind !== 'video') {
+        if (e.key === 'ArrowLeft' && safeIdx > 0) {
+          onSelectIndex(safeIdx - 1);
+        } else if (e.key === 'ArrowRight' && safeIdx < items.length - 1) {
+          onSelectIndex(safeIdx + 1);
+        }
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -190,30 +194,9 @@ export const CaptureViewerModal: React.FC<CaptureViewerModalProps> = ({
           }}
         >
           {current.kind === 'image' ? (
-            <img
-              src={mediaSrc}
-              alt={current.filename}
-              style={{
-                maxWidth: '100%',
-                maxHeight: '66vh',
-                objectFit: 'contain',
-                borderRadius: '4px',
-              }}
-            />
+            <CustomImageViewer src={mediaSrc} alt={current.filename} />
           ) : (
-            <video
-              key={current.id}
-              src={mediaSrc}
-              controls
-              autoPlay
-              preload="metadata"
-              style={{
-                width: '100%',
-                maxHeight: '66vh',
-                borderRadius: '4px',
-                backgroundColor: '#000',
-              }}
-            />
+            <CustomVideoPlayer key={current.id} src={mediaSrc} autoPlay />
           )}
         </div>
 

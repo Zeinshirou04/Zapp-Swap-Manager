@@ -157,21 +157,20 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 }
 
 func defaultExecutor(whitelist func() []steam.Library, prefFn func() config.Preferences, qFn func() *queue.Queue) queue.Executor {
+	var (
+		steamBatchMu     sync.Mutex
+		steamClosedBatch bool
+	)
+
 	return func(ctx context.Context, job queue.Job, step queue.StepFunc) error {
 		prefs := (config.Preferences{}).Normalized()
 		if prefFn != nil {
 			prefs = prefFn().Normalized()
 		}
 
-		wasSteamRunning := false
-		if prefs.CloseSteamOnTransfer && (job.Type == queue.TypePromote || job.Type == queue.TypeEvict) {
-			wasSteamRunning = steam.CloseSteamGracefully(5 * time.Second)
-		}
-		defer func() {
-			if wasSteamRunning && prefs.RelaunchSteamAfterTransfer {
-				steam.RelaunchSteam()
-			}
-		}()
+		// Always invalidate cached directory sizes when a transfer job finishes
+		// so the next library scan immediately reflects fresh disk state.
+		defer steam.ClearSizeCache()
 
 		libs := whitelist()
 		var targetLib *steam.Library
@@ -210,6 +209,41 @@ func defaultExecutor(whitelist func() []steam.Library, prefFn func() config.Pref
 		if srcLib == nil {
 			return fmt.Errorf("source library %q not found", foundGame.LibraryID)
 		}
+
+		// Queue-batched Steam lifecycle: only close Steam for Steam-manifest
+		// mutations (promote, evict, remove), keep it closed while more
+		// manifest-mutating jobs are queued, and relaunch once the batch drains.
+		needsSteamClosed := !foundGame.IsCustom &&
+			(job.Type == queue.TypePromote || job.Type == queue.TypeEvict || job.Type == queue.TypeRemove)
+		if prefs.CloseSteamOnTransfer && needsSteamClosed {
+			steamBatchMu.Lock()
+			if !steamClosedBatch && steam.CloseSteamGracefully(5*time.Second) {
+				steamClosedBatch = true
+			}
+			steamBatchMu.Unlock()
+		}
+		defer func() {
+			steamBatchMu.Lock()
+			if !steamClosedBatch {
+				steamBatchMu.Unlock()
+				return
+			}
+			hasMore := false
+			if qFn != nil {
+				if qInst := qFn(); qInst != nil {
+					hasMore, _ = qInst.HasQueuedManifestJobs()
+				}
+			}
+			if !hasMore {
+				steamClosedBatch = false
+				steamBatchMu.Unlock()
+				if prefs.RelaunchSteamAfterTransfer {
+					steam.RelaunchSteam()
+				}
+				return
+			}
+			steamBatchMu.Unlock()
+		}()
 
 		slog.Info("executor starting transfer",
 			"job_id", job.ID,
@@ -276,6 +310,12 @@ func defaultExecutor(whitelist func() []steam.Library, prefFn func() config.Pref
 			}
 		case queue.TypeBackup:
 			runErr = transfer.Backup(ctx, opts, srcLib.Path, targetLib.Path, foundGame.Manifest.InstallDir)
+		case queue.TypeRemove:
+			if foundGame.IsCustom {
+				runErr = transfer.RemoveSSDCustom(ctx, opts, srcLib.Path, targetLib.Path, foundGame.Manifest.InstallDir)
+			} else {
+				runErr = transfer.RemoveSSD(ctx, opts, srcLib.Path, targetLib.Path, manifestName, foundGame.Manifest.InstallDir)
+			}
 		default:
 			runErr = step(1, "unsupported", func() error {
 				return fmt.Errorf("unsupported job type %q", job.Type)
@@ -364,4 +404,25 @@ func (s *Service) Server() *api.Server {
 // Config returns the active configuration.
 func (s *Service) Config() *config.Config {
 	return s.cfg
+}
+
+// GetPinnedGames returns currently scanned games that are pinned.
+func (s *Service) GetPinnedGames() []steam.Game {
+	if s.server == nil {
+		return nil
+	}
+	games, err := s.server.GetPinnedGames()
+	if err != nil {
+		slog.Warn("failed to query pinned games", "err", err)
+		return nil
+	}
+	return games
+}
+
+// LaunchGame initiates launching the specified game.
+func (s *Service) LaunchGame(appID string) (string, error) {
+	if s.server == nil {
+		return "", errors.New("server not available")
+	}
+	return s.server.LaunchGame(appID)
 }

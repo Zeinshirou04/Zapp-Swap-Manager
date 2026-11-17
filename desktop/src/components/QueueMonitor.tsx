@@ -12,6 +12,7 @@ import {
   HardDriveDownload,
   HardDriveUpload,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 import { formatBytes } from '../utils/format.ts';
 
@@ -50,6 +51,8 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({
         return { label: 'Evict to HDD', icon: <HardDriveUpload size={14} />, color: 'var(--warning)' };
       case 'backup':
         return { label: 'Backup to HDD', icon: <RefreshCw size={14} />, color: 'var(--success)' };
+      case 'remove':
+        return { label: 'Remove from SSD', icon: <Trash2 size={14} />, color: 'var(--danger)' };
       default:
         return { label: 'Transfer', icon: <Play size={14} />, color: 'var(--primary)' };
     }

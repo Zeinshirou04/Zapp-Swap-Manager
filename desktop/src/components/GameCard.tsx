@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Game, Job, JobType } from '../types/api.ts';
-import { Database, RefreshCw, Zap, Loader2, Gamepad2, Folder, ArrowRight } from 'lucide-react';
+import { Zap, Loader2, Gamepad2, Folder, ArrowRight, Play, Pin } from 'lucide-react';
 import { formatBytes, getSteamGridUrls } from '../utils/format.ts';
 import { resolveCoverUrl } from '../api/client.ts';
 
@@ -10,6 +10,8 @@ interface GameCardProps {
   actionLoading?: boolean;
   activeJob?: Job;
   onClick?: (game: Game) => void;
+  onLaunch?: (game: Game) => void;
+  onTogglePin?: (game: Game) => void;
   variant?: 'actions' | 'details';
 }
 
@@ -19,6 +21,8 @@ export const GameCard: React.FC<GameCardProps> = ({
   actionLoading = false,
   activeJob,
   onClick,
+  onLaunch,
+  onTogglePin,
   variant = 'actions',
 }) => {
   const [imgFailed, setImgFailed] = useState(false);
@@ -224,6 +228,38 @@ export const GameCard: React.FC<GameCardProps> = ({
               </span>
             ) : null}
           </div>
+
+          {/* Pin Button Overlay */}
+          <button
+            type="button"
+            data-testid="game-pin-btn"
+            aria-label={game.is_pinned ? `Unpin ${game.name}` : `Pin ${game.name}`}
+            title={game.is_pinned ? 'Unpin game' : 'Pin game to top'}
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePin?.(game);
+            }}
+            style={{
+              position: 'absolute',
+              top: '8px',
+              right: '8px',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '5px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              backgroundColor: game.is_pinned
+                ? 'var(--primary)'
+                : 'rgba(15, 23, 42, 0.65)',
+              color: '#ffffff',
+              backdropFilter: 'blur(4px)',
+              transition: 'background-color 0.15s ease, transform 0.1s ease',
+            }}
+          >
+            <Pin size={13} style={{ transform: game.is_pinned ? 'rotate(0deg)' : 'rotate(45deg)' }} />
+          </button>
         </div>
 
         <div style={{ padding: '12px' }}>
@@ -332,25 +368,15 @@ export const GameCard: React.FC<GameCardProps> = ({
             </button>
           )
         ) : (
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => onAction?.(game, 'backup')}
-              disabled={actionLoading}
-              className={game.has_hdd_backup ? 'btn-secondary' : 'btn-primary'}
-              style={{ flex: 1, justifyContent: 'center' }}
-              title="Mirror SSD changes to HDD"
-            >
-              <RefreshCw size={14} /> Backup to HDD
-            </button>
-            <button
-              onClick={() => onAction?.(game, 'evict')}
-              disabled={actionLoading}
-              className="btn-danger"
-              title="Safely mirror to HDD and free SSD space"
-            >
-              <Database size={14} /> Evict to HDD
-            </button>
-          </div>
+          <button
+            onClick={() => onLaunch?.(game)}
+            disabled={actionLoading}
+            className="btn-primary"
+            style={{ width: '100%', justifyContent: 'center' }}
+            title="Launch game directly"
+          >
+            <Play size={14} fill="currentColor" /> Play
+          </button>
         )}
       </div>
     </div>

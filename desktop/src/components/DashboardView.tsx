@@ -15,6 +15,8 @@ export interface DashboardViewProps {
   onOpenWizard: () => void;
   onSelectGame?: (game: Game) => void;
   onSelectDrive?: (library: Library) => void;
+  onLaunch?: (game: Game) => void;
+  onTogglePin?: (game: Game) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -27,8 +29,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenWizard: _onOpenWizard,
   onSelectGame,
   onSelectDrive,
+  onLaunch,
+  onTogglePin,
 }) => {
-  const ssdGames = games.filter((g) => g.state === 'active_ssd');
+  const ssdGames = [...games]
+    .filter((g) => g.state === 'active_ssd')
+    .sort((a, b) => {
+      const aPinned = a.is_pinned ? 1 : 0;
+      const bPinned = b.is_pinned ? 1 : 0;
+      if (aPinned !== bPinned) return bPinned - aPinned;
+      return a.name.localeCompare(b.name);
+    });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -125,6 +136,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 game={game}
                 onAction={onAction}
                 actionLoading={actionLoading}
+                onLaunch={onLaunch}
+                onTogglePin={onTogglePin}
                 onClick={() => onSelectGame?.(game)}
                 activeJob={jobs.find(
                   (j) =>

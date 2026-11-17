@@ -4,14 +4,14 @@ import { GameCard } from './GameCard.tsx';
 import { AddGameModal } from './AddGameModal.tsx';
 import { GameDetailModal } from './GameDetailModal.tsx';
 import {
-  Database,
   HardDrive,
   LayoutGrid,
   List,
   Search,
   Zap,
   Plus,
-  RefreshCw,
+  Play,
+  Pin,
 } from 'lucide-react';
 import { formatBytes } from '../utils/format.ts';
 
@@ -24,6 +24,8 @@ interface GameListProps {
   onRefresh?: () => void;
   onSelectGame?: (game: Game) => void;
   onGameUpdated?: (updated: Game) => void;
+  onLaunch?: (game: Game) => void;
+  onTogglePin?: (game: Game) => void;
 }
 
 export const GameList: React.FC<GameListProps> = ({
@@ -35,6 +37,8 @@ export const GameList: React.FC<GameListProps> = ({
   onRefresh,
   onSelectGame,
   onGameUpdated,
+  onLaunch,
+  onTogglePin,
 }) => {
   const [search, setSearch] = useState('');
   const [filterState, setFilterState] = useState<'all' | 'active_ssd' | 'storage_hdd' | 'custom' | 'unbacked'>('all');
@@ -43,10 +47,9 @@ export const GameList: React.FC<GameListProps> = ({
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
 
   const ssdLib = libraries.find((l) => l.type === 'ssd_cache');
-  const hddLib = libraries.find((l) => l.type === 'hdd_master');
 
   const filteredGames = useMemo(() => {
-    return games.filter((g) => {
+    const list = games.filter((g) => {
       const matchesSearch =
         g.name.toLowerCase().includes(search.toLowerCase()) ||
         String(g.app_id).includes(search) ||
@@ -65,6 +68,15 @@ export const GameList: React.FC<GameListProps> = ({
       }
 
       return matchesSearch && matchesState;
+    });
+
+    return [...list].sort((a, b) => {
+      const aPinned = a.is_pinned ? 1 : 0;
+      const bPinned = b.is_pinned ? 1 : 0;
+      if (aPinned !== bPinned) {
+        return bPinned - aPinned;
+      }
+      return a.name.localeCompare(b.name);
     });
   }, [games, search, filterState]);
 
@@ -86,31 +98,18 @@ export const GameList: React.FC<GameListProps> = ({
           <Zap size={14} /> Move to SSD
         </button>
       )
-    ) : isOnSSD && hddLib ? (
-      <>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onAction(game, 'backup');
-          }}
-          disabled={actionLoading}
-          className={game.has_hdd_backup ? 'btn-secondary' : 'btn-primary'}
-          title="Mirror SSD changes to HDD"
-        >
-          <RefreshCw size={14} /> Backup
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onAction(game, 'evict');
-          }}
-          disabled={actionLoading}
-          className="btn-danger"
-          title="Safely mirror to HDD and free SSD space"
-        >
-          <Database size={14} /> Evict
-        </button>
-      </>
+    ) : isOnSSD ? (
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onLaunch?.(game);
+        }}
+        disabled={actionLoading}
+        className="btn-primary"
+        title="Launch game directly"
+      >
+        <Play size={14} fill="currentColor" /> Play
+      </button>
     ) : null;
   };
 
@@ -275,6 +274,8 @@ export const GameList: React.FC<GameListProps> = ({
                 game={game}
                 onAction={onAction}
                 actionLoading={actionLoading}
+                onLaunch={onLaunch}
+                onTogglePin={onTogglePin}
                 onClick={(g) => (onSelectGame ? onSelectGame(g) : setSelectedGame(g))}
                 activeJob={jobs?.find(
                   (j) =>
@@ -355,6 +356,26 @@ export const GameList: React.FC<GameListProps> = ({
                   >
                     <td style={{ padding: '12px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onTogglePin?.(game);
+                          }}
+                          aria-label={game.is_pinned ? 'Unpin game' : 'Pin game'}
+                          title={game.is_pinned ? 'Unpin game' : 'Pin game to top'}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: game.is_pinned ? 'var(--primary)' : 'var(--text-muted)',
+                            padding: '2px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Pin size={13} style={{ transform: game.is_pinned ? 'rotate(0deg)' : 'rotate(45deg)' }} />
+                        </button>
                         <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{game.name}</span>
                         {game.is_custom && (
                           <span

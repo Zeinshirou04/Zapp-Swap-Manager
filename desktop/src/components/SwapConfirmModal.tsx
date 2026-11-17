@@ -26,6 +26,7 @@ const ACTION_META: Record<JobType, { verb: string; canFree: boolean }> = {
   promote: { verb: 'Move to SSD', canFree: false },
   evict: { verb: 'Evict to HDD', canFree: true },
   backup: { verb: 'Backup to HDD', canFree: false },
+  remove: { verb: 'Remove from SSD', canFree: true },
 };
 
 const ChecklistItem: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -111,6 +112,9 @@ export const SwapConfirmModal: React.FC<SwapConfirmModalProps> = ({
   } else if (action.type === 'backup') {
     ssdDelta = 0;
     hddDelta = action.hasHddBackup ? 0 : -action.sizeBytes;
+  } else if (action.type === 'remove') {
+    ssdDelta = action.sizeBytes;
+    hddDelta = 0;
   }
 
   const ssdFreeBefore = ssd?.free_bytes ?? 0;
@@ -188,21 +192,42 @@ export const SwapConfirmModal: React.FC<SwapConfirmModalProps> = ({
           </div>
         )}
 
+        {action.type === 'remove' && !action.hasHddBackup && (
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', padding: '10px', background: 'rgba(239, 68, 68, 0.12)', borderRadius: 'var(--radius)', color: 'var(--danger)', fontSize: '0.85rem', alignItems: 'center' }}>
+            <AlertTriangle size={16} />
+            <span>No verified HDD backup exists. Use Backup or Evict to HDD first so your files are protected.</span>
+          </div>
+        )}
+
         {/* Safety guarantees */}
         <h3 style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '8px', fontWeight: 600 }}>
           Safety Guarantees
         </h3>
-        <ul style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '20px', paddingLeft: 0, listStyle: 'none' }}>
-          <ChecklistItem>
-            Files are first mirrored with Robocopy and bit-for-bit verified before anything is deleted.
-          </ChecklistItem>
-          <ChecklistItem>
-            SSD files are removed only after the HDD copy passes verification — nothing is deleted up front.
-          </ChecklistItem>
-          <ChecklistItem>
-            Steam manifests are updated atomically; a failed or cancelled transfer leaves the game playable from its current library.
-          </ChecklistItem>
-        </ul>
+        {action.type === 'remove' ? (
+          <ul style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '20px', paddingLeft: 0, listStyle: 'none' }}>
+            <ChecklistItem>
+              Your existing HDD master copy is verified non-empty and will NOT be overwritten or modified.
+            </ChecklistItem>
+            <ChecklistItem>
+              Any local SSD changes made since your last backup will be discarded when SSD files are removed.
+            </ChecklistItem>
+            <ChecklistItem>
+              Steam manifest is moved back to HDD (or NTFS junction created for custom games) strictly before deleting SSD files.
+            </ChecklistItem>
+          </ul>
+        ) : (
+          <ul style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '20px', paddingLeft: 0, listStyle: 'none' }}>
+            <ChecklistItem>
+              Files are first mirrored with Robocopy and bit-for-bit verified before anything is deleted.
+            </ChecklistItem>
+            <ChecklistItem>
+              SSD files are removed only after the HDD copy passes verification — nothing is deleted up front.
+            </ChecklistItem>
+            <ChecklistItem>
+              Steam manifests are updated atomically; a failed or cancelled transfer leaves the game playable from its current library.
+            </ChecklistItem>
+          </ul>
+        )}
 
         {error && (
           <div
@@ -225,13 +250,19 @@ export const SwapConfirmModal: React.FC<SwapConfirmModalProps> = ({
           </button>
           <button
             onClick={onConfirm}
-            className="btn-primary"
-            disabled={loading || (action.type === 'promote' && ssdFreeAfter < 0)}
+            className={action.type === 'remove' ? 'btn-danger' : 'btn-primary'}
+            disabled={
+              loading ||
+              (action.type === 'promote' && ssdFreeAfter < 0) ||
+              (action.type === 'remove' && !action.hasHddBackup)
+            }
           >
             {loading ? (
               <>
                 <Loader2 size={16} className="spin" /> Queuing...
               </>
+            ) : action.type === 'remove' ? (
+              'Confirm Removal'
             ) : (
               'Confirm Transfer'
             )}

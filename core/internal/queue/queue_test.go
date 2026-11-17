@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -392,4 +393,93 @@ func TestHasActiveJobAndFailedProgressPreserved(t *testing.T) {
 	if has, err := q.HasActiveJob("105600"); err != nil || has {
 		t.Errorf("after failure HasActiveJob(105600) = (%v, %v), want (false, nil)", has, err)
 	}
+}
+
+func TestMigrateLegacyJobsSchemaAndRemoveJob(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "legacy.db")
+
+	// Simulate an existing v0.3.3-beta.3 database whose CHECK constraint only allows promote/evict/backup.
+	rawDB, err := sql.Open(driverName, "file:"+dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	legacySchema := `
+	CREATE TABLE jobs (
+		id                TEXT    PRIMARY KEY,
+		type              TEXT    NOT NULL CHECK (type IN ('promote', 'evict', 'backup')),
+		app_id            TEXT    NOT NULL,
+		target_library_id TEXT    NOT NULL,
+		status            TEXT    NOT NULL DEFAULT 'queued'
+		                  CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')),
+		progress_percent  REAL    NOT NULL DEFAULT 0,
+		bytes_transferred INTEGER NOT NULL DEFAULT 0,
+		total_bytes       INTEGER NOT NULL DEFAULT 0,
+		error             TEXT,
+		created_at        TEXT    NOT NULL,
+		started_at        TEXT,
+		completed_at      TEXT
+	);
+	CREATE TABLE job_journal (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		job_id      TEXT    NOT NULL REFERENCES jobs(id),
+		step_index  INTEGER NOT NULL,
+		step_name   TEXT    NOT NULL,
+		status      TEXT    NOT NULL CHECK (status IN ('started', 'completed', 'failed')),
+		recorded_at TEXT    NOT NULL,
+		details     TEXT
+	);
+	INSERT INTO jobs (id, type, app_id, target_library_id, status, created_at)
+	VALUES ('old-1', 'backup', '105600', 'hdd0', 'succeeded', '2026-11-01T00:00:00Z');
+	INSERT INTO job_journal (job_id, step_index, step_name, status, recorded_at)
+	VALUES ('old-1', 1, 'backup-mirror', 'completed', '2026-11-01T00:00:01Z');
+	`
+	if _, err := rawDB.Exec(legacySchema); err != nil {
+		rawDB.Close()
+		t.Fatalf("seed legacy schema: %v", err)
+	}
+	rawDB.Close()
+
+	gate := make(chan struct{})
+	inProgress := make(chan struct{})
+	q, err := New(dbPath, func(ctx context.Context, job Job, step StepFunc) error {
+		if job.Type == TypeRemove {
+			close(inProgress)
+			<-gate
+		}
+		return step(1, "run-"+job.Type, func() error { return nil })
+	})
+	if err != nil {
+		t.Fatalf("New on legacy db: %v", err)
+	}
+	t.Cleanup(func() { q.Close() })
+
+	// Existing rows must be preserved.
+	if old, err := q.GetJob("old-1"); err != nil || old.Status != StatusSucceeded {
+		t.Fatalf("preserved job old-1 = (%+v, %v)", old, err)
+	}
+
+	// Enqueueing a TypeRemove job must now succeed!
+	remJob, err := q.Enqueue(CreateJobRequest{Type: TypeRemove, AppID: "105600", TargetLibraryID: "hdd0"})
+	if err != nil {
+		t.Fatalf("Enqueue TypeRemove after migration: %v", err)
+	}
+	<-inProgress
+
+	// Enqueue a second manifest job behind it and verify HasQueuedManifestJobs returns true.
+	if _, err := q.Enqueue(CreateJobRequest{Type: TypePromote, AppID: "221380", TargetLibraryID: "ssd0"}); err != nil {
+		t.Fatalf("Enqueue second manifest job: %v", err)
+	}
+	if has, err := q.HasQueuedManifestJobs(); err != nil || !has {
+		t.Fatalf("HasQueuedManifestJobs() = (%v, %v), want (true, nil)", has, err)
+	}
+
+	close(gate)
+	waitFor(t, "remove job succeeds", func() bool {
+		j, err := q.GetJob(remJob.ID)
+		return err == nil && j.Status == StatusSucceeded
+	})
+	waitFor(t, "queue drains", func() bool {
+		has, err := q.HasQueuedManifestJobs()
+		return err == nil && !has
+	})
 }

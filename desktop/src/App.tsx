@@ -514,6 +514,65 @@ export const App: React.FC = () => {
     loadData();
   }, [loadData]);
 
+  const handleLaunchGame = useCallback(async (game: Game) => {
+    try {
+      addToast({
+        id: `launching-${game.app_id}-${Date.now()}`,
+        type: 'info',
+        title: 'Launching Game',
+        message: `Starting ${game.name}...`,
+        durationMs: 3000,
+      });
+      const res = await api.launchGame(game.app_id);
+      if (res.launched) {
+        addToast({
+          id: `launched-${game.app_id}-${Date.now()}`,
+          type: 'success',
+          title: 'Game Started',
+          message: `${game.name} launched successfully.`,
+          durationMs: 4000,
+        });
+      }
+    } catch (err) {
+      addToast({
+        id: `launch-err-${game.app_id}-${Date.now()}`,
+        type: 'error',
+        title: 'Launch Failed',
+        message: err instanceof Error ? err.message : 'Could not launch game',
+      });
+    }
+  }, [addToast]);
+
+  const handleTogglePin = useCallback(async (game: Game) => {
+    const nextPinned = !game.is_pinned;
+    const optimistic: Game = { ...game, is_pinned: nextPinned };
+    setSelectedGame((prev) => (prev && String(prev.app_id) === String(game.app_id) ? optimistic : prev));
+    setGames((prev) => prev.map((g) => (String(g.app_id) === String(game.app_id) ? optimistic : g)));
+
+    try {
+      const updated = await api.setGamePin(game.app_id, nextPinned);
+      handleGameUpdated(updated);
+      addToast({
+        id: `pin-${game.app_id}-${Date.now()}`,
+        type: 'info',
+        title: nextPinned ? 'Game Pinned' : 'Game Unpinned',
+        message: nextPinned
+          ? `${game.name} pinned to top of list and tray menu.`
+          : `${game.name} unpinned.`,
+        durationMs: 2500,
+      });
+    } catch (err) {
+      setSelectedGame((prev) => (prev && String(prev.app_id) === String(game.app_id) ? game : prev));
+      setGames((prev) => prev.map((g) => (String(g.app_id) === String(game.app_id) ? game : g)));
+      addToast({
+        id: `pin-err-${game.app_id}-${Date.now()}`,
+        type: 'error',
+        title: 'Pin Update Failed',
+        message: err instanceof Error ? err.message : 'Could not update game pin status',
+      });
+    }
+  }, [addToast, handleGameUpdated]);
+
   const handleCancelJob = async (jobId: string) => {
     try {
       setActionLoading(true);
@@ -627,7 +686,7 @@ export const App: React.FC = () => {
           drivesCount={libraries.length}
           queueCount={jobs.filter((j) => j.status === 'running' || j.status === 'queued').length}
           steamRunning={health?.steam_running ?? false}
-          appVersion="0.3.3-beta.3"
+          appVersion="0.3.3-beta.4"
           onOpenWizard={() => {
             if (activeRoute === 'settings' && settingsDirty) {
               setShakeSettingsTrigger((prev) => prev + 1);
@@ -680,6 +739,8 @@ export const App: React.FC = () => {
                 navigate('game-detail');
               }}
               onSelectDrive={handleSelectDrive}
+              onLaunch={handleLaunchGame}
+              onTogglePin={handleTogglePin}
             />
           )}
 
@@ -708,6 +769,8 @@ export const App: React.FC = () => {
                   setSelectedGame(g);
                   navigate('game-detail');
                 }}
+                onLaunch={handleLaunchGame}
+                onTogglePin={handleTogglePin}
               />
             </div>
           )}
@@ -728,6 +791,8 @@ export const App: React.FC = () => {
               onAction={requestSwap}
               actionLoading={actionLoading}
               onGameUpdated={handleGameUpdated}
+              onLaunch={handleLaunchGame}
+              onTogglePin={handleTogglePin}
             />
           )}
 
@@ -805,7 +870,7 @@ export const App: React.FC = () => {
           {/* View 6: Settings */}
           {activeRoute === 'settings' && (
             <SettingsView
-              appVersion={health?.version ? `v${health.version}` : 'v0.3.3-beta.3'}
+              appVersion={health?.version ? `v${health.version}` : 'v0.3.3-beta.4'}
               steamRunning={!!health?.steam_running}
               onCheckUpdates={() => handleCheckUpdates(true)}
               checkingUpdates={checkingUpdates}

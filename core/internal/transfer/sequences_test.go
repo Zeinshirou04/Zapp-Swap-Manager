@@ -485,3 +485,127 @@ func TestPromoteAndEvictStepsAndProgressCap(t *testing.T) {
 		t.Errorf("expected post-copy verify/move-manifest stage progress in (95, 100), got %+v", promoteSamples)
 	}
 }
+
+func TestRemoveSSDPreservesHDDAndRefusesWithoutBackup(t *testing.T) {
+	ctx := context.Background()
+
+	// Case 1: No HDD backup -> MUST refuse and leave SSD untouched.
+	ssdNoBackup := setUpLibrary(t, map[string]int{gameDir + "/save.dat": 512}, manifestName)
+	hddEmpty := setUpLibrary(t, nil, "")
+	if err := RemoveSSD(ctx, Options{}, ssdNoBackup, hddEmpty, manifestName, installDir); err == nil {
+		t.Fatalf("expected RemoveSSD to refuse when HDD backup is missing")
+	}
+	if _, err := os.Stat(filepath.Join(ssdNoBackup, "steamapps", "common", installDir, "save.dat")); err != nil {
+		t.Fatalf("SSD files must remain untouched when HDD backup is missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(ssdNoBackup, "steamapps", manifestName)); err != nil {
+		t.Fatalf("SSD manifest must remain untouched when HDD backup is missing: %v", err)
+	}
+
+	// Case 2: Existing HDD backup with different content -> RemoveSSD deletes SSD,
+	// moves manifest to HDD, and leaves HDD files 100% untouched.
+	ssd := setUpLibrary(t, map[string]int{
+		gameDir + "/save.dat":      2048,
+		gameDir + "/ssd_only.bin":  1024,
+	}, manifestName)
+	hdd := setUpLibrary(t, map[string]int{
+		gameDir + "/save.dat": 128, // Older/original HDD copy that must NOT be overwritten
+	}, "")
+	hddSavePath := filepath.Join(hdd, "steamapps", "common", installDir, "save.dat")
+	if err := os.WriteFile(hddSavePath, []byte("original-hdd-save"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var steps []string
+	opts := Options{
+		StepFn: func(index int, name string, run func() error) error {
+			steps = append(steps, name)
+			return run()
+		},
+	}
+	if err := RemoveSSD(ctx, opts, ssd, hdd, manifestName, installDir); err != nil {
+		t.Fatalf("RemoveSSD failed: %v", err)
+	}
+
+	wantSteps := []string{"verify-hdd-backup", "move-manifest", "delete-ssd"}
+	if len(steps) != len(wantSteps) {
+		t.Fatalf("RemoveSSD steps = %v, want %v", steps, wantSteps)
+	}
+	for i := range wantSteps {
+		if steps[i] != wantSteps[i] {
+			t.Errorf("step[%d] = %q, want %q", i, steps[i], wantSteps[i])
+		}
+	}
+
+	// SSD folder and manifest must be gone.
+	if _, err := os.Stat(filepath.Join(ssd, "steamapps", "common", installDir)); !os.IsNotExist(err) {
+		t.Errorf("SSD game folder should be deleted, got err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(ssd, "steamapps", manifestName)); !os.IsNotExist(err) {
+		t.Errorf("SSD manifest should be moved, got err=%v", err)
+	}
+	// HDD manifest must now exist.
+	if _, err := os.Stat(filepath.Join(hdd, "steamapps", manifestName)); err != nil {
+		t.Errorf("HDD manifest missing after RemoveSSD: %v", err)
+	}
+	// HDD save file must remain completely untouched, and ssd_only.bin must NOT exist on HDD.
+	gotSave, err := os.ReadFile(hddSavePath)
+	if err != nil {
+		t.Fatalf("ReadFile HDD save: %v", err)
+	}
+	if string(gotSave) != "original-hdd-save" {
+		t.Errorf("HDD save was modified: got %q, want %q", string(gotSave), "original-hdd-save")
+	}
+	if _, err := os.Stat(filepath.Join(hdd, "steamapps", "common", installDir, "ssd_only.bin")); !os.IsNotExist(err) {
+		t.Errorf("SSD-only file leaked to HDD during RemoveSSD")
+	}
+}
+
+func TestRemoveSSDCustom(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("mklink /J is Windows-only")
+	}
+	ctx := context.Background()
+	customDir := "CustomAction"
+
+	ssd := filepath.Join(t.TempDir(), "SSD")
+	hdd := filepath.Join(t.TempDir(), "HDD")
+	if err := os.MkdirAll(filepath.Join(ssd, customDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ssd, customDir, "game.exe"), []byte("ssd-modified"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(hdd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Refuses when HDD copy is missing
+	if err := RemoveSSDCustom(ctx, Options{}, ssd, hdd, customDir); err == nil {
+		t.Fatalf("expected RemoveSSDCustom to refuse when HDD backup is missing")
+	}
+
+	// Seed HDD master copy
+	if err := os.MkdirAll(filepath.Join(hdd, customDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hdd, customDir, "game.exe"), []byte("hdd-original"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RemoveSSDCustom(ctx, Options{}, ssd, hdd, customDir); err != nil {
+		t.Fatalf("RemoveSSDCustom failed: %v", err)
+	}
+
+	ssdPath := filepath.Join(ssd, customDir)
+	if !IsJunction(ssdPath) {
+		t.Errorf("expected %q to be a junction after RemoveSSDCustom", ssdPath)
+	}
+	got, err := os.ReadFile(filepath.Join(hdd, customDir, "game.exe"))
+	if err != nil {
+		t.Fatalf("read HDD copy: %v", err)
+	}
+	if string(got) != "hdd-original" {
+		t.Errorf("HDD file modified: got %q, want %q", string(got), "hdd-original")
+	}
+}

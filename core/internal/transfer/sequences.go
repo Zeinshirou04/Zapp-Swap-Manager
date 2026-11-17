@@ -390,6 +390,143 @@ func PromoteCustom(ctx context.Context, opts Options, hddLibRoot, ssdLibRoot, in
 	return nil
 }
 
+// RemoveSSD frees SSD cache space WITHOUT mirroring or modifying the HDD master copy:
+//  1. verify the HDD master copy already exists and is non-empty (refuse otherwise),
+//  2. move appmanifest_<appid>.acf from SSD steamapps to HDD steamapps,
+//  3. ONLY THEN delete the SSD game folder.
+//
+// HDD files are never written to or overwritten.
+func RemoveSSD(ctx context.Context, opts Options, ssdLibRoot, hddLibRoot, manifestName, installDir string) error {
+	_ = ctx
+	registerStep := func(step int, err error) error {
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("remove-ssd step %d: %w", step, err)
+	}
+	ssdDir := gameFolder(ssdLibRoot, installDir)
+	hddDir := gameFolder(hddLibRoot, installDir)
+
+	var totalBytes int64
+	// Step 1: verify HDD master copy exists and is non-empty; guard SSD target path.
+	if err := registerStep(1, execStep(opts, 1, "verify-hdd-backup", func() error {
+		if err := validateInstallDir(installDir); err != nil {
+			return err
+		}
+		if err := CheckDestination(ssdDir, ssdLibRoot, installDir); err != nil {
+			return err
+		}
+		if err := CheckDestination(hddDir, hddLibRoot, installDir); err != nil {
+			return err
+		}
+		if err := CheckSource(hddDir); err != nil {
+			return fmt.Errorf("cannot remove SSD copy without a verified HDD backup: %w", err)
+		}
+		if stats, err := MeasureTree(ssdDir); err == nil {
+			totalBytes = stats.Bytes
+		}
+		reportStageProgress(opts, totalBytes, 35.0)
+		slog.Info("verified existing HDD backup before SSD removal", "hdd", hddDir)
+		return nil
+	})); err != nil {
+		return err
+	}
+
+	// Step 2: relocate the Steam manifest from SSD to HDD (idempotent if already moved).
+	if err := registerStep(2, execStep(opts, 2, "move-manifest", func() error {
+		reportStageProgress(opts, totalBytes, 70.0)
+		ssdManifest := filepath.Join(steamappsFolder(ssdLibRoot), manifestName)
+		hddManifest := filepath.Join(steamappsFolder(hddLibRoot), manifestName)
+		if _, err := os.Stat(ssdManifest); os.IsNotExist(err) {
+			if _, herr := os.Stat(hddManifest); herr == nil {
+				return nil
+			}
+		}
+		slog.Info("moving steam manifest to HDD", "manifest", manifestName)
+		return MoveManifest(ssdManifest, hddManifest)
+	})); err != nil {
+		return err
+	}
+
+	// Step 3: delete the SSD copy, strictly after HDD verification and manifest move.
+	if err := registerStep(3, execStep(opts, 3, "delete-ssd", func() error {
+		reportStageProgress(opts, totalBytes, 95.0)
+		slog.Info("removing SSD cache folder without modifying HDD", "path", ssdDir)
+		return retryOverLocking(func() error { return os.RemoveAll(ssdDir) })
+	})); err != nil {
+		return err
+	}
+	reportStageProgress(opts, totalBytes, 100.0)
+	return nil
+}
+
+// RemoveSSDCustom frees SSD cache space for a non-Steam game WITHOUT modifying
+// the HDD master copy:
+//  1. verify the HDD master copy already exists and is non-empty (refuse otherwise),
+//  2. delete the SSD game folder,
+//  3. create an NTFS directory junction on SSD pointing to the HDD target.
+func RemoveSSDCustom(ctx context.Context, opts Options, ssdLibRoot, hddLibRoot, installDir string) error {
+	_ = ctx
+	registerStep := func(step int, err error) error {
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("remove-ssd custom step %d: %w", step, err)
+	}
+	ssdDir := gameFolder(ssdLibRoot, installDir)
+	hddDir := gameFolder(hddLibRoot, installDir)
+
+	var totalBytes int64
+	// Step 1: verify HDD master copy exists and is non-empty; guard SSD target path.
+	if err := registerStep(1, execStep(opts, 1, "verify-hdd-backup", func() error {
+		if err := validateInstallDir(installDir); err != nil {
+			return err
+		}
+		if err := CheckDestination(ssdDir, ssdLibRoot, installDir); err != nil {
+			return err
+		}
+		if err := CheckDestination(hddDir, hddLibRoot, installDir); err != nil {
+			return err
+		}
+		if err := CheckSource(hddDir); err != nil {
+			return fmt.Errorf("cannot remove SSD copy without a verified HDD backup: %w", err)
+		}
+		if stats, err := MeasureTree(ssdDir); err == nil {
+			totalBytes = stats.Bytes
+		}
+		reportStageProgress(opts, totalBytes, 35.0)
+		slog.Info("verified existing HDD backup before custom SSD removal", "hdd", hddDir)
+		return nil
+	})); err != nil {
+		return err
+	}
+
+	// Step 2: delete the SSD copy (skip if already a junction).
+	if err := registerStep(2, execStep(opts, 2, "delete-ssd", func() error {
+		reportStageProgress(opts, totalBytes, 70.0)
+		if IsJunction(ssdDir) {
+			return nil
+		}
+		slog.Info("removing custom SSD cache folder without modifying HDD", "path", ssdDir)
+		return retryOverLocking(func() error { return os.RemoveAll(ssdDir) })
+	})); err != nil {
+		return err
+	}
+
+	// Step 3: create Directory Junction on SSD pointing to HDD.
+	if err := registerStep(3, execStep(opts, 3, "create-junction", func() error {
+		reportStageProgress(opts, totalBytes, 95.0)
+		if IsJunction(ssdDir) {
+			return nil
+		}
+		return CreateJunction(ssdDir, hddDir)
+	})); err != nil {
+		return err
+	}
+	reportStageProgress(opts, totalBytes, 100.0)
+	return nil
+}
+
 // MoveManifest relocates appmanifest_<appid>.acf between two libraries'
 // steamapps folders. It refuses to overwrite an existing destination
 // (Steam treats the manifest as owning the game in exactly one library) and

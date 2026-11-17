@@ -56,9 +56,17 @@ export const DriveDetailView: React.FC<DriveDetailViewProps> = ({
 
   // Search filter for games inside this drive
   const [search, setSearch] = useState('');
-  const filteredGames = libGames.filter((g) =>
-    g.name.toLowerCase().includes(search.toLowerCase()) || String(g.app_id).includes(search)
-  );
+  const filteredGames = libGames
+    .filter(
+      (g) =>
+        g.name.toLowerCase().includes(search.toLowerCase()) || String(g.app_id).includes(search)
+    )
+    .sort((a, b) => {
+      const aPinned = a.is_pinned ? 1 : 0;
+      const bPinned = b.is_pinned ? 1 : 0;
+      if (aPinned !== bPinned) return bPinned - aPinned;
+      return a.name.localeCompare(b.name);
+    });
 
   const handleSavePath = async (e: React.FormEvent) => {
     e.preventDefault();

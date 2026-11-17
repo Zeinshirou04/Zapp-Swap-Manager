@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api, resolveBannerUrl, resolveCoverUrl } from '../api/client.ts';
 import { ArtworkEditorModal } from './ArtworkEditorModal.tsx';
 import { GameCapturesSection } from './GameCapturesSection.tsx';
@@ -27,6 +27,10 @@ import {
   CheckCircle2,
   X,
   Loader2,
+  Play,
+  Pin,
+  ChevronDown,
+  Trash2,
 } from 'lucide-react';
 
 export interface GameDetailViewProps {
@@ -37,6 +41,8 @@ export interface GameDetailViewProps {
   onAction: (game: Game, type: JobType) => void;
   actionLoading: boolean;
   onGameUpdated: (updated: Game) => void;
+  onLaunch?: (game: Game) => void;
+  onTogglePin?: (game: Game) => void;
 }
 
 export const GameDetailView: React.FC<GameDetailViewProps> = ({
@@ -47,6 +53,8 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
   onAction,
   actionLoading,
   onGameUpdated,
+  onLaunch,
+  onTogglePin,
 }) => {
   const [imgFailed, setImgFailed] = useState(false);
   const [steamFallbackIdx, setSteamFallbackIdx] = useState<number | null>(() => (game.cover_url ? null : 0));
@@ -69,6 +77,29 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Close storage actions dropdown on outside click or Escape
+  useEffect(() => {
+    if (!isActionsMenuOpen) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+        setIsActionsMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsActionsMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isActionsMenuOpen]);
 
   // Sync state whenever the selected game or its metadata updates
   useEffect(() => {
@@ -224,47 +255,56 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
       {/* Notion-Style Hero Banner with Acrylic Frosted Backdrop & Foreground Portrait Grid */}
       <div
+        data-testid="hero-banner-container"
         style={{
           position: 'relative',
-          overflow: 'hidden',
+          zIndex: 10,
           margin: '-24px -24px 0 -24px',
           padding: '20px 28px 32px 28px',
           borderBottom: '1px solid var(--border-color)',
-          backgroundColor: 'var(--bg-sunken)',
+          backgroundColor: 'var(--bg-main)',
         }}
       >
-        {/* Background Banner Image */}
-        {heroDisplayUrl && (
-          <img
-            data-testid="hero-banner-img"
-            src={heroDisplayUrl}
-            alt=""
-            aria-hidden="true"
-            onError={handleHeroImgError}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              objectPosition: 'center',
-              pointerEvents: 'none',
-            }}
-          />
-        )}
-
-        {/* Acrylic Frosted Scrim in front of Banner */}
+        {/* Background Banner Image & Acrylic Scrim */}
         <div
           style={{
             position: 'absolute',
             inset: 0,
-            backdropFilter: 'blur(20px) saturate(1.35)',
-            WebkitBackdropFilter: 'blur(20px) saturate(1.35)',
-            background:
-              'linear-gradient(180deg, color-mix(in srgb, var(--bg-main) 62%, transparent) 0%, color-mix(in srgb, var(--bg-main) 82%, transparent) 60%, var(--bg-main) 100%)',
+            overflow: 'hidden',
             pointerEvents: 'none',
+            contain: 'strict',
+            transform: 'translateZ(0)',
           }}
-        />
+        >
+          {heroDisplayUrl && (
+            <img
+              data-testid="hero-banner-img"
+              src={heroDisplayUrl}
+              alt=""
+              aria-hidden="true"
+              onError={handleHeroImgError}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                objectPosition: 'center',
+              }}
+            />
+          )}
+
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backdropFilter: 'blur(28px) saturate(1.4)',
+              WebkitBackdropFilter: 'blur(28px) saturate(1.4)',
+              background:
+                'linear-gradient(180deg, color-mix(in srgb, var(--bg-main) 65%, transparent) 0%, color-mix(in srgb, var(--bg-main) 85%, transparent) 55%, var(--bg-main) 100%)',
+            }}
+          />
+        </div>
 
         {/* Foreground Content over Acrylic Banner */}
         <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -290,6 +330,26 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
             </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => onTogglePin?.(game)}
+                className="btn-secondary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 14px',
+                  fontSize: '0.85rem',
+                  color: game.is_pinned ? 'var(--primary-text)' : undefined,
+                  borderColor: game.is_pinned ? 'var(--primary-border)' : undefined,
+                  backgroundColor: game.is_pinned ? 'var(--primary-subtle)' : undefined,
+                }}
+                title={game.is_pinned ? 'Unpin game' : 'Pin game to top'}
+              >
+                <Pin size={15} style={{ transform: game.is_pinned ? 'rotate(0deg)' : 'rotate(45deg)' }} />
+                {game.is_pinned ? 'Pinned' : 'Pin Game'}
+              </button>
+
               <button
                 type="button"
                 onClick={() => setIsArtworkOpen(true)}
@@ -400,7 +460,7 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
             </div>
 
             {/* Action Buttons */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '180px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '200px' }}>
               {activeJob ? (
                 <div
                   style={{
@@ -420,24 +480,170 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
                 </div>
               ) : isSwappable ? (
                 isOnSSD ? (
-                  <>
+                  <div ref={actionsMenuRef} style={{ position: 'relative', display: 'flex', gap: '8px' }}>
                     <button
-                      onClick={() => onAction(game, 'backup')}
+                      type="button"
+                      onClick={() => onLaunch?.(game)}
+                      disabled={actionLoading}
+                      className="btn-primary"
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 16px' }}
+                      title="Launch game directly"
+                    >
+                      <Play size={16} fill="currentColor" /> Play Game
+                    </button>
+
+                    <button
+                      type="button"
+                      data-testid="storage-actions-btn"
+                      aria-label="Storage actions"
+                      aria-haspopup="menu"
+                      aria-expanded={isActionsMenuOpen}
+                      onClick={() => setIsActionsMenuOpen((open) => !open)}
                       disabled={actionLoading}
                       className="btn-secondary"
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 16px' }}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '10px 12px',
+                      }}
+                      title="Backup, Evict, or Remove from SSD"
                     >
-                      <Database size={16} /> Backup to HDD
+                      <ChevronDown
+                        size={16}
+                        style={{
+                          transform: isActionsMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.15s ease',
+                        }}
+                      />
                     </button>
-                    <button
-                      onClick={() => onAction(game, 'evict')}
-                      disabled={actionLoading}
-                      className="btn-secondary"
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 16px', color: 'var(--danger)', borderColor: 'rgba(220, 38, 38, 0.3)' }}
-                    >
-                      <HardDrive size={16} /> Evict to HDD
-                    </button>
-                  </>
+
+                    {isActionsMenuOpen && (
+                      <div
+                        role="menu"
+                        data-testid="storage-actions-menu"
+                        aria-label="SSD storage actions"
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 8px)',
+                          right: 0,
+                          minWidth: '250px',
+                          backgroundColor: 'var(--bg-card)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-card)',
+                          boxShadow: '0 14px 32px rgba(0, 0, 0, 0.28)',
+                          padding: '6px',
+                          zIndex: 40,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setIsActionsMenuOpen(false);
+                            onAction(game, 'backup');
+                          }}
+                          disabled={actionLoading}
+                          style={{
+                            width: '100%',
+                            background: 'transparent',
+                            border: 'none',
+                            borderRadius: 'var(--radius)',
+                            padding: '9px 10px',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '10px',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            color: 'var(--text-main)',
+                          }}
+                        >
+                          <Database size={15} style={{ color: 'var(--success)', marginTop: '2px', flexShrink: 0 }} />
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Backup to HDD</span>
+                            <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)' }}>
+                              Sync SSD changes to HDD, keep on SSD
+                            </span>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setIsActionsMenuOpen(false);
+                            onAction(game, 'evict');
+                          }}
+                          disabled={actionLoading}
+                          style={{
+                            width: '100%',
+                            background: 'transparent',
+                            border: 'none',
+                            borderRadius: 'var(--radius)',
+                            padding: '9px 10px',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '10px',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            color: 'var(--text-main)',
+                          }}
+                        >
+                          <HardDrive size={15} style={{ color: 'var(--warning)', marginTop: '2px', flexShrink: 0 }} />
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Evict to HDD</span>
+                            <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)' }}>
+                              Sync to HDD, verify, and free SSD space
+                            </span>
+                          </div>
+                        </button>
+
+                        <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '4px 6px' }} />
+
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setIsActionsMenuOpen(false);
+                            onAction(game, 'remove');
+                          }}
+                          disabled={actionLoading || !game.has_hdd_backup}
+                          title={
+                            game.has_hdd_backup
+                              ? 'Remove from SSD without updating HDD copy'
+                              : 'Requires an existing verified HDD backup'
+                          }
+                          style={{
+                            width: '100%',
+                            background: 'transparent',
+                            border: 'none',
+                            borderRadius: 'var(--radius)',
+                            padding: '9px 10px',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '10px',
+                            textAlign: 'left',
+                            cursor: !game.has_hdd_backup ? 'not-allowed' : 'pointer',
+                            opacity: !game.has_hdd_backup ? 0.5 : 1,
+                            color: 'var(--danger)',
+                          }}
+                        >
+                          <Trash2 size={15} style={{ marginTop: '2px', flexShrink: 0 }} />
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Remove from SSD</span>
+                            <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)' }}>
+                              {game.has_hdd_backup
+                                ? 'Free SSD space without updating HDD copy'
+                                : 'Requires an existing HDD backup first'}
+                            </span>
+                          </div>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <button
                     onClick={() => onAction(game, 'promote')}

@@ -17,6 +17,7 @@ const (
 	TypePromote = "promote"
 	TypeEvict   = "evict"
 	TypeBackup  = "backup"
+	TypeRemove  = "remove"
 )
 
 // Job mirrors the `Job` schema in api/openapi.yaml.

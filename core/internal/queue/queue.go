@@ -88,7 +88,7 @@ func (q *Queue) wakeWorker() {
 // whitelisted library ID (docs/safety.md "API input": reject any path).
 func validate(req CreateJobRequest) error {
 	switch req.Type {
-	case TypePromote, TypeEvict, TypeBackup:
+	case TypePromote, TypeEvict, TypeBackup, TypeRemove:
 	default:
 		return fmt.Errorf("unknown job type %q", req.Type)
 	}
@@ -231,6 +231,18 @@ func (q *Queue) HasActiveJob(appID string) (bool, error) {
 	err := q.db.QueryRow(
 		`SELECT COUNT(1) FROM jobs WHERE app_id = ? AND status IN (?, ?)`,
 		appID, StatusQueued, StatusRunning,
+	).Scan(&count)
+	return count > 0, err
+}
+
+// HasQueuedManifestJobs reports whether any queued (pending) job will mutate
+// Steam manifests (promote, evict, or remove). Used by the service executor to
+// keep Steam closed across consecutive manifest-changing jobs in a batch.
+func (q *Queue) HasQueuedManifestJobs() (bool, error) {
+	var count int
+	err := q.db.QueryRow(
+		`SELECT COUNT(1) FROM jobs WHERE status = ? AND type IN (?, ?, ?)`,
+		StatusQueued, TypePromote, TypeEvict, TypeRemove,
 	).Scan(&count)
 	return count > 0, err
 }

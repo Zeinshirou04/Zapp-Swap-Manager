@@ -424,6 +424,34 @@ func (h handlers) createJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "raw_path_rejected", "filesystem paths are not accepted; build locations server-side from whitelisted library IDs")
 		return
 	}
+	// Safety pre-check for `remove` jobs: strictly require that the game is
+	// currently on SSD and already has a verified non-empty HDD backup.
+	if req.Type == queue.TypeRemove {
+		games, err := h.scanGames()
+		if err != nil && len(games) == 0 {
+			writeError(w, http.StatusInternalServerError, "scan_failed", err.Error())
+			return
+		}
+		var foundGame *steam.Game
+		for i := range games {
+			if games[i].Manifest.AppID == req.AppID {
+				foundGame = &games[i]
+				break
+			}
+		}
+		if foundGame == nil {
+			writeError(w, http.StatusNotFound, "not_found", fmt.Sprintf("game %s not found in any library", req.AppID))
+			return
+		}
+		if foundGame.State != steam.StateActiveSSD {
+			writeError(w, http.StatusBadRequest, "invalid_state", "only games currently on SSD can be removed from SSD")
+			return
+		}
+		if !foundGame.HasHDDBackup {
+			writeError(w, http.StatusBadRequest, "missing_hdd_backup", "cannot remove SSD copy without an existing verified backup on HDD")
+			return
+		}
+	}
 	job, err := h.cfg.Queue.Enqueue(req)
 	switch {
 	case errors.Is(err, queue.ErrConflict):

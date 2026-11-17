@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // driverName registers modernc.org/sqlite via driver.go (pure Go, CGO-free:
@@ -33,13 +34,72 @@ func Open(path string) (*sql.DB, error) {
 		db.Close()
 		return nil, fmt.Errorf("init queue schema: %w", err)
 	}
+	if err := migrateJobsTypeConstraint(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate queue schema: %w", err)
+	}
 	return db, nil
+}
+
+// migrateJobsTypeConstraint upgrades existing SQLite databases whose jobs table
+// CHECK constraint predates the 'remove' job type.
+func migrateJobsTypeConstraint(db *sql.DB) error {
+	var ddl string
+	if err := db.QueryRow(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'jobs'`).Scan(&ddl); err != nil {
+		return err
+	}
+	if strings.Contains(ddl, "'remove'") {
+		return nil
+	}
+
+	if _, err := db.Exec(`PRAGMA foreign_keys = OFF`); err != nil {
+		return err
+	}
+	defer func() {
+		_, _ = db.Exec(`PRAGMA foreign_keys = ON`)
+	}()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	stmts := []string{
+		`CREATE TABLE jobs_migrated (
+			id                TEXT    PRIMARY KEY,
+			type              TEXT    NOT NULL CHECK (type IN ('promote', 'evict', 'backup', 'remove')),
+			app_id            TEXT    NOT NULL,
+			target_library_id TEXT    NOT NULL,
+			status            TEXT    NOT NULL DEFAULT 'queued'
+			                  CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')),
+			progress_percent  REAL    NOT NULL DEFAULT 0,
+			bytes_transferred INTEGER NOT NULL DEFAULT 0,
+			total_bytes       INTEGER NOT NULL DEFAULT 0,
+			error             TEXT,
+			created_at        TEXT    NOT NULL,
+			started_at        TEXT,
+			completed_at      TEXT
+		)`,
+		`INSERT INTO jobs_migrated (id, type, app_id, target_library_id, status, progress_percent, bytes_transferred, total_bytes, error, created_at, started_at, completed_at)
+		 SELECT id, type, app_id, target_library_id, status, progress_percent, bytes_transferred, total_bytes, error, created_at, started_at, completed_at FROM jobs`,
+		`DROP TABLE jobs`,
+		`ALTER TABLE jobs_migrated RENAME TO jobs`,
+		`CREATE INDEX IF NOT EXISTS idx_jobs_status_order ON jobs(status, created_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_jobs_app_active ON jobs(app_id) WHERE status IN ('queued', 'running')`,
+	}
+	for _, s := range stmts {
+		if _, err := tx.Exec(s); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 const schema = `
 CREATE TABLE IF NOT EXISTS jobs (
 	id                TEXT    PRIMARY KEY,
-	type              TEXT    NOT NULL CHECK (type IN ('promote', 'evict', 'backup')),
+	type              TEXT    NOT NULL CHECK (type IN ('promote', 'evict', 'backup', 'remove')),
 	app_id            TEXT    NOT NULL,
 	target_library_id TEXT    NOT NULL,
 	status            TEXT    NOT NULL DEFAULT 'queued'

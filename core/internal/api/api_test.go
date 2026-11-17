@@ -1172,3 +1172,36 @@ func TestGamePinAndLaunchEndpoints(t *testing.T) {
 	}
 }
 
+func TestRemoveSSDJobEndpoint(t *testing.T) {
+	ts, cfg := newTestAPI(t, nil)
+
+	// 1. Without an HDD backup, POST /jobs type=remove MUST be rejected with 400.
+	code, errResp := doJSON(t, ts, "POST", "/jobs", map[string]any{
+		"type":              "remove",
+		"app_id":            "105600",
+		"target_library_id": "hdd0",
+	}, true)
+	if code != http.StatusBadRequest || errResp["code"] != "missing_hdd_backup" {
+		t.Fatalf("remove without HDD backup: code=%d body=%v, want 400 missing_hdd_backup", code, errResp)
+	}
+
+	// 2. Seed a non-empty HDD backup folder (no manifest on HDD, matching real backup state).
+	hddDir := filepath.Join(cfg.Libraries[1].Path, "steamapps", "common", "Terraria")
+	if err := os.MkdirAll(hddDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hddDir, "a.bin"), []byte("hdd-copy"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. Now POST /jobs type=remove must be accepted (202).
+	code, job := doJSON(t, ts, "POST", "/jobs", map[string]any{
+		"type":              "remove",
+		"app_id":            "105600",
+		"target_library_id": "hdd0",
+	}, true)
+	if code != http.StatusAccepted || job["type"] != "remove" {
+		t.Fatalf("remove with HDD backup: code=%d body=%v, want 202 type=remove", code, job)
+	}
+}
+

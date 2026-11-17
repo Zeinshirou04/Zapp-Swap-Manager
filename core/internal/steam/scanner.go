@@ -53,7 +53,9 @@ type customCandidate struct {
 func ScanLibraries(libs []Library) ([]Game, error) {
 	var games []Game
 	var errs []error
-	seen := map[string]string{} // appid -> library ID; a manifest lives in one library at a time
+	seen := map[string]string{}     // appid -> library ID; a manifest lives in one library at a time
+	seenIdx := map[string]int{}     // appid -> index in games slice
+	seenHasFiles := map[string]bool{} // appid -> whether the chosen library's game folder has files
 	claimedDirs := map[string]bool{}
 
 	for i := range libs {
@@ -66,6 +68,8 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 			errs = append(errs, err)
 			continue
 		}
+		commonDir := filepath.Join(lib.Path, "steamapps", "common")
+		hasCommonDir := dirExists(commonDir)
 		matches, err := filepath.Glob(filepath.Join(lib.Path, "steamapps", manifestGlob))
 		if err != nil {
 			errs = append(errs, fmt.Errorf("scan library %q: %w", lib.ID, err))
@@ -89,20 +93,26 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 					continue
 				}
 			}
+
+			actualDir := filepath.Join(commonDir, m.InstallDir)
+			actualHasFiles := m.InstallDir != "" && dirHasFiles(actualDir)
+
+			// If this library has a steamapps/common directory and the manifest
+			// claims the game is fully installed (StateFlags == 4), but the
+			// game folder does not exist on disk at all, treat it as a stale/ghost
+			// manifest (e.g. left behind after manual deletion or Steam uninstall).
+			if hasCommonDir && m.InstallDir != "" && m.FullyInstalled() && !dirExists(actualDir) {
+				continue
+			}
+
 			if m.InstallDir != "" {
 				claimedDirs[strings.ToLower(m.InstallDir)] = true
 			}
-			if first := seen[m.AppID]; first != "" {
-				errs = append(errs, fmt.Errorf("game %s has appmanifest in both %q and %q; expected in one library only", m.AppID, first, lib.ID))
-				continue
-			}
-			seen[m.AppID] = lib.ID
+
 			state := StateStorageHDD
 			if lib.Type == TypeSSDCache {
 				state = StateActiveSSD
 			}
-
-			actualDir := filepath.Join(lib.Path, "steamapps", "common", m.InstallDir)
 
 			var coverURL string
 			var bannerURL string
@@ -133,16 +143,16 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 				m.SizeOnDisk = dirSize(actualDir)
 			}
 
-			// Check if SSD game has an existing backup in an HDD master library
+			// Check if SSD game has an existing non-empty backup in an HDD master library
 			hasHDDBackup := false
 			if state == StateActiveSSD {
 				for _, other := range libs {
 					if other.Type == TypeHDDMaster {
 						backupDir := filepath.Join(other.Path, "steamapps", "common", m.InstallDir)
-						if !dirExists(backupDir) {
+						if !dirHasFiles(backupDir) {
 							backupDir = filepath.Join(other.Path, m.InstallDir)
 						}
-						if dirExists(backupDir) {
+						if dirHasFiles(backupDir) {
 							hasHDDBackup = true
 							break
 						}
@@ -158,7 +168,7 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 				lastPlayed = &t
 			}
 
-			games = append(games, Game{
+			gameEntry := Game{
 				Manifest:     m,
 				State:        state,
 				LibraryID:    lib.ID,
@@ -170,7 +180,23 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 				IsNativeHDD:  isNativeHDD,
 				Tags:         tags,
 				LastPlayed:   lastPlayed,
-			})
+			}
+
+			if first := seen[m.AppID]; first != "" {
+				errs = append(errs, fmt.Errorf("game %s has appmanifest in both %q and %q; expected in one library only", m.AppID, first, lib.ID))
+				// If the earlier entry had no files on disk but this library does,
+				// prefer the library that actually holds the game files.
+				if !seenHasFiles[m.AppID] && actualHasFiles {
+					games[seenIdx[m.AppID]] = gameEntry
+					seen[m.AppID] = lib.ID
+					seenHasFiles[m.AppID] = true
+				}
+				continue
+			}
+			seen[m.AppID] = lib.ID
+			seenIdx[m.AppID] = len(games)
+			seenHasFiles[m.AppID] = actualHasFiles
+			games = append(games, gameEntry)
 		}
 	}
 
@@ -298,16 +324,16 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 			chosen.game.Manifest.SizeOnDisk = realSize
 		}
 
-		// Check if HDD backup exists
+		// Check if HDD backup exists (must contain actual files, not an empty leftover dir)
 		hasHDDBackup := false
 		if chosen.game.State == StateActiveSSD {
 			for _, other := range libs {
 				if other.Type == TypeHDDMaster {
 					hddPath := filepath.Join(other.Path, "steamapps", "common", chosen.game.Manifest.InstallDir)
-					if !dirExists(hddPath) {
+					if !dirHasFiles(hddPath) {
 						hddPath = filepath.Join(other.Path, chosen.game.Manifest.InstallDir)
 					}
-					if dirExists(hddPath) {
+					if dirHasFiles(hddPath) {
 						hasHDDBackup = true
 						break
 					}
@@ -356,6 +382,14 @@ var (
 	sizeCacheMu sync.RWMutex
 	sizeCache   = make(map[string]sizeCacheEntry)
 )
+
+// ClearSizeCache invalidates all cached directory size measurements so
+// subsequent library scans reflect fresh filesystem state immediately.
+func ClearSizeCache() {
+	sizeCacheMu.Lock()
+	sizeCache = make(map[string]sizeCacheEntry)
+	sizeCacheMu.Unlock()
+}
 
 func dirSize(path string) int64 {
 	sizeCacheMu.RLock()
@@ -566,7 +600,7 @@ func findCustomGameDirsInLib(baseDir string, claimedDirs map[string]bool, isStea
 						break
 					}
 					subPath := filepath.Join(lvl1Path, sub.Name())
-					if hasGameFiles(subPath) {
+					if hasExecutableFile(subPath, 3) {
 						hasSubGame = true
 						claimedRel[subLower] = true
 						results = append(results, customGameDirInfo{
@@ -578,8 +612,9 @@ func findCustomGameDirsInLib(baseDir string, claimedDirs map[string]bool, isStea
 				}
 			}
 
-			if !hasSubGame {
-				// Level 1 directory itself is the game!
+			if !hasSubGame && hasExecutableFile(lvl1Path, 3) {
+				// Level 1 directory itself is a real unmanifested game (contains executable files).
+				// Empty or leftover residue folders (e.g., after Steam uninstall) are skipped.
 				claimedRel[lvl1Lower] = true
 				results = append(results, customGameDirInfo{
 					relPath:    lvl1Rel,
@@ -593,15 +628,57 @@ func findCustomGameDirsInLib(baseDir string, claimedDirs map[string]bool, isStea
 	return results
 }
 
-func hasGameFiles(dir string) bool {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
+var errFoundFile = errors.New("found")
+
+// dirHasFiles reports whether path is an existing directory containing at least
+// one regular file anywhere inside it.
+func dirHasFiles(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() {
 		return false
 	}
-	for _, e := range entries {
-		if !e.IsDir() {
-			return true
+	err = filepath.WalkDir(path, func(_ string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
 		}
+		if !d.IsDir() {
+			return errFoundFile
+		}
+		return nil
+	})
+	return errors.Is(err, errFoundFile)
+}
+
+// hasExecutableFile reports whether dir contains at least one executable file
+// within maxDepth directory levels, filtering out empty folders and leftover
+// config/log directories from uninstalled Steam games.
+func hasExecutableFile(dir string, maxDepth int) bool {
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return false
 	}
-	return false
+	err = filepath.WalkDir(dir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		rel, relErr := filepath.Rel(dir, path)
+		if relErr == nil && rel != "." {
+			depth := strings.Count(rel, string(filepath.Separator))
+			if d.IsDir() {
+				if depth >= maxDepth {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+		}
+		if !d.IsDir() {
+			ext := strings.ToLower(filepath.Ext(d.Name()))
+			switch ext {
+			case ".exe", ".bat", ".cmd", ".msi", ".jar", ".appimage", ".sh", ".bin":
+				return errFoundFile
+			}
+		}
+		return nil
+	})
+	return errors.Is(err, errFoundFile)
 }

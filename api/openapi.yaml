@@ -708,10 +708,10 @@ paths:
     post:
       summary: Enqueue a new job
       description: >
-        Queues a promote, evict, or backup for one Steam app. Accepts only an
+        Queues a promote, evict, backup, or remove for one game. Accepts only an
         app ID and a whitelisted target library ID; the core builds all
         filesystem paths and commands server-side. Raw paths are rejected with
-        400. The single queue worker executes jobs serially; a promote/evict
+        400. The single queue worker executes jobs serially; a promote/evict/remove
         waits behind any running or queued backup of the same game.
       operationId: createJob
       tags: [Jobs]
@@ -1126,11 +1126,12 @@ components:
 
     JobType:
       type: string
-      enum: [promote, evict, backup]
+      enum: [promote, evict, backup, remove]
       description: >-
         promote: HDD -> SSD copy, verify, move the manifest to the SSD, keep the HDD copy.
         evict: final SSD -> HDD mirror, verify, move the manifest to the HDD, delete the SSD copy (SSD deletion happens only after the HDD copy is verified).
         backup: SSD -> HDD mirror sync.
+        remove: verify an existing non-empty HDD copy exists without modifying HDD files, move the manifest to the HDD (or create junction for custom games), and delete the SSD copy.
 
     JobStatus:
       type: string

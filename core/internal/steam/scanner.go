@@ -37,6 +37,7 @@ type Game struct {
 	IsNativeHDD  bool
 	Tags         []string
 	LastPlayed   *time.Time
+	IsPinned     bool
 }
 
 type customCandidate struct {
@@ -250,6 +251,7 @@ func ScanLibraries(libs []Library) ([]Game, error) {
 					IsNativeHDD:  isNativeHDD,
 					Tags:         tags,
 					LastPlayed:   lastPlayed,
+					IsPinned:     zm != nil && zm.IsPinned,
 				},
 				isJunction: isJunc,
 				libType:    lib.Type,

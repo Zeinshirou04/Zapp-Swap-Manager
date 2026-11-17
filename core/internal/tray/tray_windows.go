@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"syscall"
@@ -73,10 +74,11 @@ const (
 	tpmRightButton = 0x0002
 	idiApplication = 32512
 
-	cmdDashboard = 1001
-	cmdStatus    = 1002
-	cmdLogs      = 1003
-	cmdExit      = 1004
+	cmdDashboard      = 1001
+	cmdStatus         = 1002
+	cmdLogs           = 1003
+	cmdExit           = 1004
+	cmdPinnedGameBase = 2000
 )
 
 type point struct {
@@ -131,6 +133,7 @@ type WindowsRunner struct {
 	mu      sync.Mutex
 	hwnd    uintptr
 	hMenu   uintptr
+	pinned  []string
 }
 
 // NewRunner creates a platform-appropriate Runner.
@@ -161,6 +164,7 @@ func (r *WindowsRunner) Run(ctx context.Context, svc *service.Service) error {
 		switch msg {
 		case wmTrayNotify:
 			if lParam == wmRButtonUp || lParam == wmLButtonUp {
+				r.rebuildMenu(svc)
 				var pt point
 				procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
 				procSetForegroundWindow.Call(hwnd)
@@ -169,29 +173,42 @@ func (r *WindowsRunner) Run(ctx context.Context, svc *service.Service) error {
 				return 0
 			}
 		case wmCommand:
-			switch wParam {
-			case cmdDashboard:
+			switch {
+			case wParam == cmdDashboard:
 				if r.actions.OnOpenDashboard != nil {
 					r.actions.OnOpenDashboard()
 				} else {
-					url := fmt.Sprintf("http://%s/health", svc.Config().BindAddr)
-					cmd := exec.Command("cmd", "/c", "start", url)
-					cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
-					_ = cmd.Start()
+					launchDesktopApp(svc.Config().BindAddr)
 				}
 				return 0
-			case cmdLogs:
+			case wParam == cmdLogs:
 				logDir := logger.LogDir()
 				_ = os.MkdirAll(logDir, 0755)
 				cmd := exec.Command("explorer", logDir)
 				cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
 				_ = cmd.Start()
 				return 0
-			case cmdExit:
+			case wParam == cmdExit:
 				if r.actions.OnExit != nil {
 					r.actions.OnExit()
 				}
 				procDestroyWindow.Call(hwnd)
+				return 0
+			case wParam >= cmdPinnedGameBase:
+				idx := int(wParam - cmdPinnedGameBase)
+				r.mu.Lock()
+				var appID string
+				if idx >= 0 && idx < len(r.pinned) {
+					appID = r.pinned[idx]
+				}
+				r.mu.Unlock()
+				if appID != "" {
+					go func() {
+						if _, err := svc.LaunchGame(appID); err != nil {
+							slog.Error("failed to launch game from tray", "app_id", appID, "err", err)
+						}
+					}()
+				}
 				return 0
 			}
 		case wmClose:
@@ -247,22 +264,16 @@ func (r *WindowsRunner) Run(ctx context.Context, svc *service.Service) error {
 	procShellNotifyIconW.Call(nimAdd, uintptr(unsafe.Pointer(&nid)))
 	defer procShellNotifyIconW.Call(nimDelete, uintptr(unsafe.Pointer(&nid)))
 
-	// Build context menu
-	hMenu, _, _ := procCreatePopupMenu.Call()
-	r.hMenu = hMenu
-	defer procDestroyMenu.Call(hMenu)
-
-	statusStr, _ := syscall.UTF16PtrFromString("Status: Running")
-	dashStr, _ := syscall.UTF16PtrFromString("Open Web Dashboard")
-	logsStr, _ := syscall.UTF16PtrFromString("Open Logs Folder")
-	exitStr, _ := syscall.UTF16PtrFromString("Exit Zapp Swap Manager")
-
-	procAppendMenuW.Call(hMenu, mfString|mfGrayed, cmdStatus, uintptr(unsafe.Pointer(statusStr)))
-	procAppendMenuW.Call(hMenu, mfSeparator, 0, 0)
-	procAppendMenuW.Call(hMenu, mfString, cmdDashboard, uintptr(unsafe.Pointer(dashStr)))
-	procAppendMenuW.Call(hMenu, mfString, cmdLogs, uintptr(unsafe.Pointer(logsStr)))
-	procAppendMenuW.Call(hMenu, mfSeparator, 0, 0)
-	procAppendMenuW.Call(hMenu, mfString, cmdExit, uintptr(unsafe.Pointer(exitStr)))
+	// Initial context menu creation
+	r.rebuildMenu(svc)
+	defer func() {
+		r.mu.Lock()
+		if r.hMenu != 0 {
+			procDestroyMenu.Call(r.hMenu)
+			r.hMenu = 0
+		}
+		r.mu.Unlock()
+	}()
 
 	// Listen for context cancellation to break out of message loop
 	go func() {
@@ -350,4 +361,82 @@ func loadTrayIcon(hInst uintptr) uintptr {
 	// 3. Fallback to generic system icon
 	sysIcon, _, _ := procLoadIconW.Call(0, uintptr(idiApplication))
 	return sysIcon
+}
+
+func (r *WindowsRunner) rebuildMenu(svc *service.Service) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.hMenu != 0 {
+		procDestroyMenu.Call(r.hMenu)
+		r.hMenu = 0
+	}
+
+	hMenu, _, _ := procCreatePopupMenu.Call()
+	r.hMenu = hMenu
+
+	// 1. Pinned Games Section at the very top
+	pinned := svc.GetPinnedGames()
+	r.pinned = nil
+	if len(pinned) > 0 {
+		for i, g := range pinned {
+			if i >= 50 {
+				break
+			}
+			r.pinned = append(r.pinned, g.Manifest.AppID)
+			label, _ := syscall.UTF16PtrFromString(fmt.Sprintf("%s", g.Manifest.Name))
+			procAppendMenuW.Call(hMenu, mfString, uintptr(cmdPinnedGameBase+i), uintptr(unsafe.Pointer(label)))
+		}
+	} else {
+		noPinned, _ := syscall.UTF16PtrFromString("(No Pinned Games)")
+		procAppendMenuW.Call(hMenu, mfString|mfGrayed, 0, uintptr(unsafe.Pointer(noPinned)))
+	}
+
+	procAppendMenuW.Call(hMenu, mfSeparator, 0, 0)
+
+	// 2. Application options
+	appStr, _ := syscall.UTF16PtrFromString("Open Zapp Manager")
+	logsStr, _ := syscall.UTF16PtrFromString("Open Logs Folder")
+	exitStr, _ := syscall.UTF16PtrFromString("Exit Zapp Swap Manager")
+
+	procAppendMenuW.Call(hMenu, mfString, cmdDashboard, uintptr(unsafe.Pointer(appStr)))
+	procAppendMenuW.Call(hMenu, mfString, cmdLogs, uintptr(unsafe.Pointer(logsStr)))
+	procAppendMenuW.Call(hMenu, mfSeparator, 0, 0)
+	procAppendMenuW.Call(hMenu, mfString, cmdExit, uintptr(unsafe.Pointer(exitStr)))
+}
+
+func launchDesktopApp(bindAddr string) {
+	var candidates []string
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Dir(exe)
+		candidates = append(candidates,
+			filepath.Join(dir, "zapp-desktop.exe"),
+			filepath.Join(dir, "Zapp Swap Manager.exe"),
+			filepath.Join(dir, "Zapp-Swap-Manager.exe"),
+			filepath.Join(dir, "..", "desktop", "src-tauri", "target", "release", "zapp-desktop.exe"),
+			filepath.Join(dir, "..", "desktop", "src-tauri", "target", "debug", "zapp-desktop.exe"),
+		)
+	}
+	if localApp := os.Getenv("LOCALAPPDATA"); localApp != "" {
+		candidates = append(candidates,
+			filepath.Join(localApp, "Programs", "Zapp Swap Manager", "zapp-desktop.exe"),
+			filepath.Join(localApp, "Programs", "Zapp Swap Manager", "Zapp Swap Manager.exe"),
+		)
+	}
+
+	for _, c := range candidates {
+		if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
+			cmd := exec.Command(c)
+			cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: false}
+			if err := cmd.Start(); err == nil {
+				return
+			}
+		}
+	}
+
+	// Fallback to web browser if desktop application binary not found
+	url := fmt.Sprintf("http://%s/health", bindAddr)
+	cmd := exec.Command("cmd", "/c", "start", url)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+	_ = cmd.Start()
 }

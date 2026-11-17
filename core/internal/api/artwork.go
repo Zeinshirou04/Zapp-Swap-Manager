@@ -27,6 +27,7 @@ const (
 type artworkOverride struct {
 	CoverURL  *string `json:"cover_url,omitempty"`
 	BannerURL *string `json:"banner_url,omitempty"`
+	Pinned    *bool   `json:"pinned,omitempty"`
 }
 
 // artworkStore manages cached uploaded artwork images and non-invasive per-game
@@ -256,7 +257,7 @@ func (s *artworkStore) ClearOverrideFields(appID string, clearGrid, clearBanner 
 		ov.BannerURL = nil
 	}
 	if ok {
-		if ov.CoverURL == nil && ov.BannerURL == nil {
+		if ov.CoverURL == nil && ov.BannerURL == nil && ov.Pinned == nil {
 			delete(m, appID)
 		} else {
 			m[appID] = ov
@@ -265,7 +266,7 @@ func (s *artworkStore) ClearOverrideFields(appID string, clearGrid, clearBanner 
 	}
 }
 
-// Apply overlays any stored artwork overrides onto scanned games in place.
+// Apply overlays any stored artwork and pin overrides onto scanned games in place.
 func (s *artworkStore) Apply(games []steam.Game) {
 	if s == nil {
 		return
@@ -288,7 +289,47 @@ func (s *artworkStore) Apply(games []steam.Game) {
 		if ov.BannerURL != nil {
 			games[i].BannerURL = *ov.BannerURL
 		}
+		if ov.Pinned != nil {
+			games[i].IsPinned = *ov.Pinned
+		}
 	}
+}
+
+// SetPinned updates the pinned status for appID in overrides.json.
+func (s *artworkStore) SetPinned(appID string, pinned bool) error {
+	if !isValidAppID(appID) {
+		return errors.New("invalid app_id")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	m, err := s.loadLocked()
+	if err != nil {
+		return err
+	}
+	ov := m[appID]
+	ov.Pinned = &pinned
+	m[appID] = ov
+	return s.saveLocked(m)
+}
+
+// IsPinned checks if appID is pinned in overrides.json.
+func (s *artworkStore) IsPinned(appID string) bool {
+	if s == nil || !isValidAppID(appID) {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	m, err := s.loadLocked()
+	if err != nil {
+		return false
+	}
+	ov, ok := m[appID]
+	if !ok || ov.Pinned == nil {
+		return false
+	}
+	return *ov.Pinned
 }
 
 // FindCachedFile locates the cached raster image for (appID, kind) if present.

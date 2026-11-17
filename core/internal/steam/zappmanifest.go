@@ -13,11 +13,13 @@ type ZappManifest struct {
 	ID          string     `json:"id"`
 	Name        string     `json:"name"`
 	InstallDir  string     `json:"install_dir"`
-	CoverURL    string     `json:"cover_url,omitempty"`
-	BannerURL   string     `json:"banner_url,omitempty"`
-	SwapEnabled bool       `json:"swap_enabled"`
-	IsNativeHDD bool       `json:"is_native_hdd"`
-	Tags        []string   `json:"tags,omitempty"`
+	CoverURL     string     `json:"cover_url,omitempty"`
+	BannerURL    string     `json:"banner_url,omitempty"`
+	LauncherPath string     `json:"launcher_path,omitempty"`
+	SwapEnabled  bool       `json:"swap_enabled"`
+	IsNativeHDD  bool       `json:"is_native_hdd"`
+	IsPinned     bool       `json:"is_pinned,omitempty"`
+	Tags         []string   `json:"tags,omitempty"`
 	LastPlayed  *time.Time `json:"last_played,omitempty"`
 }
 

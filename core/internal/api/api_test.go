@@ -1128,3 +1128,47 @@ func TestCapturesEndpointsAndByteRangeStreaming(t *testing.T) {
 	}
 }
 
+func TestGamePinAndLaunchEndpoints(t *testing.T) {
+	ts, _ := newTestAPI(t, nil)
+
+	// 1. Initial pin state should be false
+	code, game := doJSON(t, ts, "GET", "/games/105600", nil, true)
+	if code != http.StatusOK || game["is_pinned"] != false {
+		t.Fatalf("initial game detail: code=%d is_pinned=%v", code, game["is_pinned"])
+	}
+
+	// 2. Set pinned = true
+	code, pinned := doJSON(t, ts, "PUT", "/games/105600/pin", map[string]any{"pinned": true}, true)
+	if code != http.StatusOK || pinned["is_pinned"] != true {
+		t.Fatalf("set pin true: code=%d is_pinned=%v", code, pinned["is_pinned"])
+	}
+
+	// 3. Verify persisted in GET /games and GET /games/105600
+	code, game = doJSON(t, ts, "GET", "/games/105600", nil, true)
+	if code != http.StatusOK || game["is_pinned"] != true {
+		t.Fatalf("get pinned game: code=%d is_pinned=%v", code, game["is_pinned"])
+	}
+
+	// 4. Clear pin (pinned = false)
+	code, unpinned := doJSON(t, ts, "PUT", "/games/105600/pin", map[string]any{"pinned": false}, true)
+	if code != http.StatusOK || unpinned["is_pinned"] != false {
+		t.Fatalf("set pin false: code=%d is_pinned=%v", code, unpinned["is_pinned"])
+	}
+
+	// 5. Test launch endpoint
+	code, launch := doJSON(t, ts, "POST", "/games/105600/launch", nil, true)
+	if code != http.StatusOK || launch["launched"] != true || launch["app_id"].(float64) != 105600 {
+		t.Fatalf("launch game: code=%d body=%v", code, launch)
+	}
+
+	// 6. Test 404 for unknown app IDs
+	code, _ = doJSON(t, ts, "POST", "/games/999999/launch", nil, true)
+	if code != http.StatusNotFound {
+		t.Errorf("launch unknown game status = %d, want 404", code)
+	}
+	code, _ = doJSON(t, ts, "PUT", "/games/999999/pin", map[string]any{"pinned": true}, true)
+	if code != http.StatusNotFound {
+		t.Errorf("pin unknown game status = %d, want 404", code)
+	}
+}
+

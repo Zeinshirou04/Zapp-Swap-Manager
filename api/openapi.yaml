@@ -351,6 +351,74 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /games/{app_id}/launch:
+    post:
+      summary: Launch game directly
+      description: >
+        Launches the game directly via Steam protocol (steam://run/<app_id>) for Steam games
+        or executes the configured executable for custom games.
+      operationId: launchGame
+      tags: [Games]
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      responses:
+        '200':
+          description: Game launch initiated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaunchGameResponse'
+        '404':
+          description: Unknown game app ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Game is currently undergoing a file transfer job.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /games/{app_id}/pin:
+    put:
+      summary: Pin or unpin a game
+      description: >
+        Pins or unpins a game. Pinned games always sort to the top of the game list and
+        appear at the top of the Zapp system tray menu for quick launching.
+      operationId: setGamePin
+      tags: [Games]
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pinned]
+              properties:
+                pinned:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated game.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Game'
+        '404':
+          description: Unknown game app ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /games/{app_id}/captures:
     get:
       summary: List screenshots and video captures matched to a game
@@ -903,6 +971,9 @@ components:
           items:
             type: string
           description: Custom window titles, process names, or folder names used to match screenshots/clips.
+        is_pinned:
+          type: boolean
+          description: True if this game is pinned to the top of the manager and tray.
 
     Preferences:
       type: object
@@ -1137,6 +1208,21 @@ components:
                 format: date-time
               message:
                 type: string
+
+    LaunchGameResponse:
+      type: object
+      required: [launched, app_id, name]
+      properties:
+        launched:
+          type: boolean
+        app_id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        command:
+          type: string
+          description: Launch protocol or command invoked.
 
     ErrorResponse:
       type: object

@@ -365,3 +365,24 @@ func (s *Service) Server() *api.Server {
 func (s *Service) Config() *config.Config {
 	return s.cfg
 }
+
+// GetPinnedGames returns currently scanned games that are pinned.
+func (s *Service) GetPinnedGames() []steam.Game {
+	if s.server == nil {
+		return nil
+	}
+	games, err := s.server.GetPinnedGames()
+	if err != nil {
+		slog.Warn("failed to query pinned games", "err", err)
+		return nil
+	}
+	return games
+}
+
+// LaunchGame initiates launching the specified game.
+func (s *Service) LaunchGame(appID string) (string, error) {
+	if s.server == nil {
+		return "", errors.New("server not available")
+	}
+	return s.server.LaunchGame(appID)
+}

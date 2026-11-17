@@ -49,6 +49,7 @@ type Server struct {
 	cfg   Config
 	srv   *http.Server
 	start time.Time
+	h     *handlers
 }
 
 // New builds the server (not yet started). It validates the config: a queue
@@ -69,9 +70,9 @@ func New(cfg Config) (*Server, error) {
 	if cfg.Port == 0 {
 		cfg.Port = 8765
 	}
-	mux := newRouter(cfg)
+	mux, h := newRouter(cfg)
 	handler := corsMiddleware(cfg.Auth.RequireAuth(reqLog(mux)))
-	s := &Server{cfg: cfg, start: time.Now()}
+	s := &Server{cfg: cfg, start: time.Now(), h: h}
 	s.srv = &http.Server{
 		// safety: core binds to loopback only, never 0.0.0.0.
 		Addr:              net.JoinHostPort("127.0.0.1", fmt.Sprint(cfg.Port)),
@@ -101,12 +102,59 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
-func newRouter(cfg Config) *http.ServeMux {
+// GetPinnedGames returns currently scanned games that are pinned.
+func (s *Server) GetPinnedGames() ([]steam.Game, error) {
+	if s.h == nil {
+		return nil, nil
+	}
+	games, err := s.h.scanGames()
+	if err != nil && len(games) == 0 {
+		return nil, err
+	}
+	var pinned []steam.Game
+	for _, g := range games {
+		if g.IsPinned {
+			pinned = append(pinned, g)
+		}
+	}
+	return pinned, nil
+}
+
+// LaunchGame launches the game by appID string.
+func (s *Server) LaunchGame(appID string) (string, error) {
+	if s.h == nil {
+		return "", errors.New("server not initialized")
+	}
+	games, err := s.h.scanGames()
+	if err != nil && len(games) == 0 {
+		return "", err
+	}
+	var foundGame *steam.Game
+	for i := range games {
+		if games[i].Manifest.AppID == appID {
+			foundGame = &games[i]
+			break
+		}
+	}
+	if foundGame == nil {
+		return "", fmt.Errorf("game %s not found in any library", appID)
+	}
+	var lib steam.Library
+	for _, l := range s.h.libs() {
+		if l.ID == foundGame.LibraryID {
+			lib = l
+			break
+		}
+	}
+	return steam.LaunchGameProcess(*foundGame, lib)
+}
+
+func newRouter(cfg Config) (*http.ServeMux, *handlers) {
 	capMgr := cfg.CaptureManager
 	if capMgr == nil {
 		capMgr = captures.NewManager(cfg.CapturesDir)
 	}
-	h := handlers{
+	h := &handlers{
 		cfg:      cfg,
 		start:    time.Now(),
 		artwork:  newArtworkStore(cfg.ArtworkDir),
@@ -120,6 +168,8 @@ func newRouter(cfg Config) *http.ServeMux {
 	mux.HandleFunc("POST /libraries", h.registerLibraries)
 	mux.HandleFunc("GET /games", h.listGames)
 	mux.HandleFunc("GET /games/{app_id}", h.getGame)
+	mux.HandleFunc("POST /games/{app_id}/launch", h.launchGame)
+	mux.HandleFunc("PUT /games/{app_id}/pin", h.setGamePin)
 	mux.HandleFunc("GET /games/{app_id}/cover", h.getGameCover)
 	mux.HandleFunc("GET /games/{app_id}/banner", h.getGameBanner)
 	mux.HandleFunc("PUT /games/{app_id}/artwork", h.updateGameArtwork)
@@ -136,7 +186,7 @@ func newRouter(cfg Config) *http.ServeMux {
 	mux.HandleFunc("PUT /preferences", h.updatePreferences)
 	mux.HandleFunc("POST /custom-games", h.createCustomGame)
 	mux.HandleFunc("PUT /custom-games/{app_id}", h.updateCustomGame)
-	return mux
+	return mux, h
 }
 
 // reqLog emits one structured line per request.

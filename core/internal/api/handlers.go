@@ -221,6 +221,7 @@ type gameJSON struct {
 	IsNativeHDD      bool       `json:"is_native_hdd"`
 	Tags             []string   `json:"tags,omitempty"`
 	CaptureAliases   []string   `json:"capture_aliases,omitempty"`
+	IsPinned         bool       `json:"is_pinned"`
 }
 
 func toGameJSONWithAliases(g steam.Game, aliases []string) gameJSON {
@@ -243,6 +244,7 @@ func toGameJSONWithAliases(g steam.Game, aliases []string) gameJSON {
 		IsNativeHDD:      g.IsNativeHDD,
 		Tags:             g.Tags,
 		CaptureAliases:   aliases,
+		IsPinned:         g.IsPinned,
 	}
 }
 
@@ -299,6 +301,112 @@ func (h handlers) getGame(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeError(w, http.StatusNotFound, "not_found", "no game with app ID "+appID+" in any registered library")
+}
+
+// launchGame: POST /games/{app_id}/launch
+func (h handlers) launchGame(w http.ResponseWriter, r *http.Request) {
+	appID := r.PathValue("app_id")
+	appIDInt, err := strconv.ParseInt(appID, 10, 64)
+	if err != nil || appIDInt <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid_app_id", "app_id must be a positive integer")
+		return
+	}
+
+	// Safety: refuse launching if transfer job is active for this game
+	if h.cfg.Queue != nil {
+		if active, aErr := h.cfg.Queue.HasActiveJob(appID); aErr != nil {
+			writeError(w, http.StatusInternalServerError, "queue_check_failed", aErr.Error())
+			return
+		} else if active {
+			writeError(w, http.StatusConflict, "conflict", fmt.Sprintf("cannot launch game %s while a transfer job is queued or running", appID))
+			return
+		}
+	}
+
+	games, err := h.scanGames()
+	if err != nil && len(games) == 0 {
+		writeError(w, http.StatusInternalServerError, "scan_failed", err.Error())
+		return
+	}
+
+	var foundGame *steam.Game
+	for i := range games {
+		if games[i].Manifest.AppID == appID {
+			foundGame = &games[i]
+			break
+		}
+	}
+	if foundGame == nil {
+		writeError(w, http.StatusNotFound, "not_found", fmt.Sprintf("game %s not found in any library", appID))
+		return
+	}
+
+	var lib steam.Library
+	for _, l := range h.libs() {
+		if l.ID == foundGame.LibraryID {
+			lib = l
+			break
+		}
+	}
+
+	cmdStr, err := steam.LaunchGameProcess(*foundGame, lib)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "launch_failed", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"launched": true,
+		"app_id":   appIDInt,
+		"name":     foundGame.Manifest.Name,
+		"command":  cmdStr,
+	})
+}
+
+// setGamePin: PUT /games/{app_id}/pin
+type setGamePinRequest struct {
+	Pinned bool `json:"pinned"`
+}
+
+func (h handlers) setGamePin(w http.ResponseWriter, r *http.Request) {
+	appID := r.PathValue("app_id")
+	appIDInt, err := strconv.ParseInt(appID, 10, 64)
+	if err != nil || appIDInt <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid_app_id", "app_id must be a positive integer")
+		return
+	}
+
+	var req setGamePinRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", "invalid JSON payload")
+		return
+	}
+
+	games, err := h.scanGames()
+	if err != nil && len(games) == 0 {
+		writeError(w, http.StatusInternalServerError, "scan_failed", err.Error())
+		return
+	}
+
+	var foundGame *steam.Game
+	for i := range games {
+		if games[i].Manifest.AppID == appID {
+			foundGame = &games[i]
+			break
+		}
+	}
+	if foundGame == nil {
+		writeError(w, http.StatusNotFound, "not_found", fmt.Sprintf("game %s not found in any library", appID))
+		return
+	}
+
+	if err := h.artworkStore().SetPinned(appID, req.Pinned); err != nil {
+		writeError(w, http.StatusInternalServerError, "pin_failed", err.Error())
+		return
+	}
+
+	foundGame.IsPinned = req.Pinned
+	writeJSON(w, http.StatusOK, h.toGameResponse(*foundGame))
 }
 
 // createJob: POST /jobs. Strict safety guard: only type/app_id/

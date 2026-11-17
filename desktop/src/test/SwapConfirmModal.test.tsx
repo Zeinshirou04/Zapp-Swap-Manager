@@ -80,4 +80,48 @@ describe('SwapConfirmModal Component', () => {
     );
     expect(container).toBeEmptyDOMElement();
   });
+
+  it('handles Remove from SSD confirmation with and without HDD backup', () => {
+    const onConfirm = vi.fn();
+    const removeAction: SwapAction = {
+      type: 'remove',
+      appId: 105600,
+      title: 'Terraria',
+      sizeBytes: 512 * 1024 * 1024,
+      targetLibraryId: 'hdd1',
+      sourceLibraryId: 'ssd1',
+      hasHddBackup: true,
+    };
+
+    const { rerender } = render(
+      <SwapConfirmModal
+        action={removeAction}
+        libraries={mockLibraries}
+        loading={false}
+        error={null}
+        onConfirm={onConfirm}
+        onCancel={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/Remove from SSD/)).toBeInTheDocument();
+    expect(screen.getByText(/will NOT be overwritten or modified/i)).toBeInTheDocument();
+    const confirmBtn = screen.getByRole('button', { name: 'Confirm Removal' });
+    expect(confirmBtn).not.toBeDisabled();
+    fireEvent.click(confirmBtn);
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <SwapConfirmModal
+        action={{ ...removeAction, hasHddBackup: false }}
+        libraries={mockLibraries}
+        loading={false}
+        error={null}
+        onConfirm={onConfirm}
+        onCancel={vi.fn()}
+      />
+    );
+    expect(screen.getByText(/No verified HDD backup exists/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm Removal' })).toBeDisabled();
+  });
 });

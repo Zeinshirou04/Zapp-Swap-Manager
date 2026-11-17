@@ -525,10 +525,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               />
               <div>
                 <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                  Close Steam before moving or evicting games
+                  Close Steam before moving, evicting, or removing games
                 </div>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
-                  Sends a graceful exit command (<code>steam://exit</code>) to let Steam flush cloud saves and release locked manifest files before copying begins.
+                  Sends a graceful shutdown (<code>steam.exe -shutdown</code>) once per batch of queued transfers so Steam flushes cloud saves and releases locked manifests cleanly.
                 </div>
               </div>
             </label>
@@ -550,10 +550,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               />
               <div>
                 <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                  Relaunch Steam after transfer finishes
+                  Relaunch Steam after transfer batch finishes
                 </div>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
-                  Automatically reopens Steam (<code>steam://open/main</code>) once the Robocopy sync and manifest relocation complete successfully.
+                  Quietly reopens Steam in the system tray (<code>steam.exe -silent</code>) only after all queued manifest transfers complete.
                 </div>
               </div>
             </label>

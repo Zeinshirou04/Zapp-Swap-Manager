@@ -11,6 +11,7 @@ import {
   Folder,
   AlertCircle,
   CheckCircle2,
+  Trash2,
 } from 'lucide-react';
 
 interface GameDetailModalProps {
@@ -384,9 +385,22 @@ export const GameDetailModal: React.FC<GameDetailModalProps> = ({
                     type="button"
                     onClick={() => onAction(game, 'evict')}
                     disabled={actionLoading}
-                    className="btn-danger"
+                    className="btn-secondary"
                   >
                     <Database size={14} /> Evict to HDD
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onAction(game, 'remove')}
+                    disabled={actionLoading || !game.has_hdd_backup}
+                    className="btn-danger"
+                    title={
+                      game.has_hdd_backup
+                        ? 'Remove from SSD without modifying HDD backup'
+                        : 'Requires an existing verified HDD backup'
+                    }
+                  >
+                    <Trash2 size={14} /> Remove from SSD
                   </button>
                 </>
               )}

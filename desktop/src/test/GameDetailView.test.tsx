@@ -75,8 +75,18 @@ describe('GameDetailView Component', () => {
 
     expect(screen.getByRole('heading', { name: 'Arknights: Endfield', level: 1 })).toBeInTheDocument();
     expect(screen.getByText('Back to Games')).toBeInTheDocument();
-    expect(screen.getByText('Backup to HDD')).toBeInTheDocument();
-    expect(screen.getByText('Evict to HDD')).toBeInTheDocument();
+    expect(screen.getByText('Play Game')).toBeInTheDocument();
+
+    // Open the Storage Actions dropdown beside Play Game to reveal Backup, Evict, and Remove from SSD
+    fireEvent.click(screen.getByTestId('storage-actions-btn'));
+    expect(screen.getByRole('menuitem', { name: /Backup to HDD/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Evict to HDD/i })).toBeInTheDocument();
+    const removeMenuItem = screen.getByRole('menuitem', { name: /Remove from SSD/i });
+    expect(removeMenuItem).toBeInTheDocument();
+    expect(removeMenuItem).not.toBeDisabled();
+    fireEvent.click(removeMenuItem);
+    expect(onAction).toHaveBeenCalledWith(mockGame, 'remove');
+
     expect(screen.getByText('Game & Backup Status')).toBeInTheDocument();
     expect(screen.getByText('Fast SSD Cache')).toBeInTheDocument();
     expect(screen.getByText('Backup Verified')).toBeInTheDocument();

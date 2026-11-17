@@ -147,7 +147,7 @@ export interface CaptureSources {
   custom_folders: string[];
 }
 
-export type JobType = 'promote' | 'evict' | 'backup';
+export type JobType = 'promote' | 'evict' | 'backup' | 'remove';
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 
 export interface CreateJobRequest {

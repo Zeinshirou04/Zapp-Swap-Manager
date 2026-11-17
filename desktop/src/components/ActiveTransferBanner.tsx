@@ -1,6 +1,6 @@
 import React from 'react';
 import { Job, Game } from '../types/api.ts';
-import { Play, Ban, ExternalLink, HardDriveDownload, HardDriveUpload, RefreshCw } from 'lucide-react';
+import { Play, Ban, ExternalLink, HardDriveDownload, HardDriveUpload, RefreshCw, Trash2 } from 'lucide-react';
 import { formatBytes } from '../utils/format.ts';
 
 interface ActiveTransferBannerProps {
@@ -40,6 +40,11 @@ export const ActiveTransferBanner: React.FC<ActiveTransferBannerProps> = ({
       label: 'Backing up to HDD Master',
       icon: <RefreshCw size={14} />,
       color: 'var(--success)',
+    },
+    remove: {
+      label: 'Removing from Fast SSD',
+      icon: <Trash2 size={14} />,
+      color: 'var(--danger)',
     },
   };
 

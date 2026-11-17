@@ -27,6 +27,8 @@ import {
   CheckCircle2,
   X,
   Loader2,
+  Play,
+  Pin,
 } from 'lucide-react';
 
 export interface GameDetailViewProps {
@@ -37,6 +39,8 @@ export interface GameDetailViewProps {
   onAction: (game: Game, type: JobType) => void;
   actionLoading: boolean;
   onGameUpdated: (updated: Game) => void;
+  onLaunch?: (game: Game) => void;
+  onTogglePin?: (game: Game) => void;
 }
 
 export const GameDetailView: React.FC<GameDetailViewProps> = ({
@@ -47,6 +51,8 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
   onAction,
   actionLoading,
   onGameUpdated,
+  onLaunch,
+  onTogglePin,
 }) => {
   const [imgFailed, setImgFailed] = useState(false);
   const [steamFallbackIdx, setSteamFallbackIdx] = useState<number | null>(() => (game.cover_url ? null : 0));
@@ -224,47 +230,57 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
       {/* Notion-Style Hero Banner with Acrylic Frosted Backdrop & Foreground Portrait Grid */}
       <div
+        data-testid="hero-banner-container"
         style={{
           position: 'relative',
           overflow: 'hidden',
+          contain: 'paint',
+          transform: 'translateZ(0)',
           margin: '-24px -24px 0 -24px',
           padding: '20px 28px 32px 28px',
           borderBottom: '1px solid var(--border-color)',
-          backgroundColor: 'var(--bg-sunken)',
+          backgroundColor: 'var(--bg-main)',
         }}
       >
-        {/* Background Banner Image */}
-        {heroDisplayUrl && (
-          <img
-            data-testid="hero-banner-img"
-            src={heroDisplayUrl}
-            alt=""
-            aria-hidden="true"
-            onError={handleHeroImgError}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              objectPosition: 'center',
-              pointerEvents: 'none',
-            }}
-          />
-        )}
-
-        {/* Acrylic Frosted Scrim in front of Banner */}
+        {/* Background Banner Image & Acrylic Scrim */}
         <div
           style={{
             position: 'absolute',
             inset: 0,
-            backdropFilter: 'blur(20px) saturate(1.35)',
-            WebkitBackdropFilter: 'blur(20px) saturate(1.35)',
-            background:
-              'linear-gradient(180deg, color-mix(in srgb, var(--bg-main) 62%, transparent) 0%, color-mix(in srgb, var(--bg-main) 82%, transparent) 60%, var(--bg-main) 100%)',
+            overflow: 'hidden',
             pointerEvents: 'none',
+            contain: 'strict',
           }}
-        />
+        >
+          {heroDisplayUrl && (
+            <img
+              data-testid="hero-banner-img"
+              src={heroDisplayUrl}
+              alt=""
+              aria-hidden="true"
+              onError={handleHeroImgError}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                objectPosition: 'center',
+              }}
+            />
+          )}
+
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backdropFilter: 'blur(28px) saturate(1.4)',
+              WebkitBackdropFilter: 'blur(28px) saturate(1.4)',
+              background:
+                'linear-gradient(180deg, color-mix(in srgb, var(--bg-main) 65%, transparent) 0%, color-mix(in srgb, var(--bg-main) 85%, transparent) 55%, var(--bg-main) 100%)',
+            }}
+          />
+        </div>
 
         {/* Foreground Content over Acrylic Banner */}
         <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -290,6 +306,26 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
             </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => onTogglePin?.(game)}
+                className="btn-secondary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 14px',
+                  fontSize: '0.85rem',
+                  color: game.is_pinned ? 'var(--primary-text)' : undefined,
+                  borderColor: game.is_pinned ? 'var(--primary-border)' : undefined,
+                  backgroundColor: game.is_pinned ? 'var(--primary-subtle)' : undefined,
+                }}
+                title={game.is_pinned ? 'Unpin game' : 'Pin game to top'}
+              >
+                <Pin size={15} style={{ transform: game.is_pinned ? 'rotate(0deg)' : 'rotate(45deg)' }} />
+                {game.is_pinned ? 'Pinned' : 'Pin Game'}
+              </button>
+
               <button
                 type="button"
                 onClick={() => setIsArtworkOpen(true)}
@@ -421,6 +457,15 @@ export const GameDetailView: React.FC<GameDetailViewProps> = ({
               ) : isSwappable ? (
                 isOnSSD ? (
                   <>
+                    <button
+                      onClick={() => onLaunch?.(game)}
+                      disabled={actionLoading}
+                      className="btn-primary"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 16px' }}
+                      title="Launch game directly"
+                    >
+                      <Play size={16} fill="currentColor" /> Play Game
+                    </button>
                     <button
                       onClick={() => onAction(game, 'backup')}
                       disabled={actionLoading}

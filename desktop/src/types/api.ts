@@ -48,6 +48,14 @@ export interface Game {
   is_native_hdd?: boolean;
   tags?: string[];
   capture_aliases?: string[];
+  is_pinned?: boolean;
+}
+
+export interface LaunchGameResponse {
+  launched: boolean;
+  app_id: number;
+  name: string;
+  command?: string;
 }
 
 export interface Preferences {

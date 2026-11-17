@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { GameList } from '../components/GameList.tsx';
 import { Game, Library } from '../types/api.ts';
 
@@ -87,22 +87,30 @@ describe('GameList Component', () => {
     expect(onActionMock).toHaveBeenCalledWith(mockGames[1], 'promote');
   });
 
-  it('triggers evict and backup actions for SSD game', () => {
+  it('triggers play and pin actions for SSD game', () => {
     const onActionMock = vi.fn();
+    const onLaunchMock = vi.fn();
+    const onTogglePinMock = vi.fn();
     render(
       <GameList
         games={mockGames}
         libraries={mockLibraries}
         onAction={onActionMock}
         actionLoading={false}
+        onLaunch={onLaunchMock}
+        onTogglePin={onTogglePinMock}
       />
     );
 
-    fireEvent.click(screen.getByText('Backup to HDD'));
-    expect(onActionMock).toHaveBeenCalledWith(mockGames[0], 'backup');
+    // Primary action for SSD game is now Play
+    fireEvent.click(screen.getByText('Play'));
+    expect(onLaunchMock).toHaveBeenCalledWith(mockGames[0]);
 
-    fireEvent.click(screen.getByText('Evict to HDD'));
-    expect(onActionMock).toHaveBeenCalledWith(mockGames[0], 'evict');
+    // Pin toggle on card
+    const terrariaCard = screen.getByText('Terraria').closest('[data-testid="game-card"]')!;
+    const pinBtn = within(terrariaCard as HTMLElement).getByTestId('game-pin-btn');
+    fireEvent.click(pinBtn);
+    expect(onTogglePinMock).toHaveBeenCalledWith(mockGames[0]);
   });
 
   it('toggles between grid and table view', () => {

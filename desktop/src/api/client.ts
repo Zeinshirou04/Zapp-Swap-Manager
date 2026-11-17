@@ -13,6 +13,7 @@ import {
   HealthResponse,
   Job,
   JobStatus,
+  LaunchGameResponse,
   Library,
   LibraryInput,
   Preferences,
@@ -171,6 +172,19 @@ class ApiClient {
 
   async getGame(appId: string | number): Promise<Game> {
     return this.request<Game>(`/games/${appId}`);
+  }
+
+  async launchGame(appId: string | number): Promise<LaunchGameResponse> {
+    return this.request<LaunchGameResponse>(`/games/${appId}/launch`, {
+      method: 'POST',
+    });
+  }
+
+  async setGamePin(appId: string | number, pinned: boolean): Promise<Game> {
+    return this.request<Game>(`/games/${appId}/pin`, {
+      method: 'PUT',
+      body: JSON.stringify({ pinned }),
+    });
   }
 
   async listJobs(status?: JobStatus): Promise<Job[]> {

@@ -401,9 +401,10 @@ describe('GameDetailView Component', () => {
     expect(screen.getByText('ShareX History Tags')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Next/i }));
-    const videoEl = dialog.querySelector('video');
-    expect(videoEl).not.toBeNull();
-    expect(videoEl?.hasAttribute('controls')).toBe(true);
+    const customPlayer = dialog.querySelector('[data-testid="custom-video-player"]');
+    expect(customPlayer).not.toBeNull();
+    expect(screen.getByLabelText('Skip forward 5 seconds')).toBeInTheDocument();
+    expect(screen.getByLabelText('Skip backward 5 seconds')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Close Capture Viewer' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

@@ -32,7 +32,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onCheckUpdates,
   checkingUpdates = false,
   onSaved,
-  appVersion = 'v0.3.3-beta.5',
+  appVersion = 'v0.3.3-beta.6',
   updateStatus = null,
   steamRunning = false,
   onThemeChange,

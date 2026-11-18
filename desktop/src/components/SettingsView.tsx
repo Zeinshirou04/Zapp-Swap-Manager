@@ -21,6 +21,7 @@ interface SettingsViewProps {
   checkingUpdates?: boolean;
   onSaved?: () => void;
   appVersion?: string;
+  updateStatus?: string | null;
   steamRunning?: boolean;
   onThemeChange?: (theme: 'system' | 'light' | 'dark') => void;
   onDirtyChange?: (dirty: boolean) => void;
@@ -32,6 +33,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   checkingUpdates = false,
   onSaved,
   appVersion = 'v0.3.3-beta.5',
+  updateStatus = null,
   steamRunning = false,
   onThemeChange,
   onDirtyChange,
@@ -1134,18 +1136,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
 
-            {onCheckUpdates && (
-              <button
-                type="button"
-                onClick={onCheckUpdates}
-                disabled={checkingUpdates}
-                className="btn-secondary"
-                style={{ fontSize: '0.85rem', padding: '8px 16px' }}
-              >
-                <Sparkles size={14} className={checkingUpdates ? 'spin' : ''} />
-                {checkingUpdates ? 'Checking Updates...' : 'Check for Updates'}
-              </button>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              {updateStatus && (
+                <div
+                  style={{
+                    fontSize: '0.82rem',
+                    color: updateStatus.includes('latest') ? 'var(--success)' : updateStatus.includes('Failed') || updateStatus.includes('failed') ? 'var(--danger)' : 'var(--text-main)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  {updateStatus.includes('latest') ? (
+                    <CheckCircle2 size={15} style={{ color: 'var(--success)' }} />
+                  ) : updateStatus.includes('Failed') || updateStatus.includes('failed') ? (
+                    <AlertCircle size={15} style={{ color: 'var(--danger)' }} />
+                  ) : null}
+                  <span>{updateStatus}</span>
+                </div>
+              )}
+
+              {onCheckUpdates && (
+                <button
+                  type="button"
+                  onClick={onCheckUpdates}
+                  disabled={checkingUpdates}
+                  className="btn-secondary"
+                  style={{ fontSize: '0.85rem', padding: '8px 16px' }}
+                >
+                  <Sparkles size={14} className={checkingUpdates ? 'spin' : ''} />
+                  {checkingUpdates ? 'Checking Updates...' : 'Check for Updates'}
+                </button>
+              )}
+            </div>
           </div>
         </section>
       )}

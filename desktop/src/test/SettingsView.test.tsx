@@ -194,4 +194,17 @@ describe('SettingsView Component', () => {
       );
     });
   });
+
+  it('displays update status message in App Updates section', () => {
+    render(
+      <SettingsView
+        appVersion="v0.3.3-beta.5"
+        updateStatus="You're running the latest version of Zapp Swap Manager!"
+        onCheckUpdates={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("You're running the latest version of Zapp Swap Manager!")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Check for Updates/i })).toBeInTheDocument();
+  });
 });

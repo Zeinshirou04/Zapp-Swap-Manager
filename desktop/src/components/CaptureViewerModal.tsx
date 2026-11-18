@@ -1,14 +1,16 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { CaptureItem } from '../types/api.ts';
 import { getCaptureFileUrl } from '../api/client.ts';
 import { formatBytes, formatExactTimestamp } from '../utils/format.ts';
 import { CustomImageViewer } from './CustomImageViewer.tsx';
 import { CustomVideoPlayer } from './CustomVideoPlayer.tsx';
+import { ZappIcon } from './ZappIcon.tsx';
 import {
   Check,
   ChevronLeft,
   ChevronRight,
   Copy,
+  Info,
   Loader2,
   X,
 } from 'lucide-react';
@@ -47,6 +49,7 @@ export const CaptureViewerModal: React.FC<CaptureViewerModalProps> = ({
   copyingId,
   copiedId,
 }) => {
+  const [showDetails, setShowDetails] = useState<boolean>(false);
   const safeIdx = Math.max(0, Math.min(currentIndex, Math.max(0, items.length - 1)));
   const current = open && items.length > 0 ? items[safeIdx] : null;
 
@@ -78,13 +81,13 @@ export const CaptureViewerModal: React.FC<CaptureViewerModalProps> = ({
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(10, 12, 16, 0.86)',
-        backdropFilter: 'blur(8px)',
+        backgroundColor: 'rgba(10, 12, 16, 0.88)',
+        backdropFilter: 'blur(10px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 70,
-        padding: '20px',
+        padding: '16px',
       }}
     >
       <div
@@ -93,74 +96,148 @@ export const CaptureViewerModal: React.FC<CaptureViewerModalProps> = ({
         aria-label={current.filename}
         className="card"
         style={{
-          width: '100%',
-          maxWidth: '980px',
-          maxHeight: '92vh',
+          width: 'fit-content',
+          maxWidth: 'min(94vw, 1100px)',
+          maxHeight: '94vh',
           display: 'flex',
           flexDirection: 'column',
-          gap: '14px',
-          padding: '18px',
+          gap: '10px',
+          padding: '14px 16px',
+          backgroundColor: 'var(--bg-card)',
+          borderRadius: 'var(--radius-card, 12px)',
+          boxShadow: '0 24px 48px rgba(0, 0, 0, 0.55)',
         }}
       >
-        {/* Top Metadata & Action Bar */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span
-                style={{
-                  fontSize: '0.72rem',
-                  fontWeight: 700,
-                  padding: '2px 8px',
-                  borderRadius: '999px',
-                  backgroundColor: 'var(--primary-subtle)',
-                  color: 'var(--primary)',
-                  border: '1px solid var(--primary-border)',
-                }}
-              >
-                {SOURCE_LABELS[current.source] || current.source}
-              </span>
-              <h2
-                style={{
-                  fontSize: '1rem',
-                  fontWeight: 700,
-                  margin: 0,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {current.filename}
-              </h2>
-            </div>
-            <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+        {/* Top Minimalist Header Bar: Title, Date, Size, Image Counter, and Actions */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '14px',
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flexWrap: 'wrap' }}>
+            <span
+              style={{
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                padding: '3px 8px',
+                borderRadius: '999px',
+                backgroundColor: 'var(--primary-subtle)',
+                color: 'var(--primary)',
+                border: '1px solid var(--primary-border)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                flexShrink: 0,
+              }}
+            >
+              <ZappIcon
+                name={current.source === 'sharex' ? 'sharex' : current.source === 'shadowplay' ? 'shadowplay' : 'custom-folder'}
+                size={13}
+              />
+              {SOURCE_LABELS[current.source] || current.source}
+            </span>
+
+            <h2
+              style={{
+                fontSize: '0.95rem',
+                fontWeight: 700,
+                margin: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: '360px',
+              }}
+            >
+              {current.filename}
+            </h2>
+
+            <div
+              style={{
+                fontSize: '0.75rem',
+                color: 'var(--text-muted)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                flexWrap: 'wrap',
+              }}
+            >
               <span>{formatExactTimestamp(current.captured_at)}</span>
-              <span>•</span>
+              <span style={{ opacity: 0.4 }}>|</span>
               <span>{formatBytes(current.size_bytes)}</span>
-              <span>•</span>
-              <span>{safeIdx + 1} / {items.length}</span>
+              <span style={{ opacity: 0.4 }}>|</span>
+              <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+                {safeIdx + 1} / {items.length}
+              </span>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+            {/* Previous & Next for Video (For images, navigation is inside the floating image controls) */}
+            {current.kind === 'video' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={safeIdx <= 0}
+                  onClick={() => onSelectIndex(safeIdx - 1)}
+                  aria-label="Previous video"
+                  style={{ fontSize: '0.75rem', padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: '2px' }}
+                >
+                  <ChevronLeft size={14} /> Prev
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={safeIdx >= items.length - 1}
+                  onClick={() => onSelectIndex(safeIdx + 1)}
+                  aria-label="Next video"
+                  style={{ fontSize: '0.75rem', padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: '2px' }}
+                >
+                  Next <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowDetails((prev) => !prev)}
+              aria-label={showDetails ? 'Hide capture details' : 'Show capture details'}
+              className={showDetails ? 'btn-primary' : 'btn-secondary'}
+              style={{
+                fontSize: '0.75rem',
+                padding: '5px 9px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <Info size={13} />
+              {showDetails ? 'Details' : 'Details'}
+            </button>
+
             {current.kind === 'image' && (
               <button
                 type="button"
                 className={isCopied ? 'btn-primary' : 'btn-secondary'}
                 onClick={() => onCopyImage(current)}
                 disabled={isCopying}
-                style={{ fontSize: '0.82rem', padding: '6px 12px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                style={{ fontSize: '0.78rem', padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
               >
                 {isCopying ? (
                   <>
-                    <Loader2 size={14} className="spin" /> Copying...
+                    <Loader2 size={13} className="spin" /> Copying...
                   </>
                 ) : isCopied ? (
                   <>
-                    <Check size={14} /> Copied Image
+                    <Check size={13} /> Copied Image
                   </>
                 ) : (
                   <>
-                    <Copy size={14} /> Copy Image
+                    <Copy size={13} /> Copy Image
                   </>
                 )}
               </button>
@@ -171,73 +248,67 @@ export const CaptureViewerModal: React.FC<CaptureViewerModalProps> = ({
               onClick={onClose}
               aria-label="Close Capture Viewer"
               className="btn-ghost"
-              style={{ padding: '6px' }}
+              style={{ padding: '5px' }}
             >
               <X size={18} />
             </button>
           </div>
         </div>
 
-        {/* Media Viewport */}
+        {/* Media Viewport (Clean, seamless container without black background or letterbox frame) */}
         <div
           style={{
-            flex: 1,
-            minHeight: '320px',
-            backgroundColor: '#090b0f',
-            borderRadius: 'var(--radius)',
-            border: '1px solid var(--border-color)',
+            position: 'relative',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            backgroundColor: 'transparent',
+            borderRadius: 'var(--radius)',
             overflow: 'hidden',
-            padding: '8px',
           }}
         >
           {current.kind === 'image' ? (
-            <CustomImageViewer src={mediaSrc} alt={current.filename} />
+            <CustomImageViewer
+              src={mediaSrc}
+              alt={current.filename}
+              onPrevious={() => onSelectIndex(safeIdx - 1)}
+              onNext={() => onSelectIndex(safeIdx + 1)}
+              hasPrevious={safeIdx > 0}
+              hasNext={safeIdx < items.length - 1}
+            />
           ) : (
             <CustomVideoPlayer key={current.id} src={mediaSrc} autoPlay />
           )}
         </div>
 
-        {/* Bottom Attribution & Prev/Next Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            <span>Matched via: <strong style={{ color: 'var(--text-main)' }}>{MATCH_LABELS[current.matched_by] || current.matched_by}</strong></span>
-            {current.window_title && (
-              <>
-                <span>•</span>
-                <span>Window: <code>{current.window_title}</code></span>
-              </>
-            )}
-            {current.process_name && (
-              <>
-                <span>•</span>
-                <span>Process: <code>{current.process_name}</code></span>
-              </>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={safeIdx <= 0}
-              onClick={() => onSelectIndex(safeIdx - 1)}
-              style={{ fontSize: '0.8rem', padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-            >
-              <ChevronLeft size={15} /> Previous
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={safeIdx >= items.length - 1}
-              onClick={() => onSelectIndex(safeIdx + 1)}
-              style={{ fontSize: '0.8rem', padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-            >
-              Next <ChevronRight size={15} />
-            </button>
-          </div>
+        {/* Separate Section for Window, Process, and Matching Details (Hidden by default, toggled via Details button) */}
+        <div
+          style={{
+            display: showDetails ? 'flex' : 'none',
+            alignItems: 'center',
+            gap: '12px',
+            flexWrap: 'wrap',
+            padding: '8px 12px',
+            backgroundColor: 'var(--bg-main)',
+            borderRadius: 'var(--radius)',
+            border: '1px solid var(--border-color)',
+            fontSize: '0.75rem',
+            color: 'var(--text-muted)',
+          }}
+        >
+          <span>
+            Matched via: <strong style={{ color: 'var(--text-main)' }}>{MATCH_LABELS[current.matched_by] || current.matched_by}</strong>
+          </span>
+          {current.window_title && (
+            <span>
+              • Window: <code>{current.window_title}</code>
+            </span>
+          )}
+          {current.process_name && (
+            <span>
+              • Process: <code>{current.process_name}</code>
+            </span>
+          )}
         </div>
       </div>
     </div>

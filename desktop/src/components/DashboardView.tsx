@@ -43,51 +43,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Drives Overview Section */}
+      {/* Top Hero Section: Active Games on SSD */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
           <div>
             <h1
               style={{
-                fontSize: '1.65rem',
+                fontSize: '1.45rem',
                 fontWeight: 800,
                 letterSpacing: '-0.02em',
                 color: 'var(--text-main)',
                 margin: 0,
               }}
             >
-              Drive Storage & Allocation
+              Active Games on SSD
             </h1>
-          </div>
-          <button
-            type="button"
-            onClick={() => onNavigate('drives')}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--primary-text, var(--primary))',
-              padding: '4px 0',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-            }}
-          >
-            Manage Drives <ArrowRight size={14} />
-          </button>
-        </div>
-        <DrivesOverview libraries={libraries} games={games} onSelectDrive={onSelectDrive} />
-      </div>
-
-      {/* Fast SSD Games Drawer Preview */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-          <div>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>Active Games on SSD</h3>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              {ssdGames.length} {ssdGames.length === 1 ? 'game' : 'games'}
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              {ssdGames.length} {ssdGames.length === 1 ? 'game' : 'games'} installed on fast storage
             </span>
           </div>
           <button
@@ -148,6 +120,44 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             ))}
           </div>
         )}
+      </div>
+
+      {/* Drives Overview Section (Compact & Simplified below Games) */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+          <div>
+            <h2
+              style={{
+                fontSize: '1.15rem',
+                fontWeight: 700,
+                letterSpacing: '-0.01em',
+                color: 'var(--text-main)',
+                margin: 0,
+              }}
+            >
+              Drive Storage & Allocation
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigate('drives')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--primary-text, var(--primary))',
+              padding: '4px 0',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              cursor: 'pointer',
+            }}
+          >
+            Manage Drives <ArrowRight size={14} />
+          </button>
+        </div>
+        <DrivesOverview libraries={libraries} games={games} onSelectDrive={onSelectDrive} />
       </div>
     </div>
   );

@@ -11,7 +11,10 @@ export type ZappIconName =
   | 'preferences'
   | 'appearance'
   | 'core-service'
-  | 'app-updates';
+  | 'app-updates'
+  | 'sharex'
+  | 'shadowplay'
+  | 'custom-folder';
 
 interface ZappIconProps extends React.SVGProps<SVGSVGElement> {
   name: ZappIconName;
@@ -115,6 +118,30 @@ export const ZappIcon: React.FC<ZappIconProps> = ({
         <svg {...commonProps}>
           <circle cx="12" cy="12" r="9" />
           <path d="M12 7.5v8M8.5 12.5 12 16l3.5-3.5" />
+        </svg>
+      );
+    case 'sharex':
+      return (
+        <svg {...commonProps}>
+          <path d="M4 8V4h4" />
+          <path d="M20 8V4h-4" />
+          <path d="M4 16v4h4" />
+          <path d="M20 16v4h-4" />
+          <circle cx="12" cy="12" r="3.5" />
+          <path d="M12 8.5v-2M12 17.5v-2M8.5 12h-2M17.5 12h-2" />
+        </svg>
+      );
+    case 'shadowplay':
+      return (
+        <svg {...commonProps}>
+          <rect x="2" y="4" width="20" height="16" rx="3" />
+          <polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case 'custom-folder':
+      return (
+        <svg {...commonProps}>
+          <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2z" />
         </svg>
       );
     default:

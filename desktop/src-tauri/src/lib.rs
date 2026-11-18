@@ -14,11 +14,11 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 #[cfg(windows)]
 const DETACHED_PROCESS: u32 = 0x0000_0008;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct CoreState {
     // PID of the core process we spawned (None if an external process owns it — that process
     // is left alone; restart is still a no-op guarantee: start_core_daemon runs if port free).
-    spawned_pid: Mutex<Option<u32>>,
+    spawned_pid: std::sync::Arc<Mutex<Option<u32>>>,
 }
 
 #[derive(Serialize)]
@@ -175,7 +175,16 @@ fn read_local_auth_token() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-fn relaunch_app(app: tauri::AppHandle) {
+fn relaunch_app(app: tauri::AppHandle, state: State<'_, CoreState>) {
+    stop_spawned_core(&state);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("taskkill")
+            .args(["/IM", "zapp-core.exe", "/F"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+    }
     app.restart();
 }
 
@@ -207,26 +216,28 @@ async fn install_update_now(
     use tauri::Emitter;
     use tauri_plugin_updater::UpdaterExt;
 
-    // 1. Cleanly stop core daemon so resources/zapp-core.exe is not locked when installer runs
-    stop_spawned_core(&state);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        let _ = std::process::Command::new("taskkill")
-            .args(["/IM", "zapp-core.exe", "/F"])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output();
-    }
+    // Do NOT stop core daemon prematurely before downloading begins.
+    // Core remains alive during package download, and is cleanly terminated in on_before_exit
+    // right before the NSIS installer executes to replace binaries.
+    let spawned_pid = state.spawned_pid.clone();
 
-    // 2. Build an updater instance overriding on_before_exit with a non-blocking hook.
+    // Build an updater instance overriding on_before_exit with a non-blocking hook.
     // This bypasses the known Tauri v2 WebView2 cleanup_before_exit deadlock (Issue #2558)
-    // where window.hide() blocks the main thread during IPC execution.
+    // and terminates the core process so resource files are unlocked.
     let updater = app
         .updater_builder()
-        .on_before_exit(|| {
+        .on_before_exit(move || {
             #[cfg(windows)]
             {
                 use std::os::windows::process::CommandExt;
+                if let Ok(mut lock) = spawned_pid.lock() {
+                    if let Some(pid) = lock.take() {
+                        let _ = std::process::Command::new("taskkill")
+                            .args(["/PID", &pid.to_string(), "/F"])
+                            .creation_flags(CREATE_NO_WINDOW)
+                            .output();
+                    }
+                }
                 let _ = std::process::Command::new("taskkill")
                     .args(["/IM", "zapp-core.exe", "/F"])
                     .creation_flags(0x0800_0000)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"strings"
 	"time"
 )
@@ -218,7 +219,16 @@ func (q *Queue) run(executor Executor) {
 func (q *Queue) execute(executor Executor, job Job) {
 	slog.Info("queue starting job", "job_id", job.ID, "type", job.Type, "app_id", job.AppID, "target", job.TargetLibraryID)
 	result, execErr := StatusSucceeded, error(nil)
-	execErr = executor(context.Background(), job, q.stepFn(job))
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				stack := string(debug.Stack())
+				slog.Error("queue executor panic recovered", "job_id", job.ID, "panic", r, "stack", stack)
+				execErr = fmt.Errorf("internal panic during transfer: %v", r)
+			}
+		}()
+		execErr = executor(context.Background(), job, q.stepFn(job))
+	}()
 	switch {
 	case execErr == nil:
 		// success

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/captures"
@@ -18,11 +19,84 @@ import (
 	"github.com/Zeinshirou04/Zapp-Swap-Manager/core/internal/steam"
 )
 
+type scanCall struct {
+	done  chan struct{}
+	games []steam.Game
+	err   error
+}
+
+// scanCoordinator deduplicates concurrent ScanLibraries calls (singleflight)
+// and retains the latest snapshot so non-blocking callers (e.g. Windows system
+// tray) and polls during active Robocopy transfers never trigger scan storms.
+type scanCoordinator struct {
+	mu          sync.Mutex
+	inflight    *scanCall
+	cachedGames []steam.Game
+	cachedErr   error
+	cachedAt    time.Time
+}
+
+func (sc *scanCoordinator) invalidate() {
+	sc.mu.Lock()
+	sc.cachedAt = time.Time{}
+	sc.mu.Unlock()
+}
+
+func (sc *scanCoordinator) cachedSnapshot() ([]steam.Game, bool) {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	if len(sc.cachedGames) == 0 {
+		return nil, false
+	}
+	out := make([]steam.Game, len(sc.cachedGames))
+	copy(out, sc.cachedGames)
+	return out, !sc.cachedAt.IsZero()
+}
+
+func (sc *scanCoordinator) scan(maxAge time.Duration, fn func() ([]steam.Game, error)) ([]steam.Game, error) {
+	sc.mu.Lock()
+	if maxAge > 0 && !sc.cachedAt.IsZero() && time.Since(sc.cachedAt) < maxAge {
+		out := make([]steam.Game, len(sc.cachedGames))
+		copy(out, sc.cachedGames)
+		err := sc.cachedErr
+		sc.mu.Unlock()
+		return out, err
+	}
+	if sc.inflight != nil {
+		call := sc.inflight
+		sc.mu.Unlock()
+		<-call.done
+		out := make([]steam.Game, len(call.games))
+		copy(out, call.games)
+		return out, call.err
+	}
+	call := &scanCall{done: make(chan struct{})}
+	sc.inflight = call
+	sc.mu.Unlock()
+
+	games, err := fn()
+
+	sc.mu.Lock()
+	call.games = games
+	call.err = err
+	sc.cachedGames = games
+	sc.cachedErr = err
+	sc.cachedAt = time.Now()
+	sc.inflight = nil
+	close(call.done)
+	sc.mu.Unlock()
+
+	out := make([]steam.Game, len(games))
+	copy(out, games)
+	return out, err
+}
+
 type handlers struct {
 	cfg      Config
 	start    time.Time
 	artwork  *artworkStore
 	captures *captures.Manager
+	scanner  *scanCoordinator
 }
 
 func (h handlers) artworkStore() *artworkStore {
@@ -252,10 +326,49 @@ func (h handlers) toGameResponse(g steam.Game) gameJSON {
 	return toGameJSONWithAliases(g, h.captureManager().GetAliases(g.Manifest.AppID))
 }
 
+func (h handlers) hasRunningTransfer() bool {
+	if h.cfg.Queue == nil {
+		return false
+	}
+	jobs, err := h.cfg.Queue.ListJobs(queue.StatusRunning)
+	return err == nil && len(jobs) > 0
+}
+
 func (h handlers) scanGames() ([]steam.Game, error) {
-	games, err := steam.ScanLibraries(h.libs())
-	h.artworkStore().Apply(games)
-	return games, err
+	doScan := func() ([]steam.Game, error) {
+		games, err := steam.ScanLibraries(h.libs())
+		h.artworkStore().Apply(games)
+		return games, err
+	}
+	if h.scanner == nil {
+		return doScan()
+	}
+	// While a Robocopy transfer is saturating disk I/O, serve the cached snapshot
+	// for up to 10s so background polls never starve the transfer or freeze the UI.
+	// When idle, always singleflight-deduplicate concurrent callers.
+	var maxAge time.Duration
+	if h.hasRunningTransfer() {
+		maxAge = 10 * time.Second
+	}
+	return h.scanner.scan(maxAge, doScan)
+}
+
+func (h handlers) scanGamesFresh() ([]steam.Game, error) {
+	doScan := func() ([]steam.Game, error) {
+		games, err := steam.ScanLibraries(h.libs())
+		h.artworkStore().Apply(games)
+		return games, err
+	}
+	if h.scanner == nil {
+		return doScan()
+	}
+	return h.scanner.scan(0, doScan)
+}
+
+func (h handlers) invalidateScanCache() {
+	if h.scanner != nil {
+		h.scanner.invalidate()
+	}
 }
 
 // listGames: GET /games?state=&library_id=
@@ -404,6 +517,7 @@ func (h handlers) setGamePin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "pin_failed", err.Error())
 		return
 	}
+	h.invalidateScanCache()
 
 	foundGame.IsPinned = req.Pinned
 	writeJSON(w, http.StatusOK, h.toGameResponse(*foundGame))
@@ -427,7 +541,7 @@ func (h handlers) createJob(w http.ResponseWriter, r *http.Request) {
 	// Safety pre-check for `remove` jobs: strictly require that the game is
 	// currently on SSD and already has a verified non-empty HDD backup.
 	if req.Type == queue.TypeRemove {
-		games, err := h.scanGames()
+		games, err := h.scanGamesFresh()
 		if err != nil && len(games) == 0 {
 			writeError(w, http.StatusInternalServerError, "scan_failed", err.Error())
 			return

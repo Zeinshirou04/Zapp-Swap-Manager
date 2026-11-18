@@ -483,3 +483,34 @@ func TestMigrateLegacyJobsSchemaAndRemoveJob(t *testing.T) {
 		return err == nil && !has
 	})
 }
+
+func TestExecutorPanicRecovery(t *testing.T) {
+	q, err := New(filepath.Join(t.TempDir(), "panic.db"), func(ctx context.Context, job Job, step StepFunc) error {
+		if job.AppID == "111" {
+			panic("simulated nil pointer crash")
+		}
+		return step(1, "ok", func() error { return nil })
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { q.Close() })
+
+	j1, err := q.Enqueue(CreateJobRequest{Type: TypePromote, AppID: "111", TargetLibraryID: "ssd0"})
+	if err != nil {
+		t.Fatalf("Enqueue j1: %v", err)
+	}
+	j2, err := q.Enqueue(CreateJobRequest{Type: TypeBackup, AppID: "222", TargetLibraryID: "hdd0"})
+	if err != nil {
+		t.Fatalf("Enqueue j2: %v", err)
+	}
+
+	waitFor(t, "j1 fails cleanly after panic", func() bool {
+		got, err := q.GetJob(j1.ID)
+		return err == nil && got.Status == StatusFailed
+	})
+	waitFor(t, "j2 still succeeds after j1 panic", func() bool {
+		got, err := q.GetJob(j2.ID)
+		return err == nil && got.Status == StatusSucceeded
+	})
+}

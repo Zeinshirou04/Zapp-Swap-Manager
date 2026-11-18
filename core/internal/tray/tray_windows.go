@@ -264,8 +264,11 @@ func (r *WindowsRunner) Run(ctx context.Context, svc *service.Service) error {
 	procShellNotifyIconW.Call(nimAdd, uintptr(unsafe.Pointer(&nid)))
 	defer procShellNotifyIconW.Call(nimDelete, uintptr(unsafe.Pointer(&nid)))
 
-	// Initial context menu creation
+	// Initial context menu creation (non-blocking — uses cache and warms scan in background)
 	r.rebuildMenu(svc)
+	go func() {
+		_ = svc.GetPinnedGames()
+	}()
 	defer func() {
 		r.mu.Lock()
 		if r.hMenu != 0 {
@@ -375,8 +378,13 @@ func (r *WindowsRunner) rebuildMenu(svc *service.Service) {
 	hMenu, _, _ := procCreatePopupMenu.Call()
 	r.hMenu = hMenu
 
-	// 1. Pinned Games Section at the very top
-	pinned := svc.GetPinnedGames()
+	// 1. Pinned Games Section at the very top (never block Win32 UI thread on disk I/O)
+	pinned, hasCache := svc.GetPinnedGamesCached()
+	if !hasCache {
+		go func() {
+			_ = svc.GetPinnedGames()
+		}()
+	}
 	r.pinned = nil
 	if len(pinned) > 0 {
 		for i, g := range pinned {
@@ -413,6 +421,9 @@ func launchDesktopApp(bindAddr string) {
 			filepath.Join(dir, "zapp-desktop.exe"),
 			filepath.Join(dir, "Zapp Swap Manager.exe"),
 			filepath.Join(dir, "Zapp-Swap-Manager.exe"),
+			filepath.Join(dir, "..", "zapp-desktop.exe"),
+			filepath.Join(dir, "..", "Zapp Swap Manager.exe"),
+			filepath.Join(dir, "..", "Zapp-Swap-Manager.exe"),
 			filepath.Join(dir, "..", "desktop", "src-tauri", "target", "release", "zapp-desktop.exe"),
 			filepath.Join(dir, "..", "desktop", "src-tauri", "target", "debug", "zapp-desktop.exe"),
 		)

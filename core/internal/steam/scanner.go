@@ -391,6 +391,19 @@ func ClearSizeCache() {
 	sizeCacheMu.Unlock()
 }
 
+// InvalidateSizeCache removes specific directory paths from the size cache
+// without forcing a full re-walk of unrelated game directories on HDD.
+func InvalidateSizeCache(paths ...string) {
+	sizeCacheMu.Lock()
+	for _, p := range paths {
+		if p != "" {
+			delete(sizeCache, p)
+			delete(sizeCache, filepath.Clean(p))
+		}
+	}
+	sizeCacheMu.Unlock()
+}
+
 func dirSize(path string) int64 {
 	sizeCacheMu.RLock()
 	if entry, ok := sizeCache[path]; ok && time.Now().Before(entry.expires) {
@@ -400,8 +413,11 @@ func dirSize(path string) int64 {
 	sizeCacheMu.RUnlock()
 
 	var total int64
-	_ = filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
-		if err == nil && info != nil && !info.IsDir() {
+	_ = filepath.WalkDir(path, func(_ string, d os.DirEntry, err error) error {
+		if err != nil || d == nil || d.IsDir() {
+			return nil
+		}
+		if info, ierr := d.Info(); ierr == nil && info != nil {
 			total += info.Size()
 		}
 		return nil
@@ -452,6 +468,22 @@ type customGameDirInfo struct {
 	zm         *ZappManifest
 }
 
+// isGameInternalSubdir skips massive engine/asset/data subtrees when searching
+// nested directories for zappmanifest.json or directory junctions.
+func isGameInternalSubdir(name string) bool {
+	switch strings.ToLower(name) {
+	case "content", "paks", "assets", "streamingassets", "binaries", "engine",
+		"saved", "logs", "cache", "shaders", "mods", "resourcepacks", "datapacks",
+		"world", "saves", "screenshots", "crash-reports", "node_modules", "plugins",
+		"thirdparty", "redist", "_commonredist", "directx", "vcredist", "movies",
+		"binks", "audio", "sound", "textures", "models", "maps", "locales",
+		"webcache", "cef", "crashpad", "battleye", "easyanticheat", "versions",
+		"libraries", "runtime", "jre", "data", "shaderpacks":
+		return true
+	}
+	return false
+}
+
 func findCustomGameDirsInLib(baseDir string, claimedDirs map[string]bool, isSteam bool) []customGameDirInfo {
 	var results []customGameDirInfo
 	if !dirExists(baseDir) {
@@ -460,111 +492,88 @@ func findCustomGameDirsInLib(baseDir string, claimedDirs map[string]bool, isStea
 
 	claimedRel := map[string]bool{}
 
-	// Pass 1: Look for any zappmanifest.json up to 4 levels deep
-	_ = filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info == nil {
-			return nil
+	markAncestors := func(relPath string) {
+		ancestor := relPath
+		for {
+			ancestor = filepath.Dir(ancestor)
+			if ancestor == "." || ancestor == "" || ancestor == "/" || ancestor == "\\" {
+				break
+			}
+			claimedRel[strings.ToLower(filepath.ToSlash(ancestor))] = true
 		}
-		rel, err := filepath.Rel(baseDir, path)
+	}
+
+	// Single-pass directory-only walk (os.ReadDir, zero per-file Lstat calls) up to
+	// 4 levels deep to locate games with zappmanifest.json or NTFS directory junctions.
+	// Skips already-claimed Steam games, ignored folders, and stops recursing as soon
+	// as a game root (manifest or junction) is identified.
+	var walkCustomDirs func(curDir, relPrefix string, depth int)
+	walkCustomDirs = func(curDir, relPrefix string, depth int) {
+		entries, err := os.ReadDir(curDir)
 		if err != nil {
-			return nil
+			return
 		}
-		parts := strings.Split(rel, string(filepath.Separator))
-		if len(parts) > 5 {
-			if info.IsDir() {
-				return filepath.SkipDir
+		for _, entry := range entries {
+			mode := entry.Type()
+			isJunc := mode&(os.ModeSymlink|os.ModeIrregular) != 0
+			if !entry.IsDir() && !isJunc {
+				continue
 			}
-			return nil
-		}
-		if info.IsDir() && isIgnoredDir(info.Name()) {
-			return filepath.SkipDir
-		}
-		if !info.IsDir() && info.Name() == ZappManifestFilename {
-			gameDir := filepath.Dir(path)
-			gameRel, err := filepath.Rel(baseDir, gameDir)
-			if err == nil && gameRel != "." {
-				relSlash := filepath.ToSlash(gameRel)
-				relLower := strings.ToLower(relSlash)
-				if !claimedDirs[relLower] && !claimedRel[relLower] {
-					fi, _ := os.Lstat(gameDir)
-					isJunc := fi != nil && (fi.Mode()&os.ModeSymlink != 0 || fi.Mode()&os.ModeIrregular != 0)
-					zm, _ := ReadZappManifest(gameDir)
-					results = append(results, customGameDirInfo{
-						relPath:    relSlash,
-						fullPath:   gameDir,
-						isJunction: isJunc,
-						zm:         zm,
-					})
-					claimedRel[relLower] = true
-					// Mark all ancestor directories as claimed so they aren't treated as games
-					ancestor := gameRel
-					for {
-						ancestor = filepath.Dir(ancestor)
-						if ancestor == "." || ancestor == "" || ancestor == "/" || ancestor == "\\" {
-							break
-						}
-						claimedRel[strings.ToLower(filepath.ToSlash(ancestor))] = true
-					}
-				}
+			name := entry.Name()
+			if isIgnoredDir(name) {
+				continue
 			}
-		}
-		return nil
-	})
+			if depth >= 1 && isGameInternalSubdir(name) {
+				continue
+			}
 
-	// Pass 2: Look for existing junctions/symlinks up to 4 levels deep
-	_ = filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info == nil {
-			return nil
-		}
-		rel, err := filepath.Rel(baseDir, path)
-		if err != nil || rel == "." {
-			return nil
-		}
-		parts := strings.Split(rel, string(filepath.Separator))
-		if len(parts) > 4 {
-			if info.IsDir() {
-				return filepath.SkipDir
+			childRel := name
+			if relPrefix != "" {
+				childRel = relPrefix + "/" + name
 			}
-			return nil
-		}
-		if info.IsDir() && isIgnoredDir(info.Name()) {
-			return filepath.SkipDir
-		}
-		relSlash := filepath.ToSlash(rel)
-		relLower := strings.ToLower(relSlash)
-		if claimedDirs[relLower] || claimedRel[relLower] {
-			return nil
-		}
+			childLower := strings.ToLower(childRel)
+			if claimedDirs[childLower] || claimedRel[childLower] {
+				continue
+			}
 
-		fi, err := os.Lstat(path)
-		if err == nil && fi != nil {
-			isJunc := (fi.Mode()&os.ModeSymlink != 0 || fi.Mode()&os.ModeIrregular != 0)
+			childFull := filepath.Join(curDir, name)
+
 			if isJunc {
-				zm, _ := ReadZappManifest(path)
+				zm, _ := ReadZappManifest(childFull)
 				results = append(results, customGameDirInfo{
-					relPath:    relSlash,
-					fullPath:   path,
+					relPath:    childRel,
+					fullPath:   childFull,
 					isJunction: true,
 					zm:         zm,
 				})
-				claimedRel[relLower] = true
-				ancestor := rel
-				for {
-					ancestor = filepath.Dir(ancestor)
-					if ancestor == "." || ancestor == "" || ancestor == "/" || ancestor == "\\" {
-						break
-					}
-					claimedRel[strings.ToLower(filepath.ToSlash(ancestor))] = true
-				}
-				return filepath.SkipDir
+				claimedRel[childLower] = true
+				markAncestors(childRel)
+				continue
+			}
+
+			if zm, err := ReadZappManifest(childFull); err == nil && zm != nil {
+				results = append(results, customGameDirInfo{
+					relPath:    childRel,
+					fullPath:   childFull,
+					isJunction: false,
+					zm:         zm,
+				})
+				claimedRel[childLower] = true
+				markAncestors(childRel)
+				continue
+			}
+
+			if depth < 3 {
+				walkCustomDirs(childFull, childRel, depth+1)
 			}
 		}
-		return nil
-	})
+	}
+
+	walkCustomDirs(baseDir, "", 0)
 
 	if !isSteam {
 		// Generic non-Steam libraries: only include games with an explicit
-		// zappmanifest.json (Pass 1) or directory junctions (Pass 2).
+		// zappmanifest.json or directory junction.
 		// Never auto-detect arbitrary unmanifested folders as games.
 		return results
 	}

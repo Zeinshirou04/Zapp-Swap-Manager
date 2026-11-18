@@ -283,15 +283,29 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  const loadData = useCallback(async () => {
+  const gamesInFlightRef = useRef(false);
+  const jobsInFlightRef = useRef(false);
+  const healthInFlightRef = useRef(false);
+  const libsInFlightRef = useRef(false);
+
+  const refreshHealth = useCallback(async () => {
+    if (healthInFlightRef.current) return;
+    healthInFlightRef.current = true;
     try {
-      const [h, libs, g, j] = await Promise.all([
-        api.getHealth().catch(() => null),
-        api.listLibraries().catch(() => []),
-        api.listGames().catch(() => []),
-        api.listJobs().catch(() => []),
-      ]);
+      const h = await api.getHealth();
       setHealth(h);
+    } catch {
+      setHealth(null);
+    } finally {
+      healthInFlightRef.current = false;
+    }
+  }, []);
+
+  const refreshLibraries = useCallback(async () => {
+    if (libsInFlightRef.current) return;
+    libsInFlightRef.current = true;
+    try {
+      const libs = await api.listLibraries();
       if (libs) {
         setLibraries(libs);
         try {
@@ -300,6 +314,33 @@ export const App: React.FC = () => {
           // ignore storage quota issues
         }
       }
+    } catch {
+      // keep existing libraries on transient error
+    } finally {
+      libsInFlightRef.current = false;
+    }
+  }, []);
+
+  const refreshJobs = useCallback(async () => {
+    if (jobsInFlightRef.current) return;
+    jobsInFlightRef.current = true;
+    try {
+      const j = await api.listJobs();
+      if (j) {
+        setJobs(j);
+      }
+    } catch {
+      // keep existing jobs on transient error
+    } finally {
+      jobsInFlightRef.current = false;
+    }
+  }, []);
+
+  const refreshGames = useCallback(async () => {
+    if (gamesInFlightRef.current) return;
+    gamesInFlightRef.current = true;
+    try {
+      const g = await api.listGames();
       if (g) {
         setGames(g);
         setSelectedGame((currentSelected) => {
@@ -313,41 +354,47 @@ export const App: React.FC = () => {
           // ignore storage quota issues
         }
       }
-      if (j) {
-        setJobs(j);
-      }
+    } catch {
+      // keep existing cached games on transient error
+    } finally {
+      gamesInFlightRef.current = false;
+    }
+  }, []);
+
+  const loadData = useCallback(async () => {
+    try {
+      // Update each resource independently as soon as it resolves so fast endpoints
+      // (health, libraries, jobs) are never blocked behind a slower filesystem scan.
+      await Promise.all([
+        refreshHealth(),
+        refreshLibraries(),
+        refreshJobs(),
+        refreshGames(),
+      ]);
     } finally {
       setLoading(false);
       setInitialLoadDone(true);
     }
-  }, []);
+  }, [refreshHealth, refreshLibraries, refreshJobs, refreshGames]);
 
   useEffect(() => {
     if (conn !== 'authenticated') return;
     loadData();
     // Auto-refresh jobs and health every 3 seconds, plus periodic background revalidation
+    // with in-flight guards so slow scans never stack and saturate WebView2's 6 HTTP slots.
     let ticks = 0;
     const interval = setInterval(() => {
       ticks++;
-      api.getHealth().then(setHealth).catch(() => setHealth(null));
-      api.listJobs().then(setJobs).catch(() => {});
+      refreshHealth();
+      refreshJobs();
       // Every 30 seconds (10 ticks * 3s), revalidate games & libraries quietly in background
       if (ticks % 10 === 0) {
-        api.listLibraries().then(setLibraries).catch(() => {});
-        api.listGames().then((g) => {
-          if (g) {
-            setGames(g);
-            setSelectedGame((currentSelected) => {
-              if (!currentSelected) return null;
-              const matched = g.find((game) => String(game.app_id) === String(currentSelected.app_id));
-              return matched || currentSelected;
-            });
-          }
-        }).catch(() => {});
+        refreshLibraries();
+        refreshGames();
       }
     }, 3000);
     return () => clearInterval(interval);
-  }, [conn, loadData]);
+  }, [conn, loadData, refreshHealth, refreshJobs, refreshLibraries, refreshGames]);
 
   // Request notification permissions once on startup if supported
   useEffect(() => {
@@ -686,7 +733,7 @@ export const App: React.FC = () => {
           drivesCount={libraries.length}
           queueCount={jobs.filter((j) => j.status === 'running' || j.status === 'queued').length}
           steamRunning={health?.steam_running ?? false}
-          appVersion="0.3.3-beta.4"
+          appVersion="0.3.3-beta.5"
           onOpenWizard={() => {
             if (activeRoute === 'settings' && settingsDirty) {
               setShakeSettingsTrigger((prev) => prev + 1);
@@ -870,7 +917,7 @@ export const App: React.FC = () => {
           {/* View 6: Settings */}
           {activeRoute === 'settings' && (
             <SettingsView
-              appVersion={health?.version ? `v${health.version}` : 'v0.3.3-beta.4'}
+              appVersion={health?.version ? `v${health.version}` : 'v0.3.3-beta.5'}
               steamRunning={!!health?.steam_running}
               onCheckUpdates={() => handleCheckUpdates(true)}
               checkingUpdates={checkingUpdates}

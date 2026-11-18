@@ -99,4 +99,23 @@ describe('DashboardView Component', () => {
     fireEvent.click(detailButtons[0]);
     expect(onSelectDrive).toHaveBeenCalledWith(mockLibraries[0]);
   });
+
+  it('renders Active Games on SSD at top above Drive Storage & Allocation', () => {
+    const { container } = render(
+      <DashboardView
+        games={mockGames}
+        libraries={mockLibraries}
+        jobs={mockJobs}
+        onNavigate={vi.fn()}
+        onAction={vi.fn()}
+        actionLoading={false}
+        onOpenWizard={vi.fn()}
+      />
+    );
+
+    const headings = container.querySelectorAll('h1, h2');
+    expect(headings.length).toBeGreaterThanOrEqual(2);
+    expect(headings[0]).toHaveTextContent('Active Games on SSD');
+    expect(headings[1]).toHaveTextContent('Drive Storage & Allocation');
+  });
 });

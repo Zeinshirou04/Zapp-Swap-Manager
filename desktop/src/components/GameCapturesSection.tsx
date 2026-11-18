@@ -4,6 +4,7 @@ import { CaptureItem, Game } from '../types/api.ts';
 import { copyCaptureImageToClipboard } from '../utils/clipboard.ts';
 import { formatLastPlayed } from '../utils/format.ts';
 import { CaptureViewerModal } from './CaptureViewerModal.tsx';
+import { ZappIcon } from './ZappIcon.tsx';
 import {
   Camera,
   Check,
@@ -515,13 +516,21 @@ export const GameCapturesSection: React.FC<GameCapturesSectionProps> = ({
                       left: '8px',
                       fontSize: '0.68rem',
                       fontWeight: 700,
-                      padding: '2px 7px',
+                      padding: '2px 8px',
                       borderRadius: '999px',
                       backgroundColor: 'rgba(15, 23, 42, 0.78)',
+                      backdropFilter: 'blur(6px)',
                       color: '#f8fafc',
                       border: '1px solid rgba(255, 255, 255, 0.16)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
                     }}
                   >
+                    <ZappIcon
+                      name={item.source === 'sharex' ? 'sharex' : item.source === 'shadowplay' ? 'shadowplay' : 'custom-folder'}
+                      size={12}
+                    />
                     {SOURCE_BADGES[item.source] || item.source}
                   </span>
                 </button>

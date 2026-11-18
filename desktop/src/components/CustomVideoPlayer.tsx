@@ -181,9 +181,11 @@ export const CustomVideoPlayer: React.FC<CustomVideoPlayerProps> = ({ src, autoP
       style={{
         position: 'relative',
         width: '100%',
-        maxHeight: isFullscreen ? '100vh' : '66vh',
-        backgroundColor: '#000000',
-        borderRadius: isFullscreen ? 0 : '4px',
+        maxWidth: isFullscreen ? '100vw' : '1020px',
+        aspectRatio: isFullscreen ? 'unset' : '16 / 9',
+        maxHeight: isFullscreen ? '100vh' : '75vh',
+        backgroundColor: 'transparent',
+        borderRadius: isFullscreen ? 0 : 'var(--radius)',
         overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',
@@ -202,9 +204,13 @@ export const CustomVideoPlayer: React.FC<CustomVideoPlayerProps> = ({ src, autoP
         onClick={togglePlay}
         style={{
           width: '100%',
-          maxHeight: isFullscreen ? '100vh' : '66vh',
+          height: isFullscreen ? '100%' : '100%',
+          aspectRatio: isFullscreen ? 'unset' : '16 / 9',
+          maxHeight: isFullscreen ? '100vh' : '75vh',
+          objectFit: 'contain',
           display: 'block',
           cursor: 'pointer',
+          borderRadius: isFullscreen ? 0 : 'var(--radius)',
         }}
       />
 

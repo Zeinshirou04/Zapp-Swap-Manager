@@ -66,13 +66,16 @@ See [tokens-and-classes.md](./references/tokens-and-classes.md) for exact hex va
   - **Clean Title Area & Action Hierarchy**: Do NOT place status badges (`Fast SSD Cache`, `Steam Game`, `Backup Verified`, `Native HDD`) above or beside the hero title. Consolidate all status badges inside the **Game & Backup Status** detail section below. The top action bar provides **Pin / Pinned** status toggle, **Play Game** primary trigger, **Edit Artwork**, and **Game Settings**.
   - **Detail Grid**: Render **Current Storage Path**, **Game & Backup Status**, **Activity & Runtime** (with exact date/time), and **Media & Captures** (`GameCapturesSection`) flat on `--bg-main` (no section wrapper card box).
   - **Custom Media Player Suite (`CaptureViewerModal`, `CustomImageViewer`, `CustomVideoPlayer`)**:
-    - Auto-detect ShareX screenshots and NVIDIA ShadowPlay videos/screenshots in a flat responsive `16:9` thumbnail gallery (`All` / `Images` / `Videos` segmented filter, source badge pill, and one-click **Copy** image button writing RGBA bitmap to Windows clipboard via `@tauri-apps/plugin-clipboard-manager`).
+    - Auto-detect ShareX screenshots and NVIDIA ShadowPlay videos/screenshots in a flat responsive `16:9` thumbnail gallery (`All` / `Images` / `Videos` segmented filter, source badge pill with crisp SVG icon, and one-click **Copy** image button writing RGBA bitmap to Windows clipboard via `@tauri-apps/plugin-clipboard-manager`).
+    - Source badges in both thumbnail grid and viewer modal use **crisp SVG icons** (`ZappIcon` `sharex`, `shadowplay`, `custom-folder`) — never bullet `•` prefixes.
     - Clicking any item opens `CaptureViewerModal` (`role="dialog"`, `.card` surface over darkened backdrop) with custom Volt & Ink viewers (no browser default media controls):
-      - **Image Viewer (`CustomImageViewer`)**: Interactive zoom (0.5x to 4x) via mouse wheel or floating `+` / `-` / `100%` controls, drag-to-pan when zoomed in, double-click reset/zoom, and one-click RGBA clipboard copy.
-      - **Video Player (`CustomVideoPlayer`)**: Custom overlay controls with Play/Pause, **Jump -5s** and **Jump +5s** (`RotateCcw` / `RotateCw` with `5` badge) seek buttons, custom scrubber bar with elapsed/total duration, volume slider with mute toggle, fullscreen toggle, keyboard shortcuts (`Space`, `ArrowLeft`/`ArrowRight`, `m`, `f`), and expandable video trimming toolbar with Start/End markers. Includes `Matched via` attribution and inline **Match Aliases** management.
+      - **Content-Fitted Dialog Dimensions**: Uses `width: 'fit-content'`, `maxWidth: 'min(94vw, 1100px)'`, and `backgroundColor: 'transparent'` for the media viewport, eliminating all hardcoded black letterbox frames and excess empty margins.
+      - **Minimalist Header & Collapsible Details**: The top header strictly displays Title, Date, Size, counter (`1 / 5`), an **Info / Details** toggle button, Copy Image, and Close. Window title, process name, and match attribution are isolated in a separate collapsible details section, keeping the viewport clean.
+      - **Image Viewer (`CustomImageViewer`)**: Interactive zoom (0.5x to 4x) via mouse wheel or floating controls, drag-to-pan when zoomed in, double-click reset/zoom, and one-click RGBA clipboard copy. **Previous (`<`) and Next (`>`) buttons are embedded directly into the floating overlay pill** beside the zoom controls, completely eliminating bottom modal footer clutter.
+      - **Standardized Video Player (`CustomVideoPlayer`)**: Locked to a standard **`16:9` aspect ratio** container (`maxWidth: 'min(90vw, 1080px)'`) with transparent background, custom overlay controls with Play/Pause, **Jump -5s** and **Jump +5s** (`RotateCcw` / `RotateCw` with `5` badge) seek buttons, custom scrubber bar with elapsed/total duration, volume slider with mute toggle, fullscreen toggle, keyboard shortcuts (`Space`, `ArrowLeft`/`ArrowRight`, `m`, `f`), and expandable video trimming toolbar with Start/End markers.
 
 ### B. Drives & Per-Drive Games (`DrivesOverview`, `DriveDetailView`)
-- **Overview Cards**: Keep `--bg-card` surface, icon tile, friendly name, **`Details →`** text link, unboxed Library Games Storage figure, percentage bar without `"Drive Used"` text, and `Free` / `Drive Capacity` footer.
+- **Overview Cards (`DrivesOverview`)**: Streamlined, compact design (~110px height, `padding: 12px 16px`). Compact drive icon (`FolderKanban`), friendly name, role badge, **`Details →`** text link, single combined metrics line (`Library Games Storage • X GB (N games)` alongside `Y%` usage), compact 6px progress bar, and `Free` / `Drive Capacity` footer. Eliminates oversized stacked boxes and large font headers to preserve vertical space on the Dashboard.
 - **`DriveDetailView`**:
   - Clean borderless `← Back to Drives` trigger, drive title + technical Library ID & role subtitle (`Fast Cache Storage (SSD)` / `Master Storage (HDD)`).
   - **Hardware Capacity** & **Library Games Allocation**: Render flat without card background boxes.
@@ -107,6 +110,14 @@ See [tokens-and-classes.md](./references/tokens-and-classes.md) for exact hex va
   - Inside `GameList`, `DashboardView`, and `DriveDetailView`, pinned games **always sort first** ahead of unpinned games. Secondary sorting within pinned and unpinned groups remains alphabetical.
   - Table view in `GameList` includes a dedicated pin toggle column and a compact `Play` or `Move to SSD` button.
   - In `GameDetailView`, the top bar includes a **Pin Game** / **Pinned** toggle button with tooltip feedback.
+
+### G. Dashboard Hierarchy (Games Top, Drive Storage Below)
+- **Active Games First**:
+  - The top hero section on `DashboardView` is **Active Games on SSD** (`<h1>Active Games on SSD</h1>`), showcasing the user's ready-to-play fast cache library and pinned games immediately without requiring scrolling.
+  - Includes quick navigation trigger `View All Games (N) →` to jump straight to the library.
+- **Compact Drive Storage & Allocation**:
+  - Positioned below the games section with simplified, space-efficient drive cards (`DrivesOverview`).
+  - Lowers card height to ~110px, consolidates library allocation and utilization into a single metric line, and keeps the full dashboard view readable above the fold.
 
 ---
 

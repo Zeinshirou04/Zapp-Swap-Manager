@@ -3,7 +3,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { GameCard } from '../components/GameCard.tsx';
 import { CustomImageViewer } from '../components/CustomImageViewer.tsx';
 import { CustomVideoPlayer } from '../components/CustomVideoPlayer.tsx';
-import { Game } from '../types/api.ts';
+import { CaptureViewerModal } from '../components/CaptureViewerModal.tsx';
+import { CaptureItem, Game } from '../types/api.ts';
 
 const mockGameSSD: Game = {
   app_id: 105600,
@@ -116,5 +117,73 @@ describe('GameCard & Custom Media Components', () => {
     expect(trimBtn).toBeInTheDocument();
     fireEvent.click(trimBtn);
     expect(screen.getByText('Trimming')).toBeInTheDocument();
+  });
+
+  it('navigates with previous and next buttons inside CustomImageViewer controls', () => {
+    const onPrevMock = vi.fn();
+    const onNextMock = vi.fn();
+    render(
+      <CustomImageViewer
+        src="blob:http://localhost/test.png"
+        alt="Test Screenshot"
+        onPrevious={onPrevMock}
+        onNext={onNextMock}
+        hasPrevious={true}
+        hasNext={true}
+      />
+    );
+
+    const prevBtn = screen.getByRole('button', { name: 'Previous image' });
+    const nextBtn = screen.getByRole('button', { name: 'Next image' });
+    expect(prevBtn).toBeInTheDocument();
+    expect(nextBtn).toBeInTheDocument();
+
+    fireEvent.click(prevBtn);
+    expect(onPrevMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(nextBtn);
+    expect(onNextMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders CaptureViewerModal with SVG icon badge, clean header, and toggles details', () => {
+    const mockItems: CaptureItem[] = [
+      {
+        id: 'cap1',
+        filename: 'Terraria_BossFight.png',
+        mime_type: 'image/png',
+        kind: 'image',
+        source: 'sharex',
+        matched_by: 'sharex_history',
+        size_bytes: 2048000,
+        captured_at: '2026-11-18T10:00:00Z',
+        window_title: 'Terraria: Journey’s End',
+        process_name: 'Terraria.exe',
+      },
+    ];
+
+    render(
+      <CaptureViewerModal
+        open={true}
+        items={mockItems}
+        currentIndex={0}
+        onSelectIndex={vi.fn()}
+        onClose={vi.fn()}
+        onCopyImage={vi.fn()}
+        copyingId={null}
+        copiedId={null}
+      />
+    );
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('Terraria_BossFight.png')).toBeInTheDocument();
+    expect(screen.getByText('ShareX')).toBeInTheDocument();
+    expect(screen.getByText('1 / 1')).toBeInTheDocument();
+
+    // Toggle details button
+    const detailsBtn = screen.getByRole('button', { name: /capture details/i });
+    expect(detailsBtn).toBeInTheDocument();
+    fireEvent.click(detailsBtn);
+    expect(screen.getByText(/Window:/)).toBeInTheDocument();
+    expect(screen.getByText('Terraria: Journey’s End')).toBeInTheDocument();
   });
 });

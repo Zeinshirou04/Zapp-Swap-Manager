@@ -28,7 +28,7 @@ import { ActiveTransferBanner } from './components/ActiveTransferBanner.tsx';
 import { LogsView } from './components/LogsView.tsx';
 import { ToastContainer } from './components/Toast.tsx';
 import { ToastMessage } from './types/toast.ts';
-import { checkUpdate, UpdateDetails } from './api/updater.ts';
+import { checkUpdate, isTauriEnvironment, UpdateDetails } from './api/updater.ts';
 import { matchTargetLibrary } from './utils/libraryMatcher.ts';
 import { AlertTriangle, Gamepad2, Loader2, X, Wand2 } from 'lucide-react';
 
@@ -217,16 +217,27 @@ export const App: React.FC = () => {
     try {
       setCheckingUpdates(true);
       if (manual) setUpdateStatusMsg(null);
+      if (!isTauriEnvironment()) {
+        if (manual) {
+          setUpdateStatusMsg('Updates are managed in the desktop application.');
+          setTimeout(() => setUpdateStatusMsg(null), 5000);
+        }
+        return;
+      }
       const update = await checkUpdate();
       if (update) {
         setAvailableUpdate(update);
+        if (manual) {
+          setUpdateStatusMsg(`Update v${update.version} is available!`);
+        }
       } else if (manual) {
         setUpdateStatusMsg("You're running the latest version of Zapp Swap Manager!");
-        setTimeout(() => setUpdateStatusMsg(null), 4000);
+        setTimeout(() => setUpdateStatusMsg(null), 5000);
       }
     } catch (err) {
       if (manual) {
-        setUpdateStatusMsg(err instanceof Error ? err.message : 'Failed to check for updates');
+        setUpdateStatusMsg(err instanceof Error ? `Failed: ${err.message}` : 'Failed to check for updates');
+        setTimeout(() => setUpdateStatusMsg(null), 6000);
       }
     } finally {
       setCheckingUpdates(false);
@@ -921,6 +932,7 @@ export const App: React.FC = () => {
               steamRunning={!!health?.steam_running}
               onCheckUpdates={() => handleCheckUpdates(true)}
               checkingUpdates={checkingUpdates}
+              updateStatus={updateStatusMsg}
               onSaved={loadData}
               onThemeChange={handleThemeChange}
               onDirtyChange={setSettingsDirty}

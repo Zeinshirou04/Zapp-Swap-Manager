@@ -32,29 +32,37 @@ export const DrivesOverview: React.FC<DrivesOverviewProps> = ({ libraries, games
           const displayName = formatLibraryName(lib);
 
           return (
-            <div key={lib.id} className="card">
+            <div
+              key={lib.id}
+              className="card"
+              style={{
+                padding: '12px 16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+              }}
+            >
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  marginBottom: '16px',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div
                     style={{
                       background: 'var(--primary-subtle)',
                       color: 'var(--primary)',
-                      padding: '8px',
+                      padding: '6px',
                       borderRadius: 'var(--radius)',
                       display: 'flex',
                     }}
                   >
-                    <FolderKanban size={20} />
+                    <FolderKanban size={16} />
                   </div>
                   <div>
-                    <h2 style={{ fontSize: '1.05rem', fontWeight: 600 }}>{displayName}</h2>
+                    <h2 style={{ fontSize: '0.95rem', fontWeight: 600, margin: 0 }}>{displayName}</h2>
                   </div>
                 </div>
 
@@ -67,63 +75,73 @@ export const DrivesOverview: React.FC<DrivesOverviewProps> = ({ libraries, games
                       background: 'none',
                       border: 'none',
                       color: 'var(--primary-text, var(--primary))',
-                      fontSize: '0.85rem',
+                      fontSize: '0.8rem',
                       fontWeight: 600,
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '4px',
+                      gap: '3px',
                       cursor: 'pointer',
-                      padding: '4px 6px',
+                      padding: '2px 4px',
                     }}
                   >
-                    Details <ArrowRight size={14} />
+                    Details <ArrowRight size={13} />
                   </button>
                 )}
               </div>
 
-              {/* Primary Metric: Steam Library Storage Size (Clean, without background container) */}
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Library Games Storage
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '2px' }}>
-                  <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-main)' }}>
+              {/* Compact Combined Metrics Line: Games Allocation + Usage Percentage */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  justifyContent: 'space-between',
+                  fontSize: '0.78rem',
+                  marginTop: '2px',
+                }}
+              >
+                <div>
+                  <span
+                    style={{
+                      fontSize: '0.72rem',
+                      color: 'var(--text-muted)',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    Library Games Storage
+                  </span>
+                  <span style={{ margin: '0 4px', color: 'var(--text-muted)' }}>•</span>
+                  <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
                     {formatBytes(libraryGamesSize)}
                   </span>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    in {libGames.length} {libGames.length === 1 ? 'game' : 'games'}
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginLeft: '4px' }}>
+                    ({libGames.length} {libGames.length === 1 ? 'game' : 'games'})
                   </span>
                 </div>
+                <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-main)' }}>
+                  {usedPercent}%
+                </span>
               </div>
 
-              {/* Secondary Metric: Entire Drive Storage (Clean, without redundant label) */}
-              <div style={{ marginBottom: '8px' }}>
+              {/* Progress Bar (Compact 6px) */}
+              <div className="progress-bar-bg" style={{ height: '6px' }}>
                 <div
+                  className="progress-bar-fill"
                   style={{
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    fontSize: '0.8rem',
-                    marginBottom: '6px',
+                    width: `${usedPercent}%`,
+                    backgroundColor: 'var(--primary)',
+                    height: '100%',
                   }}
-                >
-                  <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{usedPercent}%</span>
-                </div>
-                <div className="progress-bar-bg">
-                  <div
-                    className="progress-bar-fill"
-                    style={{
-                      width: `${usedPercent}%`,
-                      backgroundColor: 'var(--primary)',
-                    }}
-                  />
-                </div>
+                />
               </div>
 
+              {/* Drive Capacity Footer */}
               <div
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
-                  fontSize: '0.8rem',
+                  fontSize: '0.75rem',
                   color: 'var(--text-muted)',
                 }}
               >

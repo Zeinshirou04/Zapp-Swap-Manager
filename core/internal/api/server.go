@@ -111,13 +111,40 @@ func (s *Server) GetPinnedGames() ([]steam.Game, error) {
 	if err != nil && len(games) == 0 {
 		return nil, err
 	}
+	return filterPinnedGames(games), nil
+}
+
+// GetPinnedGamesCached returns pinned games from the in-memory scan snapshot
+// without blocking on disk I/O (safe for Win32 GUI/tray message loops).
+// Returns (pinned, fresh).
+func (s *Server) GetPinnedGamesCached() ([]steam.Game, bool) {
+	if s.h == nil || s.h.scanner == nil {
+		return nil, false
+	}
+	games, fresh := s.h.scanner.cachedSnapshot()
+	if len(games) == 0 {
+		return nil, false
+	}
+	s.h.artworkStore().Apply(games)
+	return filterPinnedGames(games), fresh
+}
+
+// InvalidateScanCache clears the in-memory games scan snapshot so the next
+// caller reads fresh filesystem state.
+func (s *Server) InvalidateScanCache() {
+	if s.h != nil {
+		s.h.invalidateScanCache()
+	}
+}
+
+func filterPinnedGames(games []steam.Game) []steam.Game {
 	var pinned []steam.Game
 	for _, g := range games {
 		if g.IsPinned {
 			pinned = append(pinned, g)
 		}
 	}
-	return pinned, nil
+	return pinned
 }
 
 // LaunchGame launches the game by appID string.
@@ -159,6 +186,7 @@ func newRouter(cfg Config) (*http.ServeMux, *handlers) {
 		start:    time.Now(),
 		artwork:  newArtworkStore(cfg.ArtworkDir),
 		captures: capMgr,
+		scanner:  &scanCoordinator{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", h.health)

@@ -1205,3 +1205,39 @@ func TestRemoveSSDJobEndpoint(t *testing.T) {
 	}
 }
 
+func TestGetPinnedGamesCachedNonBlocking(t *testing.T) {
+	cfg := Config{
+		Version:     "test",
+		ArtworkDir:  t.TempDir(),
+		CapturesDir: t.TempDir(),
+		Libraries: []steam.Library{
+			{ID: "ssd0", Name: "SSD Cache", Path: prepLibrary(t, true), Type: steam.TypeSSDCache},
+			{ID: "hdd0", Name: "HDD Master", Path: prepLibrary(t, false), Type: steam.TypeHDDMaster},
+		},
+		Auth:  Auth{BearerToken: testToken},
+		Queue: mustQueue(t, nil),
+	}
+	srv, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { cfg.Queue.Close() })
+
+	// Before any scan, GetPinnedGamesCached returns immediately with fresh=false.
+	if pinned, fresh := srv.GetPinnedGamesCached(); len(pinned) != 0 || fresh {
+		t.Fatalf("before scan: pinned=%v fresh=%v, want empty & false", pinned, fresh)
+	}
+
+	// Warm the cache via GetPinnedGames, then pin via artworkStore and verify cached snapshot reflects it immediately.
+	if _, err := srv.GetPinnedGames(); err != nil {
+		t.Fatalf("GetPinnedGames: %v", err)
+	}
+	if err := srv.h.artworkStore().SetPinned("105600", true); err != nil {
+		t.Fatalf("SetPinned: %v", err)
+	}
+	pinned, fresh := srv.GetPinnedGamesCached()
+	if !fresh || len(pinned) != 1 || pinned[0].Manifest.AppID != "105600" {
+		t.Fatalf("after pin: pinned=%+v fresh=%v, want [105600] & true", pinned, fresh)
+	}
+}
+

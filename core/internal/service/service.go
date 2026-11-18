@@ -83,8 +83,9 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 
 	libs := &libRegistry{list: cfg.Libraries}
 	var q *queue.Queue
+	var apiServer *api.Server
 	if executor == nil {
-		executor = defaultExecutor(libs.Get, getPrefs, func() *queue.Queue { return q })
+		executor = defaultExecutor(libs.Get, getPrefs, func() *queue.Queue { return q }, func() *api.Server { return apiServer })
 	}
 
 	var err error
@@ -103,7 +104,7 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 		}
 	}
 
-	apiServer, err := api.New(api.Config{
+	apiServer, err = api.New(api.Config{
 		Port:           cfg.Port(),
 		Version:        version,
 		Libraries:      cfg.Libraries,
@@ -156,7 +157,7 @@ func NewWithExecutor(cfg *config.Config, version string, executor queue.Executor
 	}, nil
 }
 
-func defaultExecutor(whitelist func() []steam.Library, prefFn func() config.Preferences, qFn func() *queue.Queue) queue.Executor {
+func defaultExecutor(whitelist func() []steam.Library, prefFn func() config.Preferences, qFn func() *queue.Queue, srvFn func() *api.Server) queue.Executor {
 	var (
 		steamBatchMu     sync.Mutex
 		steamClosedBatch bool
@@ -168,9 +169,15 @@ func defaultExecutor(whitelist func() []steam.Library, prefFn func() config.Pref
 			prefs = prefFn().Normalized()
 		}
 
-		// Always invalidate cached directory sizes when a transfer job finishes
-		// so the next library scan immediately reflects fresh disk state.
-		defer steam.ClearSizeCache()
+		// Invalidate cached scan snapshot when a transfer finishes so the next
+		// GET /games reflects the updated library state immediately.
+		defer func() {
+			if srvFn != nil {
+				if srv := srvFn(); srv != nil {
+					srv.InvalidateScanCache()
+				}
+			}
+		}()
 
 		libs := whitelist()
 		var targetLib *steam.Library
@@ -209,6 +216,15 @@ func defaultExecutor(whitelist func() []steam.Library, prefFn func() config.Pref
 		if srcLib == nil {
 			return fmt.Errorf("source library %q not found", foundGame.LibraryID)
 		}
+
+		// Only invalidate the transferred game's directory size cache entries,
+		// avoiding unnecessary full re-walks of unrelated games on HDD.
+		defer steam.InvalidateSizeCache(
+			filepath.Join(srcLib.Path, "steamapps", "common", foundGame.Manifest.InstallDir),
+			filepath.Join(srcLib.Path, foundGame.Manifest.InstallDir),
+			filepath.Join(targetLib.Path, "steamapps", "common", foundGame.Manifest.InstallDir),
+			filepath.Join(targetLib.Path, foundGame.Manifest.InstallDir),
+		)
 
 		// Queue-batched Steam lifecycle: only close Steam for Steam-manifest
 		// mutations (promote, evict, remove), keep it closed while more
@@ -417,6 +433,15 @@ func (s *Service) GetPinnedGames() []steam.Game {
 		return nil
 	}
 	return games
+}
+
+// GetPinnedGamesCached returns pinned games from the in-memory scan cache
+// without blocking on disk I/O (safe for Win32 tray UI thread).
+func (s *Service) GetPinnedGamesCached() ([]steam.Game, bool) {
+	if s.server == nil {
+		return nil, false
+	}
+	return s.server.GetPinnedGamesCached()
 }
 
 // LaunchGame initiates launching the specified game.

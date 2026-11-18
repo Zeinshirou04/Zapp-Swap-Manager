@@ -733,7 +733,7 @@ export const App: React.FC = () => {
           drivesCount={libraries.length}
           queueCount={jobs.filter((j) => j.status === 'running' || j.status === 'queued').length}
           steamRunning={health?.steam_running ?? false}
-          appVersion="0.3.3-beta.4"
+          appVersion="0.3.3-beta.5"
           onOpenWizard={() => {
             if (activeRoute === 'settings' && settingsDirty) {
               setShakeSettingsTrigger((prev) => prev + 1);
@@ -917,7 +917,7 @@ export const App: React.FC = () => {
           {/* View 6: Settings */}
           {activeRoute === 'settings' && (
             <SettingsView
-              appVersion={health?.version ? `v${health.version}` : 'v0.3.3-beta.4'}
+              appVersion={health?.version ? `v${health.version}` : 'v0.3.3-beta.5'}
               steamRunning={!!health?.steam_running}
               onCheckUpdates={() => handleCheckUpdates(true)}
               checkingUpdates={checkingUpdates}
